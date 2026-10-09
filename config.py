@@ -121,13 +121,24 @@ class AppConfig(BaseSettings):
     confidence_levels: list[float] = Field(default_factory=lambda: [0.95, 0.99])
     var_method: VaRMethod = VaRMethod.HISTORICAL
 
+    inflation_annual: float = Field(0.045, ge=-0.05, le=1.0,
+                                    description="HYPOTHESIS used to deflate simulated wealth")
+    goal: float | None = Field(None, gt=0, description="explicit nominal wealth goal (optional)")
+    profile_horizon_simulation: bool = True
+    n_resamples: int = Field(50, ge=0, le=2000)
+    evt_min_exceedances: int = Field(50, ge=10)
+
     # --- backtest ---------------------------------------------------------------
     backtest_lookback: int = Field(252, ge=60)
     rebalance_every: int = Field(21, ge=1)
+    slippage_bps: float = Field(5.0, ge=0)
+    validation_frac: float = Field(0.6, gt=0.1, lt=0.95)
 
     # --- output -----------------------------------------------------------------
     output_dir: Path = Path("outputs")
     make_charts: bool = True
+    profile: str = "moderado"
+    run_heavy_analyses: bool = True
 
     @field_validator("tickers")
     @classmethod
