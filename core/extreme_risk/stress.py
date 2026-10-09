@@ -83,8 +83,9 @@ def default_scenarios() -> list[Scenario]:
                  brl_devaluation, assumptions=["exposição estrangeira inferida de country != BR"]),
         Scenario("Crise cripto -70%", "Criptoativos -70%; demais inalterados", crypto_crash),
         Scenario("Estresse composto", "Ações -25%, FII -15%, cripto -60%, juros +200bp, BRL -15%, "
-                 "spreads de liquidez +150bp, vol x2 e correlações elevadas", compound,
-                 liquidity_spread_bps=150.0, vol_multiplier=2.0, corr_blend=0.5),
+                 "spreads de liquidez +150bp (choque instantâneo; vol/correlação estressadas são tratadas "
+                 "no VaR paramétrico estressado e no Monte Carlo com correlação elevada)", compound,
+                 liquidity_spread_bps=150.0),
     ]
 
 

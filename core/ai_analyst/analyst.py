@@ -20,7 +20,7 @@ import unicodedata
 from dataclasses import dataclass, field
 
 from core.ai_analyst.safety import UntrustedContent, is_order_request, redact_secrets, wrap_external
-from core.ai_analyst.tools import REGISTRY, AnalysisContext, ToolCallRecord, ToolRunner
+from core.ai_analyst.tools import REGISTRY, AnalysisContext, ToolCallRecord, ToolError, ToolRunner
 
 KIND_LABEL = {"historical": "[H] histórico observado", "estimate": "[E] estimativa estatística",
               "simulation": "[S] simulação", "hypothetical_scenario": "[C] cenário hipotético",
@@ -115,6 +115,7 @@ def classify(question: str, symbols: list[str]) -> list[str]:
 class ResearchAnalyst:
     def __init__(self, ctx: AnalysisContext, max_tool_calls: int = 25) -> None:
         self.ctx = ctx
+        self.max_tool_calls = max_tool_calls
         self.runner = ToolRunner(ctx, max_tool_calls)
         self._registry_snapshot = dict(REGISTRY)
 
@@ -129,7 +130,11 @@ class ResearchAnalyst:
         ans.claims.append(Claim(label, val, fmt, rec.call_id, path, str(rec.output.get("kind", ""))))
 
     def _call(self, ans: Answer, tool: str, **kw: object) -> ToolCallRecord | None:
-        rec = self.runner.call(tool, **kw)
+        try:
+            rec = self.runner.call(tool, **kw)
+        except ToolError as e:   # budget exhausted or unknown tool: report, never crash
+            ans.limitations.append(f"ferramenta {tool} não executada: {e}")
+            return None
         ans.tool_calls.append(rec)
         if rec.status != "ok":
             ans.limitations.append(f"ferramenta {tool} falhou: {rec.error}")
@@ -138,6 +143,7 @@ class ResearchAnalyst:
 
     # ----------------------------------------------------------- main entry
     def ask(self, question: str, external: list[tuple[str, str]] | None = None) -> Answer:
+        self.runner = ToolRunner(self.ctx, self.max_tool_calls)   # tool-call budget is per question
         symbols = list(self.ctx.returns.columns)
         intents = classify(question, symbols)
         ans = Answer(question=question, intents=intents)
@@ -181,9 +187,9 @@ class ResearchAnalyst:
         if "simulation" in intents:
             rec = self._call(ans, "simulate", portfolio="selected", n_paths=5000, horizon_days=252)
             if rec:
-                self._claim(ans, rec, "Patrimônio em 1 ano — percentil 5", ("terminal_p5",), "money")
-                self._claim(ans, rec, "Patrimônio em 1 ano — mediana", ("terminal_p50",), "money")
-                self._claim(ans, rec, "Patrimônio em 1 ano — percentil 95", ("terminal_p95",), "money")
+                self._claim(ans, rec, "Patrimônio em 1 ano (com aportes) — percentil 5", ("terminal_p5",), "money")
+                self._claim(ans, rec, "Patrimônio em 1 ano (com aportes) — mediana", ("terminal_p50",), "money")
+                self._claim(ans, rec, "Patrimônio em 1 ano (com aportes) — percentil 95", ("terminal_p95",), "money")
                 self._claim(ans, rec, "P(retorno da carteira em 1 ano < 0)", ("p_negative_return",), "pct")
         if "compare" in intents:
             names = [p for p in ("selected", "equal_weight", "min_variance", "max_sharpe") if p in self.ctx.portfolios]

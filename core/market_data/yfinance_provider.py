@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+import logging
+import re
 import time
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -26,6 +28,10 @@ from core.market_data.universe import meta_for
 from utils.logging_config import get_logger
 
 log = get_logger("market_data.yfinance")
+
+_NETWORK_ERROR = re.compile(r"ConnectionError|Timeout|timed out|CONNECT tunnel|curl: \(\d+\)|Max retries|"
+                            r"Name or service not known|ProxyError|Connection reset|SSLError|Too Many Requests|429",
+                            re.IGNORECASE)
 
 DownloadFn = Callable[..., pd.DataFrame]
 
@@ -108,11 +114,36 @@ class YFinanceProvider:
     @staticmethod
     def _default_download(tickers: list[str], period: str, interval: str,
                           timeout: float) -> pd.DataFrame:
+        """Call yfinance and turn its *logged* network failures into exceptions.
+
+        ``yf.download`` does not raise on connection errors: it logs them and returns
+        an empty frame. Without this, retries/backoff would never run and an outage
+        would be misreported as "no observations" (an invalid ticker).
+        """
         import yfinance as yf  # imported lazily: offline mode never needs it
 
-        return yf.download(tickers=tickers, period=period, interval=interval,
-                           auto_adjust=True, actions=False, progress=False, threads=False,
-                           group_by="column", timeout=timeout)
+        class _Capture(logging.Handler):
+            def __init__(self) -> None:
+                super().__init__(logging.DEBUG)
+                self.messages: list[str] = []
+
+            def emit(self, record: logging.LogRecord) -> None:
+                self.messages.append(record.getMessage())
+
+        cap = _Capture()
+        yf_logger = logging.getLogger("yfinance")
+        yf_logger.addHandler(cap)
+        try:
+            df = yf.download(tickers=tickers, period=period, interval=interval,
+                             auto_adjust=True, actions=False, progress=False, threads=False,
+                             group_by="column", timeout=timeout)
+        finally:
+            yf_logger.removeHandler(cap)
+        net = [m for m in cap.messages if _NETWORK_ERROR.search(m)]
+        got = normalize_download(df, tickers) if df is not None else {}
+        if net and len(got) < len(tickers):
+            raise ConnectionError("network failure reported by yfinance: " + " | ".join(net[:2])[:500])
+        return df
 
     def _download_with_retry(self, tickers: list[str], period: str, interval: str) -> pd.DataFrame:
         last_err: Exception | None = None

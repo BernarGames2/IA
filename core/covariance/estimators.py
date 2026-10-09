@@ -185,7 +185,10 @@ def evaluate_oos(r: pd.DataFrame, lookback: int = 252, horizon: int = 63, step: 
         train, test = r.iloc[t - lookback:t], r.iloc[t:t + horizon]
         realised = np.cov(test.to_numpy(), rowvar=False, ddof=1) * periods
         for m in methods:
-            c = estimate_cov(train, m, periods).cov.to_numpy()
+            try:
+                c = estimate_cov(train, m, periods).cov.to_numpy()
+            except (InsufficientDataError, ValueError, np.linalg.LinAlgError):
+                continue   # e.g. an asset with zero variance in this window: skip this split for m
             w = _gmv_weights(c)
             rv = float(np.std(test.to_numpy() @ w, ddof=1) * np.sqrt(periods))
             acc[m].append((rv, float(np.linalg.norm(c - realised))))

@@ -31,22 +31,30 @@ class SeriesCache:
         csv_p, meta_p = self._paths(key)
         if not (csv_p.exists() and meta_p.exists()):
             return None
-        meta = json.loads(meta_p.read_text(encoding="utf-8"))
-        if time.time() - float(meta["stored_at_epoch"]) > self.ttl_s:
-            return None
-        df = pd.read_csv(csv_p, index_col=0, parse_dates=True)
-        if hashlib.sha256(csv_p.read_bytes()).hexdigest() != meta.get("sha256"):
-            return None  # corrupted / tampered cache entry: ignore it
+        try:
+            meta = json.loads(meta_p.read_text(encoding="utf-8"))
+            if time.time() - float(meta["stored_at_epoch"]) > self.ttl_s:
+                return None
+            if hashlib.sha256(csv_p.read_bytes()).hexdigest() != meta.get("sha256"):
+                return None  # corrupted / tampered cache entry: ignore it
+            df = pd.read_csv(csv_p, index_col=0, parse_dates=True)
+            if "close" not in df.columns:
+                return None
+        except (OSError, ValueError, KeyError, TypeError, pd.errors.ParserError):
+            return None      # unreadable / truncated entry: treat as a cache miss, re-download
         vol = df["volume"] if "volume" in df.columns else None
-        return RawSeries(
-            symbol=symbol, close=df["close"].rename(symbol),
-            volume=None if vol is None else vol.rename(symbol),
-            provider=meta["provider"], price_field=meta["price_field"],
-            adjusted_for=meta["adjusted_for"], currency=meta["currency"],
-            frequency=meta["frequency"], cache_hit=True,
-            ingested_at_utc=meta["ingested_at_utc"],
-            notes=list(meta.get("notes", [])) + ["served from local cache"],
-        )
+        try:
+            return RawSeries(
+                symbol=symbol, close=df["close"].rename(symbol),
+                volume=None if vol is None else vol.rename(symbol),
+                provider=meta["provider"], price_field=meta["price_field"],
+                adjusted_for=meta["adjusted_for"], currency=meta["currency"],
+                frequency=meta["frequency"], cache_hit=True,
+                ingested_at_utc=meta["ingested_at_utc"],
+                notes=list(meta.get("notes", [])) + ["served from local cache"],
+            )
+        except KeyError:
+            return None      # metadata missing required fields
 
     def put(self, s: RawSeries, period: str, interval: str) -> Path:
         self.root.mkdir(parents=True, exist_ok=True)

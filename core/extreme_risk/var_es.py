@@ -101,16 +101,44 @@ def student_t_var_es(loc: float, scale: float, df: float, alpha: float,
                         params={"loc": loc, "scale": scale, "df": df}, warnings=w)
 
 
-def fit_student_t(returns: NDArray[np.floating], min_df: float = 2.05) -> dict[str, float]:
-    """MLE fit of a location-scale Student-t; df is bounded below by ``min_df``."""
+def fit_student_t(returns: NDArray[np.floating], min_df: float = 2.05,
+                  start_dfs: tuple[float, ...] = (3.0, 6.0, 15.0)) -> dict[str, float]:
+    """Maximum-likelihood fit of a location-scale Student-t (df bounded below by ``min_df``).
+
+    ``scipy.stats.t.fit`` alone can stop at non-optimal points on daily-scale data
+    (it returned df < 2 where the true optimum was df ~ 3), so the log-likelihood is
+    maximised directly with Nelder-Mead over (log(df - min_df), loc, log scale)
+    from several starting dfs seeded with robust moments; scipy's own fit is kept
+    as one more candidate and the best log-likelihood wins.
+    """
+    from scipy.optimize import minimize
+
     x = as_1d_float(returns, "returns")
     if len(x) < 50:
         raise InsufficientDataError("Student-t fit needs at least 50 observations")
-    df, loc, scale = stats.t.fit(x)
-    if df < min_df:
-        df, loc, scale = stats.t.fit(x, f0=min_df)
-    ll = float(np.sum(stats.t.logpdf(x, df, loc, scale)))
-    return {"df": float(df), "loc": float(loc), "scale": float(scale), "loglik": ll}
+    med = float(np.median(x))
+    sd = float(x.std(ddof=1))
+    if sd <= 0:
+        raise InsufficientDataError("Student-t fit undefined for zero variance")
+
+    def nll(theta: NDArray[np.float64]) -> float:
+        df = min_df + float(np.exp(theta[0]))
+        val = -float(np.sum(stats.t.logpdf(x, df, theta[1], float(np.exp(theta[2])))))
+        return val if np.isfinite(val) else 1e300
+
+    candidates: list[tuple[float, float, float]] = []
+    for df0 in start_dfs:
+        s0 = sd * np.sqrt((df0 - 2.0) / df0) if df0 > 2 else 0.7 * sd
+        r = minimize(nll, np.array([np.log(df0 - min_df), med, np.log(s0)]), method="Nelder-Mead",
+                     options={"xatol": 1e-7, "fatol": 1e-9, "maxiter": 4000, "maxfev": 8000})
+        candidates.append((min_df + float(np.exp(r.x[0])), float(r.x[1]), float(np.exp(r.x[2]))))
+    df_s, loc_s, scale_s = stats.t.fit(x)
+    if df_s >= min_df:
+        candidates.append((float(df_s), float(loc_s), float(scale_s)))
+    lls = [float(np.sum(stats.t.logpdf(x, d, l, sc))) for d, l, sc in candidates]
+    k = int(np.argmax(lls))
+    df, loc, scale = candidates[k]
+    return {"df": df, "loc": loc, "scale": scale, "loglik": lls[k]}
 
 
 def cornish_fisher_var_es(returns: NDArray[np.floating], alpha: float,

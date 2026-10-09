@@ -104,11 +104,14 @@ def _metrics(bt: StrategyBacktest, sl: slice, s: BacktestSettings) -> dict[str, 
     years = len(x) / s.periods
     m["turnover_annual"] = float(to.sum() / years) if years > 0 else None
     m["cost_drag_annual"] = float(bt.costs.iloc[sl].sum() / years) if years > 0 else None
-    wh = bt.weights
-    if len(wh) > 1:
-        m["avg_weight_change_l1"] = float(np.abs(np.diff(wh.to_numpy(), axis=0)).sum(axis=1).mean())
+    # only rebalances and failures that happened inside this segment (no test-period leakage)
+    if len(x):
+        lo, hi = x.index[0], x.index[-1]
+        wh = bt.weights.loc[(bt.weights.index >= lo) & (bt.weights.index <= hi)]
+        if len(wh) > 1:
+            m["avg_weight_change_l1"] = float(np.abs(np.diff(wh.to_numpy(), axis=0)).sum(axis=1).mean())
+        m["n_failures"] = sum(1 for f in bt.failures if lo.date() <= pd.Timestamp(f.split(":")[0]).date() <= hi.date())
     m["gross_cagr"] = performance_summary(bt.gross_returns.iloc[sl].to_numpy(), s.rf_annual, s.periods)["cagr"]
-    m["n_failures"] = len(bt.failures)
     return m
 
 

@@ -33,7 +33,7 @@ from core.metrics import (
 )
 from core.optimization import optimizers as opt
 from core.optimization.constraints import verify_weights
-from core.simulation.engine import SimulationSettings, simulate_portfolio
+from core.simulation.engine import CashflowPlan, SimulationSettings, simulate_portfolio
 from core.simulation.models import GBMModel
 
 
@@ -59,6 +59,7 @@ class AnalysisContext:
     cov_method: str
     mu_method: str
     capital: float
+    monthly_contribution: float = 0.0
 
     @classmethod
     def from_result(cls, res) -> "AnalysisContext":  # noqa: ANN001
@@ -71,7 +72,8 @@ class AnalysisContext:
                                "selected": res.selected.weights},
                    validation_rows=[c.as_dict() for c in res.validation.checks] if res.validation else [],
                    cov_method=res.cov.method, mu_method=res.config.expected_return_method.value,
-                   capital=res.profile_input.capital)
+                   capital=res.profile_input.capital,
+                   monthly_contribution=res.profile_input.monthly_contribution)
 
 
 # ----------------------------------------------------------------- schemas
@@ -219,11 +221,16 @@ def t_stress(ctx: AnalysisContext, inp: PortfolioIn) -> dict[str, object]:
 
 def t_simulate(ctx: AnalysisContext, inp: SimulateIn) -> dict[str, object]:
     name, w = _resolve_weights(ctx, PortfolioIn(portfolio=inp.portfolio, weights=inp.weights))
-    gbm = GBMModel.from_log_returns(ctx.log_returns)
-    res = simulate_portfolio(gbm, w.to_numpy(), SimulationSettings(
-        n_paths=inp.n_paths, n_steps=inp.horizon_days, seed=inp.seed, initial_capital=ctx.capital))
+    hist = GBMModel.from_log_returns(ctx.log_returns)
+    periods = 252
+    mu_vec = ctx.mu.loc[list(ctx.log_returns.columns)].to_numpy()
+    gbm = GBMModel(periods * np.log1p(mu_vec / periods), hist.cov, hist.dt)   # same drift as the report's MC
+    res = simulate_portfolio(gbm, w.loc[list(ctx.log_returns.columns)].to_numpy(), SimulationSettings(
+        n_paths=inp.n_paths, n_steps=inp.horizon_days, seed=inp.seed, initial_capital=ctx.capital),
+        CashflowPlan(monthly_contribution=ctx.monthly_contribution))
     sm = res.summary
-    return {"kind": "simulation", "model": "gbm", "portfolio": name, "n_paths": inp.n_paths,
+    return {"kind": "simulation", "model": "gbm (deriva = retorno esperado [E])", "portfolio": name,
+            "n_paths": inp.n_paths, "monthly_contribution": ctx.monthly_contribution,
             "horizon_days": inp.horizon_days, "seed": inp.seed,
             "terminal_p5": sm["terminal_wealth_percentiles"]["p5"],
             "terminal_p50": sm["terminal_wealth_percentiles"]["p50"],

@@ -313,16 +313,28 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput) -> Analysi
                 registry.record(name, {"mu": mu_method, "cov": cov_method, "lookback": bset.lookback,
                                        "rebalance": bset.rebalance_every, "cost_bps": bset.cost_bps},
                                 bt.metrics_validation.loc[name].to_dict(), ds.content_hash(), "validation")
-            elig = [k for k in bt.strategies if k in cands and cands[k].success and cands[k].feasible]
+            # Eligibility uses ONLY information available up to the end of validation: every target
+            # weight a strategy produced in that period must satisfy the constraints, and its
+            # REALISED validation volatility must respect the profile cap. Full-sample estimates
+            # (which include the final-test period) are never used to choose a strategy.
             vol_cap = prof.research_limits.target_volatility_band[1]
-            in_band = [k for k in elig if cands[k].volatility <= vol_cap + 1e-9]
+            elig = []
+            for k, sb in bt.strategies.items():
+                wv = sb.weights.loc[:bt.validation_end]
+                if len(wv) and all(not opt.verify_weights(row.to_numpy(), pc) for _, row in wv.iterrows()):
+                    elig.append(k)
+            vval = bt.metrics_validation["volatility_ann"].astype(float)
+            in_band = [k for k in elig if vval[k] <= vol_cap + 1e-9]
             if in_band:
                 excluded_band = sorted(set(elig) - set(in_band))
                 elig = in_band
             else:
                 excluded_band = []
-                warnings.append(f"Nenhuma estratégia elegível tem volatilidade estimada <= {vol_cap:.0%} "
-                                "(teto da faixa do perfil); seleção feita sem esse filtro.")
+                warnings.append(f"Nenhuma estratégia elegível teve volatilidade realizada na validação <= "
+                                f"{vol_cap:.0%} (teto da faixa do perfil); seleção feita sem esse filtro.")
+            if not elig:
+                elig = ["equal_weight"]
+                warnings.append("Nenhuma estratégia respeitou as restrições em toda a validação; usado pesos iguais.")
             baseline = "equal_weight" if "equal_weight" in elig else elig[0]
             selection = select_strategy(bt, baseline, elig)
             selection["excluded_by_volatility_band"] = excluded_band
@@ -460,8 +472,8 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput) -> Analysi
                 if bench:
                     fe = factor_exposures(rets, rets[[bench]].rename(columns={bench: "MKT"}), P)
                     fac["market_exposures"] = fe
-                    fac["portfolio_beta"] = float(sum(sw.get(s, 0) * fe.loc[s, "beta_MKT"] for s in fe.index)
-                                                  + sw.get(bench, 0.0))
+                    # fe already contains the benchmark itself (beta = 1); do not add its weight twice
+                    fac["portfolio_beta"] = float(sum(sw.get(s, 0) * fe.loc[s, "beta_MKT"] for s in fe.index))
                     fac["factor_note"] = (f"fator de mercado = retornos de {bench} (proxy empírico do próprio "
                                           "universo; não é fator acadêmico)")
                 sections["factors"] = fac
@@ -500,26 +512,49 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput) -> Analysi
 
     # ------------------------------------------------------------- Monte Carlo
     with _Timer(timings, "monte_carlo"):
-        gbm = GBMModel.from_log_returns(lrets, P)
+        # Drift consistency: by default every simulation model is centred on the SAME expected
+        # returns the optimiser used (section 7 [E]); the historical drift is an explicit option.
+        hist = GBMModel.from_log_returns(lrets, P)
+        mu_vec = mu.loc[list(rets.columns)].to_numpy()
+        if cfg.mc_drift == "estimator":
+            mu_c = P * np.log1p(mu_vec / P)          # E[1+r_daily] = exp(mu_c / P)
+            shift_simple = mu_vec / P - rets.mean().to_numpy()
+        else:
+            mu_c = hist.mu
+            shift_simple = np.zeros(len(mu_vec))
+        shift_log = (mu_c - hist.mu) / P
+        gbm = GBMModel(mu_c, hist.cov, hist.dt)
         sw_np = sw.to_numpy()
+        sections["mc_drift"] = {
+            "mode": cfg.mc_drift, "mu_continuous": dict(zip(rets.columns, mu_c)),
+            "portfolio_drift_continuous": float(sw_np @ mu_c),
+            "portfolio_drift_historical": float(sw_np @ hist.mu),
+            "portfolio_expected_return_E": float(sw_np @ mu_vec),
+            "note": ("modelos centrados no mesmo retorno esperado [E] do otimizador (bootstrap/GARCH/regimes "
+                     "deslocados pela diferença entre a média estimada e a histórica)") if cfg.mc_drift == "estimator"
+                    else "deriva histórica (média amostral dos log-retornos); difere do retorno esperado [E]"}
         models: dict[str, object] = {"gbm": gbm}
         try:
             models["student_t"] = StudentTModel(gbm.mu, gbm.cov, max(tfit["df"], 2.5))
         except ValueError:
             pass
-        models["bootstrap"] = BootstrapModel(rets.to_numpy())
-        models["block_bootstrap"] = BlockBootstrapModel(rets.to_numpy(), 21)
+        models["bootstrap"] = BootstrapModel(rets.to_numpy() + shift_simple)
+        models["block_bootstrap"] = BlockBootstrapModel(rets.to_numpy() + shift_simple, 21)
         if cfg.run_heavy_analyses:
             try:
-                models["garch"] = CCCGarchModel.fit(rets)
+                gm = CCCGarchModel.fit(rets)
+                gm.mu = gm.mu + shift_simple
+                models["garch"] = gm
             except InsufficientDataError:
                 pass
             reg = sections.get("regimes", {})
             if isinstance(reg, dict) and "hmm2" in reg:
                 f2 = reg["_hmm2_fit"]
                 means, covs = state_conditional_moments(rets, f2.smoothed)
-                last = f2.filtered[-1]
-                models["regime"] = RegimeSwitchingModel(means, covs, f2.transition, last / last.sum())
+                means = [m + shift_log for m in means]
+                # one-step-ahead state probabilities P(s_{T+1} | F_T) = P(s_T | F_T) @ transition
+                nxt = f2.filtered[-1] @ f2.transition
+                models["regime"] = RegimeSwitchingModel(means, covs, f2.transition, nxt / nxt.sum())
         cf = CashflowPlan(profile_input.monthly_contribution, profile_input.monthly_withdrawal, 21,
                           cfg.transaction_cost_bps)
         main_model = models.get(cfg.simulation_model.value, gbm)
@@ -532,6 +567,9 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput) -> Analysi
                                 batch_size=cfg.simulation_batch_size, goal=cfg.goal,
                                 confidence_levels=tuple(cfg.confidence_levels))
         mc_main = simulate_portfolio(main_model, sw_np, ss, cf)  # type: ignore[arg-type]
+        from core.simulation.engine import level_key
+        lv_lo, lv_hi = level_key(min(cfg.confidence_levels)), level_key(max(cfg.confidence_levels))
+        c_lo, c_hi = f"{min(cfg.confidence_levels) * 100:g}", f"{max(cfg.confidence_levels) * 100:g}"
         comp = []
         for name, m in models.items():
             r_ = simulate_portfolio(m, sw_np, SimulationSettings(**{**ss.__dict__, "n_paths": min(5000, cfg.n_simulations),
@@ -540,9 +578,9 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput) -> Analysi
             comp.append({"model": name, "median_terminal": sm["terminal_wealth_percentiles"]["p50"],
                          "p05_terminal": sm["terminal_wealth_percentiles"]["p5"],
                          "p_negative_return": sm["p_negative_return"],
-                         "var95_horizon": sm["var_es_horizon"]["levels"]["0.95"]["var"],
-                         "es95_horizon": sm["var_es_horizon"]["levels"]["0.95"]["es"],
-                         "es99_1step": sm["var_es_1step"]["levels"]["0.99"]["es"],
+                         f"var{c_lo}_horizon": sm["var_es_horizon"]["levels"][lv_lo]["var"],
+                         f"es{c_lo}_horizon": sm["var_es_horizon"]["levels"][lv_lo]["es"],
+                         f"es{c_hi}_1step": sm["var_es_1step"]["levels"][lv_hi]["es"],
                          "mdd_median": sm["max_drawdown_unit_median"]})
         from core.simulation.models import stress_covariance
         stressed = GBMModel(gbm.mu, stress_covariance(gbm.cov, 0.5, 1.5), gbm.dt, name="gbm_stressed_corr")
@@ -551,9 +589,9 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput) -> Analysi
         sm = r_.summary
         comp.append({"model": "gbm_corr+50%_vol x1.5 (cenário)", "median_terminal": sm["terminal_wealth_percentiles"]["p50"],
                      "p05_terminal": sm["terminal_wealth_percentiles"]["p5"], "p_negative_return": sm["p_negative_return"],
-                     "var95_horizon": sm["var_es_horizon"]["levels"]["0.95"]["var"],
-                     "es95_horizon": sm["var_es_horizon"]["levels"]["0.95"]["es"],
-                     "es99_1step": sm["var_es_1step"]["levels"]["0.99"]["es"], "mdd_median": sm["max_drawdown_unit_median"]})
+                     f"var{c_lo}_horizon": sm["var_es_horizon"]["levels"][lv_lo]["var"],
+                     f"es{c_lo}_horizon": sm["var_es_horizon"]["levels"][lv_lo]["es"],
+                     f"es{c_hi}_1step": sm["var_es_1step"]["levels"][lv_hi]["es"], "mdd_median": sm["max_drawdown_unit_median"]})
         sections["mc_model_comparison"] = pd.DataFrame(comp).set_index("model")
         mc_profile = None
         if cfg.profile_horizon_simulation:

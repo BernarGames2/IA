@@ -126,7 +126,37 @@ def check_feasibility(pc: PortfolioConstraints) -> FeasibilityReport:
                       bounds=bounds, method="highs")
     if res.status == 0:
         return FeasibilityReport(True)
+    if pc.previous_weights is not None and pc.max_turnover is not None:
+        rep = _diagnose_turnover(pc)
+        if rep is not None:
+            return rep
     return diagnose_infeasibility(pc)
+
+
+def _diagnose_turnover(pc: PortfolioConstraints) -> FeasibilityReport | None:
+    """If the set is feasible WITHOUT the turnover limit, the limit is the conflict: report the
+    minimum turnover needed and the allocation that achieves it (turnover limit not relaxed)."""
+    n = pc.n
+    w0 = np.asarray(pc.previous_weights, float)
+    a_ub, b_ub = _lp_matrices(pc)
+    eye = np.eye(n)
+    rows = [np.hstack([eye, -eye]), np.hstack([-eye, -eye])]
+    rhs = [w0, -w0]
+    if a_ub is not None:
+        rows.insert(0, np.hstack([a_ub, np.zeros((a_ub.shape[0], n))]))
+        rhs.insert(0, b_ub)
+    res = linprog(np.concatenate([np.zeros(n), np.ones(n)]), A_ub=np.vstack(rows), b_ub=np.concatenate(rhs),
+                  A_eq=np.hstack([np.ones(n), np.zeros(n)])[None, :], b_eq=[1.0],
+                  bounds=list(zip(pc.lower, pc.upper)) + [(0, None)] * n, method="highs")
+    if res.status != 0:
+        return None   # infeasible even without turnover: generic diagnosis
+    w = res.x[:n]
+    need = float(np.abs(w - w0).sum())
+    return FeasibilityReport(
+        False, [f"limite de turnover {pc.max_turnover:.2%} é menor que o mínimo necessário ({need:.2%}) para "
+                "atender às demais restrições a partir dos pesos atuais"],
+        [f"elevar o limite de turnover para >= {need:.2%} ou ajustar a carteira em mais de um rebalanceamento"],
+        w, verify_weights(w, pc))
 
 
 def diagnose_infeasibility(pc: PortfolioConstraints) -> FeasibilityReport:

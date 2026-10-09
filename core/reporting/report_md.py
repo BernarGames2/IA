@@ -37,7 +37,8 @@ def md_table(df: pd.DataFrame, fmt: dict[str, str] | None = None, index: bool = 
     fmt = fmt or {}
     d = df.head(max_rows).copy()
     cols = list(d.columns)
-    head = (["" if d.index.name is None else str(d.index.name)] if index else []) + [str(c) for c in cols]
+    head = [h.replace("|", "\\|") for h in
+            (["" if d.index.name is None else str(d.index.name)] if index else []) + [str(c) for c in cols]]
     lines = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     for idx, row in d.iterrows():
         cells = [str(idx)] if index else []
@@ -54,7 +55,7 @@ def md_table(df: pd.DataFrame, fmt: dict[str, str] | None = None, index: bool = 
                 cells.append(num(v, 4))
             else:
                 cells.append(str(v))
-        lines.append("| " + " | ".join(cells) + " |")
+        lines.append("| " + " | ".join(c.replace("|", "\\|").replace("\n", " ") for c in cells) + " |")
     return "\n".join(lines)
 
 
@@ -169,7 +170,8 @@ def build_report(res, charts: dict[str, str], tables: dict[str, str]) -> str:  #
         a(f"\nSeleção (regra 1-EP, mais simples): **{es['cov_selection'].get('selected')}** (melhor bruto: "
           f"{es['cov_selection'].get('best')}).\n")
         a(md_table(es["mu_oos"], {"mse": "num4", "mse_se": "num4", "rank_ic_mean": "num3"}))
-        a(f"\nSeleção de retorno esperado (regra 1-EP): **{es['mu_selection'].get('selected')}**. Médias "
+        a(f"\nAvaliação fora da amostra sugere (regra 1-EP, informativo): **{es['mu_selection'].get('selected')}**; "
+          f"método USADO nesta execução: **{cfg.expected_return_method.value}** (configuração). Médias "
           "amostrais são ruidosas; nenhum método deve ser escolhido por gerar retorno esperado maior.")
     dist = S.get("distribution")
     if dist:
@@ -244,6 +246,11 @@ def build_report(res, charts: dict[str, str], tables: dict[str, str]) -> str:  #
     a("")
     # 9
     a("## 9. Monte Carlo e percentis")
+    dr = S.get("mc_drift")
+    if dr:
+        a(f"Deriva dos modelos: **{dr['mode']}** — {dr['note']}. Deriva contínua da carteira "
+          f"{pct(dr['portfolio_drift_continuous'])} a.a. (retorno esperado [E] {pct(dr['portfolio_expected_return_E'])}; "
+          f"deriva histórica seria {pct(dr['portfolio_drift_historical'])}).")
     for lab, mc in (("Horizonte configurado", res.mc_main), ("Horizonte do perfil", res.mc_profile)):
         if mc is None:
             continue
@@ -277,8 +284,9 @@ def build_report(res, charts: dict[str, str], tables: dict[str, str]) -> str:  #
     if isinstance(cmp_, pd.DataFrame):
         a("")
         a("Incerteza de MODELO (mesma carteira, 5.000 trajetórias por modelo, horizonte configurado) **[S]**:")
-        a(md_table(cmp_, {"median_terminal": "money", "p05_terminal": "money", "p_negative_return": "pct",
-                          "var95_horizon": "pct", "es95_horizon": "pct", "es99_1step": "pct", "mdd_median": "pct"}))
+        fm_ = {"median_terminal": "money", "p05_terminal": "money", "p_negative_return": "pct", "mdd_median": "pct"}
+        fm_.update({c: "pct" for c in cmp_.columns if c.startswith(("var", "es"))})
+        a(md_table(cmp_, fm_))
         a("\nErro Monte Carlo (EP acima) ≠ incerteza de parâmetros (seção 12) ≠ incerteza de modelo (tabela acima).")
     for k in ("mc_fan", "mc_hist"):
         if k in charts:
@@ -373,6 +381,8 @@ def build_report(res, charts: dict[str, str], tables: dict[str, str]) -> str:  #
         a(f"- Choque gaussiano mais provável que atinge o limite: distância de Mahalanobis {num(g['mahalanobis_distance'], 2)}; "
           f"probabilidade sob normal {g['prob_normal']:.2e}" + (f", sob Student-t (ν={num(g['t_df'], 1)}) {g['prob_student_t']:.2e}"
                                                                 if "prob_student_t" in g else "") + ".")
+        if g.get("warning"):
+            a(f"- ⚠ {g['warning']}")
         cont = pd.DataFrame({"choque": g["shock"], "contribuição": g["contributions"]})
         a(md_table(cont, {"choque": "pct", "contribuição": "pct"}))
         a("")
@@ -470,8 +480,16 @@ def build_report(res, charts: dict[str, str], tables: dict[str, str]) -> str:  #
         for w_ in bt.bias_warnings:
             a(f"- ⚠ {w_}")
         sel = res.selection
-        a(f"\nSeleção: **{sel.get('selected')}** ({sel.get('rule')}); melhor Sharpe bruto na validação: "
-          f"{sel.get('best_validation_sharpe')}; EP do Sharpe {num(sel.get('sharpe_se'), 3)}; a 1 EP: {sel.get('within_one_se')}.")
+        a(f"\nSeleção: **{sel.get('selected')}** ({sel.get('rule')}). Melhor pela métrica "
+          f"`{sel.get('ranking_metric')}`: {sel.get('best_by_metric')}; EP {num(sel.get('metric_se'), 4)}; "
+          f"a 1 EP: {sel.get('within_one_se')}; dominadas na validação: {sel.get('dominated_in_validation') or 'nenhuma'}.")
+        if sel.get("warning"):
+            a(f"- ⚠ {sel['warning']}")
+        if sel.get("p_holm"):
+            ph = pd.DataFrame({"p (Sharpe>0)": sel["p_sharpe_gt_0_validation"], "p Holm": sel["p_holm"],
+                               "p BH": sel["p_bh"]})
+            a("\nTestes múltiplos (H0: Sharpe excedente <= 0 na validação; p = 1 − PSR):")
+            a(md_table(ph, {c: "num3" for c in ph.columns}))
         d = sel.get("dsr_validation", {})
         if isinstance(d, dict) and "dsr" in d:
             a(f"Deflated Sharpe Ratio (N={int(d['n_trials'])} estratégias testadas): {num(d['dsr'], 3)}; "
@@ -503,6 +521,6 @@ def build_report(res, charts: dict[str, str], tables: dict[str, str]) -> str:  #
     a(md_table(pd.DataFrame({"segundos": res.timings}), {"segundos": "num2"}))
     a("")
     a("### Arquivos gerados")
-    for k, p in {**charts, **tables}.items():
+    for k, p in {**{f"gráfico {k}": v for k, v in charts.items()}, **{f"tabela {k}": v for k, v in tables.items()}}.items():
         a(f"- `{k}`: `{p}`")
     return "\n".join(L) + "\n"

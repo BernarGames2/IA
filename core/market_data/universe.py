@@ -16,6 +16,8 @@ STATIC_META: dict[str, AssetMeta] = {
     "BOVA11.SA": AssetMeta("BOVA11.SA", "equity", "broad_market", "BR", "BRL", "B3", "B3"),
     "IVVB11.SA": AssetMeta("IVVB11.SA", "equity", "broad_market", "US", "BRL", "B3", "B3"),
     "KNRI11.SA": AssetMeta("KNRI11.SA", "real_estate", "reit", "BR", "BRL", "B3", "B3"),
+    "IMAB11.SA": AssetMeta("IMAB11.SA", "fixed_income", "inflation_linked", "BR", "BRL", "B3", "B3"),
+    "B5P211.SA": AssetMeta("B5P211.SA", "fixed_income", "inflation_linked", "BR", "BRL", "B3", "B3"),
     "AAPL": AssetMeta("AAPL", "equity", "technology", "US", "USD", "NASDAQ", "NYSE"),
     "MSFT": AssetMeta("MSFT", "equity", "technology", "US", "USD", "NASDAQ", "NYSE"),
     "SPY": AssetMeta("SPY", "equity", "broad_market", "US", "USD", "NYSEARCA", "NYSE"),

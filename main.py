@@ -30,14 +30,16 @@ from utils.logging_config import configure_logging
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="main.py", description=f"{APP_NAME} v{APP_VERSION} — pesquisa e simulação "
                                 "(não executa ordens, não é recomendação de investimento).")
-    p.add_argument("--offline", action="store_true", help="dados SINTÉTICOS determinísticos, sem internet")
-    p.add_argument("--profile", choices=[x.value for x in RiskProfile], default="moderado",
+    p.add_argument("--offline", action="store_true", default=None,
+                   help="dados SINTÉTICOS determinísticos, sem internet (também via QPI_OFFLINE=true)")
+    p.add_argument("--profile", choices=[x.value for x in RiskProfile], default=None,
                    help="perfil do investidor hipotético de demonstração (padrão: moderado)")
     p.add_argument("--profile-file", type=Path, help="JSON com InvestorProfileInput (substitui --profile)")
     p.add_argument("--tickers", nargs="+", help="símbolos (modo online)")
     p.add_argument("--benchmark", help="símbolo do benchmark (modo online)")
     p.add_argument("--period", help="histórico do provedor, ex. 5y, 3y, 10y (padrão 5y)")
-    p.add_argument("--interval", choices=["1d", "1wk", "1mo"], help="frequência (padrão 1d)")
+    p.add_argument("--interval", choices=["1d"],
+                   help="frequência dos dados; somente diária (1d) nesta versão — todas as anualizações usam 252")
     p.add_argument("--base-currency", help="moeda-base ISO-4217 (padrão BRL)")
     p.add_argument("--risk-free-rate", type=float, help="taxa livre de risco anual decimal (ex. 0.105)")
     p.add_argument("--simulations", type=int, help="número de trajetórias Monte Carlo (padrão 20000)")
@@ -70,7 +72,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def config_from_args(a: argparse.Namespace) -> AppConfig:
-    overrides: dict[str, object] = {"offline": a.offline, "profile": a.profile}
+    overrides: dict[str, object] = {}   # only explicit CLI flags override QPI_* environment settings
+    if a.offline is not None:
+        overrides["offline"] = a.offline
+    if a.profile is not None:
+        overrides["profile"] = a.profile
     mapping = {"tickers": "tickers", "benchmark": "benchmark", "period": "period", "interval": "interval",
                "base_currency": "base_currency", "risk_free_rate": "risk_free_rate",
                "simulations": "n_simulations", "horizon_days": "horizon_days", "seed": "seed",
@@ -92,9 +98,15 @@ def config_from_args(a: argparse.Namespace) -> AppConfig:
 def profile_from_args(a: argparse.Namespace, cfg: AppConfig) -> InvestorProfileInput:
     if a.profile_file:
         data = json.loads(a.profile_file.read_text(encoding="utf-8"))
-        return InvestorProfileInput(**data)
-    p = demo_profile(RiskProfile(a.profile))
-    upd: dict[str, object] = {"base_currency": cfg.base_currency}
+        if not isinstance(data, dict):
+            raise ValueError("--profile-file deve conter um objeto JSON (InvestorProfileInput)")
+        p = InvestorProfileInput(**data)
+        if p.base_currency != cfg.base_currency:
+            raise ValueError(f"moeda do perfil ({p.base_currency}) difere da moeda-base ({cfg.base_currency})")
+        upd: dict[str, object] = {}
+    else:
+        p = demo_profile(RiskProfile(cfg.profile))
+        upd = {"base_currency": cfg.base_currency}
     if a.capital is not None:
         upd["capital"] = a.capital
     if a.monthly_contribution is not None:
@@ -110,7 +122,8 @@ def main(argv: list[str] | None = None) -> int:
         cfg = config_from_args(args)
         cfg.ensure_dirs()
         prof = profile_from_args(args, cfg)
-    except (PydanticValidationError, ValueError, OSError) as e:
+        external_docs = [(f.read_text(encoding="utf-8"), f"arquivo local {f.name}") for f in args.external_file]
+    except (PydanticValidationError, ValueError, TypeError, OSError, UnicodeDecodeError) as e:
         print(f"ERRO de configuração/entrada: {e}", file=sys.stderr)
         return 2
     logger = configure_logging(cfg.logs_dir / "run.jsonl", getattr(logging, args.log_level))
@@ -132,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
         from core.ai_analyst.tools import AnalysisContext
 
         analyst = ResearchAnalyst(AnalysisContext.from_result(res))
-        ext = [(f.read_text(encoding="utf-8"), f"arquivo local {f.name}") for f in args.external_file]
+        ext = external_docs
         parts = [f"# Analista de IA — execução {res.run_id}\n",
                  "Respostas geradas por regras determinísticas a partir de ferramentas validadas; "
                  "nenhum modelo de linguagem externo foi chamado.\n"]

@@ -78,7 +78,7 @@ def _ewma_normal(x: np.ndarray, a: float, lam: float = 0.94) -> tuple[float, flo
 
 
 def _student_t(x: np.ndarray, a: float) -> tuple[float, float]:
-    f = fit_student_t(x)
+    f = fit_student_t(x, start_dfs=(4.0,))  # rolling refits: one start keeps the backtest fast
     e = student_t_var_es(f["loc"], f["scale"], f["df"], a)
     return float(e.var), float(e.es)
 

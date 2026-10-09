@@ -78,11 +78,12 @@ class AppConfig(BaseSettings):
     tickers: list[str] = Field(
         default_factory=lambda: [
             "PETR4.SA", "VALE3.SA", "ITUB4.SA", "BOVA11.SA", "IVVB11.SA", "KNRI11.SA",
+            "IMAB11.SA", "B5P211.SA",   # fixed-income ETFs: without them the profiles' fixed-income minimum is infeasible
         ]
     )
     benchmark: str | None = "BOVA11.SA"
     period: str = "5y"
-    interval: Literal["1d", "1wk", "1mo"] = "1d"
+    interval: Literal["1d"] = "1d"   # annualisation, backtest windows and horizons assume daily data
     base_currency: str = "BRL"
     offline: bool = False
     cache_dir: Path = Path(".cache/market_data")
@@ -118,6 +119,7 @@ class AppConfig(BaseSettings):
     n_simulations: int = Field(20_000, ge=100, le=2_000_000)
     horizon_days: int = Field(252, ge=1)
     simulation_model: SimulationModel = SimulationModel.GBM
+    mc_drift: Literal["estimator", "historical"] = "estimator"
     simulation_batch_size: int = Field(2_000, ge=100)  # profiled: ~4x less memory than 20k, same speed
     seed: int = 42
     confidence_levels: list[float] = Field(default_factory=lambda: [0.95, 0.99])
@@ -179,6 +181,8 @@ class AppConfig(BaseSettings):
                 )
             self.risk_free_rate = fallback
             self.risk_free_rate_source = "demo_fallback"
+        if self.offline and self.base_currency != "BRL":
+            raise ValueError("o modo offline usa dados sintéticos em BRL; use --base-currency BRL")
         if not self.allow_short and self.min_weight < 0:
             raise ValueError("min_weight < 0 requires allow_short=True")
         return self

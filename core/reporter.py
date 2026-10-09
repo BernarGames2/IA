@@ -128,6 +128,11 @@ def write_outputs(res) -> dict[str, str]:  # noqa: ANN001
                  "excluded": ds.quality.excluded_symbols},
         "profile": to_jsonable(res.profile),
         "selected_portfolio": res.selected_name,
+        "effective": {"covariance_method": res.cov.method,
+                      "expected_return_method": cfg.expected_return_method.value,
+                      "benchmark": ("SINT_ACOES_BR" if cfg.offline else
+                                    (cfg.benchmark if cfg.benchmark in ds.symbols else None)),
+                      "mc_drift": cfg.mc_drift, "symbols_used": ds.symbols},
         "validation_overall": res.validation.overall.value if res.validation else None,
         "validated": res.validation.validated if res.validation else False,
         "warnings": res.warnings,

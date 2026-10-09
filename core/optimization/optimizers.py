@@ -220,9 +220,15 @@ def max_sharpe(mu, cov, pc: PortfolioConstraints, rf: float,
         if y.sum() > 0:
             hint.append(np.clip(y / y.sum(), pc.lower, pc.upper))
     res = solve("max_sharpe", f, g, pc, m, c, rf, settings, start_hint=hint)
-    if not np.any(m > rf):
-        res.warnings.append("nenhum ativo tem retorno esperado acima da taxa livre de risco: "
-                            "Sharpe máximo é negativo e a carteira não é significativa")
+    try:
+        _, r_max = return_range(m, pc)
+    except InfeasibleConstraintsError:
+        r_max = float("nan")
+    if np.isfinite(r_max) and r_max <= rf:
+        res.warnings.append(f"nenhuma carteira viável tem retorno esperado acima da taxa livre de risco "
+                            f"(máximo atingível {r_max:.2%} <= rf {rf:.2%}): o 'máximo Sharpe' é negativo e "
+                            "não é uma carteira significativa")
+        res.diagnostics["max_attainable_return"] = r_max
     return res
 
 
@@ -260,18 +266,45 @@ def target_volatility(mu, cov, pc: PortfolioConstraints, target_vol: float, rf: 
                  pc, m, c, rf, settings, extra_constraints=ineq, start_hint=hint)
 
 
-def return_range(m: np.ndarray, pc: PortfolioConstraints) -> tuple[float, float]:
-    """Min and max attainable expected return under the linear constraints (LP)."""
+def _lp_rows(pc: PortfolioConstraints, ncols: int, w_off: int = 0,
+             tv_off: int | None = None) -> tuple[list[np.ndarray], list[float], np.ndarray]:
+    """Group-bound rows (+ turnover rows ``|w - w0| <= v, sum v <= TO`` when ``tv_off`` is set)."""
+    n = pc.n
+    rows: list[np.ndarray] = []
+    rhs: list[float] = []
     a, lo, hi, _ = pc.group_matrix()
-    a_ub = np.vstack([a, -a]) if a.shape[0] else None
-    b_ub = np.concatenate([hi, -lo]) if a.shape[0] else None
+    for k in range(a.shape[0]):
+        r = np.zeros(ncols); r[w_off:w_off + n] = a[k]; rows.append(r); rhs.append(float(hi[k]))
+        r = np.zeros(ncols); r[w_off:w_off + n] = -a[k]; rows.append(r); rhs.append(-float(lo[k]))
+    if tv_off is not None:
+        w0 = np.asarray(pc.previous_weights, float)
+        for i in range(n):
+            r = np.zeros(ncols); r[w_off + i] = 1; r[tv_off + i] = -1; rows.append(r); rhs.append(float(w0[i]))
+            r = np.zeros(ncols); r[w_off + i] = -1; r[tv_off + i] = -1; rows.append(r); rhs.append(-float(w0[i]))
+        r = np.zeros(ncols); r[tv_off:tv_off + n] = 1; rows.append(r); rhs.append(float(pc.max_turnover))
+    eq = np.zeros(ncols); eq[w_off:w_off + n] = 1.0
+    return rows, rhs, eq
+
+
+def _has_turnover(pc: PortfolioConstraints) -> bool:
+    return pc.previous_weights is not None and pc.max_turnover is not None
+
+
+def return_range(m: np.ndarray, pc: PortfolioConstraints) -> tuple[float, float]:
+    """Min and max attainable expected return under ALL linear constraints (incl. turnover)."""
+    n = pc.n
+    tv = _has_turnover(pc)
+    ncols = 2 * n if tv else n
+    rows, rhs, eq = _lp_rows(pc, ncols, 0, n if tv else None)
+    bounds = list(zip(pc.lower, pc.upper)) + ([(0, None)] * n if tv else [])
     out = []
     for sign in (1.0, -1.0):
-        r = linprog(sign * m, A_ub=a_ub, b_ub=b_ub, A_eq=np.ones((1, pc.n)), b_eq=[1.0],
-                    bounds=list(zip(pc.lower, pc.upper)), method="highs")
+        c = np.zeros(ncols); c[:n] = sign * m
+        r = linprog(c, A_ub=np.array(rows) if rows else None, b_ub=np.array(rhs) if rhs else None,
+                    A_eq=eq[None, :], b_eq=[1.0], bounds=bounds, method="highs")
         if r.status != 0:
             raise InfeasibleConstraintsError("constraints infeasible")
-        out.append(float(m @ r.x))
+        out.append(float(m @ r.x[:n]))
     return out[0], out[1]
 
 
@@ -279,8 +312,12 @@ def equal_weight(pc: PortfolioConstraints, mu=None, cov=None, rf: float = 0.0) -
     """1/N over assets with positive upper bound. Constraint violations are reported."""
     elig = pc.upper > 0
     w = np.where(elig, 1.0 / max(1, elig.sum()), 0.0)
-    m, c = _prep(mu, cov, pc) if cov is not None else (None, np.eye(pc.n))
-    ret, vol, sh = _stats(w, m, c, rf)
+    if cov is not None:
+        m, c = _prep(mu, cov, pc)
+        ret, vol, sh = _stats(w, m, c, rf)
+    else:   # no covariance supplied: volatility is unknown, not computed against an identity matrix
+        m = None if mu is None else (mu.loc[pc.symbols].to_numpy() if isinstance(mu, pd.Series) else np.asarray(mu, float))
+        ret, vol, sh = (float(w @ m) if m is not None else float("nan")), float("nan"), None
     viol = verify_weights(w, pc)
     return OptimizationResult("equal_weight", pd.Series(w, index=pc.symbols), True, "closed_form",
                               ret, vol, sh, not viol, violations=viol,
@@ -341,7 +378,8 @@ def risk_parity(cov, pc: PortfolioConstraints, mu=None, rf: float = 0.0,
 
     inv_vol = np.where(eligible, 1.0 / np.sqrt(np.diag(c)), 0.0)
     hint = [np.clip(inv_vol / inv_vol.sum(), pc.lower, pc.upper)] if inv_vol.sum() > 0 else None
-    res = solve("risk_parity", f2, g2, pc, m, c, rf, settings, start_hint=hint)
+    rp_settings = settings or SolverSettings(ftol=1e-10)   # objective is O(1e-2..1e2); 1e-12 stalls SLSQP
+    res = solve("risk_parity", f2, g2, pc, m, c, rf, rp_settings, start_hint=hint)
     if res.success:
         w = res.weights.to_numpy()
         share = w * (c @ w) / float(w @ c @ w)
@@ -435,17 +473,20 @@ def min_cvar(scenario_returns: np.ndarray, pc: PortfolioConstraints, alpha: floa
         return OptimizationResult("min_cvar", pd.Series(np.full(n, np.nan), index=pc.symbols), False,
                                   "infeasible_constraints", np.nan, np.nan, None, False,
                                   warnings=feas.conflicts)
-    nv = n + 1 + t
-    cvec = np.concatenate([np.zeros(n), [1.0], np.full(t, 1.0 / ((1 - alpha) * t))])
-    a_ub = np.hstack([-r, -np.ones((t, 1)), -np.eye(t)])
-    b_ub = np.zeros(t)
-    a, lo, hi, _ = pc.group_matrix()
-    if a.shape[0]:
-        a_ub = np.vstack([a_ub, np.hstack([a, np.zeros((a.shape[0], 1 + t))]),
-                          np.hstack([-a, np.zeros((a.shape[0], 1 + t))])])
-        b_ub = np.concatenate([b_ub, hi, -lo])
-    a_eq = np.zeros((1, nv)); a_eq[0, :n] = 1.0
-    bounds = list(zip(pc.lower, pc.upper)) + [(None, None)] + [(0, None)] * t
+    tv = _has_turnover(pc)
+    nv = n + 1 + t + (n if tv else 0)
+    cvec = np.zeros(nv)
+    cvec[n] = 1.0
+    cvec[n + 1:n + 1 + t] = 1.0 / ((1 - alpha) * t)
+    a_cvar = np.zeros((t, nv))
+    a_cvar[:, :n] = -r
+    a_cvar[:, n] = -1.0
+    a_cvar[:, n + 1:n + 1 + t] = -np.eye(t)
+    rows, rhs, a_eq_row = _lp_rows(pc, nv, 0, (n + 1 + t) if tv else None)
+    a_ub = np.vstack([a_cvar] + ([np.array(rows)] if rows else []))
+    b_ub = np.concatenate([np.zeros(t), np.array(rhs)]) if rows else np.zeros(t)
+    a_eq = a_eq_row[None, :]
+    bounds = list(zip(pc.lower, pc.upper)) + [(None, None)] + [(0, None)] * t + ([(0, None)] * n if tv else [])
     res = linprog(cvec, A_ub=a_ub, b_ub=b_ub, A_eq=a_eq, b_eq=[1.0], bounds=bounds, method="highs")
     if res.status != 0:
         return OptimizationResult("min_cvar", pd.Series(np.full(n, np.nan), index=pc.symbols), False,

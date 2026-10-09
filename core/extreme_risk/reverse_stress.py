@@ -40,6 +40,14 @@ def gaussian_reverse_stress(weights: pd.Series, mean_h: pd.Series, cov_h: pd.Dat
         "contributions": dict(zip(weights.index, w * shock)),
         "portfolio_return_check": float(w @ shock),
     }
+    impossible = {k: float(v) for k, v in zip(weights.index, shock) if v <= -1.0}
+    out["impossible_components"] = impossible
+    out["plausible_as_price_shock"] = not impossible
+    if impossible:
+        out["warning"] = ("o choque gaussiano mais provável contém retornos <= -100% "
+                          f"({', '.join(impossible)}): matematicamente impossível para posições compradas; "
+                          "a aproximação normal de retornos simples não vale nessa cauda — use apenas como "
+                          "indicação de direção, não como cenário")
     if t_df is not None and t_df > 2:
         scale = np.sqrt((t_df - 2) / t_df)
         out["prob_student_t"] = float(stats.t.sf(d / scale, t_df))

@@ -168,6 +168,11 @@ def simulate_portfolio(model: ReturnModel, weights: np.ndarray, settings: Simula
         summary=summary, convergence=conv)
 
 
+def level_key(a: float) -> str:
+    """Stable key for a confidence level (0.95 -> "0.95", 0.975 -> "0.975"; never rounded)."""
+    return f"{a:g}"
+
+
 def _binom_se(p: float, n: int) -> float:
     return float(np.sqrt(max(p * (1 - p), 0.0) / n))
 
@@ -201,9 +206,9 @@ def summarize(term: np.ndarray, real: np.ndarray, unit: np.ndarray, mdd: np.ndar
     var_h, var_1 = {}, {}
     for a in s.confidence_levels:
         v, e = empirical_var_es(-(unit - 1.0), a)
-        var_h[f"{a:.2f}"] = {"var": v, "es": e}
+        var_h[level_key(a)] = {"var": v, "es": e}
         v1, e1 = empirical_var_es(-first, a)
-        var_1[f"{a:.2f}"] = {"var": v1, "es": e1}
+        var_1[level_key(a)] = {"var": v1, "es": e1}
     out["var_es_horizon"] = {"variable": "retorno da carteira no horizonte, sem fluxos (U_T-1)",
                              "horizon_steps": s.n_steps, "levels": var_h}
     out["var_es_1step"] = {"variable": "retorno da carteira no 1º passo simulado (condicional)",
