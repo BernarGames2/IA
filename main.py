@@ -61,6 +61,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="pula análises pesadas (backtest, modelos de volatilidade, regimes, robustez)")
     p.add_argument("--no-charts", action="store_true", help="não gera PNGs")
     p.add_argument("--output-dir", type=Path, help="diretório de saída (padrão outputs/)")
+    p.add_argument("--ask", action="append", default=[],
+                   help="pergunta ao analista de IA (baseado em ferramentas); pode repetir")
+    p.add_argument("--external-file", type=Path, action="append", default=[],
+                   help="documento externo (texto) tratado como dado NÃO confiável pelo analista")
     p.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
     return p
 
@@ -123,6 +127,22 @@ def main(argv: list[str] | None = None) -> int:
         logger.error("data unavailable", extra={"error": str(e)})
         return 2
     outputs = write_outputs(res)
+    if args.ask:
+        from core.ai_analyst.analyst import ResearchAnalyst
+        from core.ai_analyst.tools import AnalysisContext
+
+        analyst = ResearchAnalyst(AnalysisContext.from_result(res))
+        ext = [(f.read_text(encoding="utf-8"), f"arquivo local {f.name}") for f in args.external_file]
+        parts = [f"# Analista de IA — execução {res.run_id}\n",
+                 "Respostas geradas por regras determinísticas a partir de ferramentas validadas; "
+                 "nenhum modelo de linguagem externo foi chamado.\n"]
+        for q in args.ask:
+            ans = analyst.ask(q, ext)
+            parts.append(ans.render())
+            print("\n" + ans.render())
+        ap = cfg.reports_dir / f"{res.run_id}_analyst.md"
+        ap.write_text("\n\n".join(parts), encoding="utf-8")
+        outputs["analyst"] = str(ap)
     v = res.validation
     print(f"{APP_NAME} v{APP_VERSION} — execução {res.run_id}")
     print(f"Dados: {'SINTÉTICOS (offline)' if res.dataset.is_synthetic else 'reais (yfinance)'}; "
@@ -138,6 +158,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  ! {w}")
     print(f"Relatório: {outputs['report']}")
     print(f"Manifesto: {outputs['manifest']}")
+    if "analyst" in outputs:
+        print(f"Analista: {outputs['analyst']}")
     logger.info("run end", extra={"run_id": res.run_id, "validation": v.overall.value if v else None,
                                   "timings": res.timings})
     return 0 if (v is None or v.validated) else 3
