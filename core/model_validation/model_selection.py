@@ -28,7 +28,7 @@ COMPLEXITY = {
     "hrp": 2, "max_diversification": 2, "max_sharpe": 2, "min_cvar": 2,
     "robust_mean_variance": 3, "resampled_max_sharpe": 3,
 }
-COV_COMPLEXITY = {"sample": 0, "ledoit_wolf": 1, "oas": 1, "ewma": 1, "factor_pca": 2}
+COV_COMPLEXITY = {"sample": 0, "ledoit_wolf": 1, "lw_constant_corr": 1, "oas": 1, "ewma": 1, "factor_pca": 2}
 VOL_COMPLEXITY = {"rolling_hist": 0, "ewma": 1, "garch": 2, "gjr_garch": 3}
 MU_COMPLEXITY = {"grand_mean": 0, "historical": 1, "ewma": 1, "james_stein": 2}
 

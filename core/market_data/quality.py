@@ -119,7 +119,7 @@ def align_prices(cleaned: dict[str, pd.Series]) -> tuple[pd.DataFrame, str, int]
     Aligning *prices* (not returns) means a Friday->Monday return for a 24x7 asset
     correctly compounds the weekend. Returns (panel, description, dates_dropped).
     """
-    panel = pd.concat(cleaned, axis=1, join="outer").sort_index()
+    panel = pd.concat(cleaned, axis=1, join="outer", sort=True).sort_index()
     total = len(panel)
     aligned = panel.dropna(how="any")
     desc = ("inner join of price dates across all symbols (no forward-fill); "

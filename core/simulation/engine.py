@@ -87,7 +87,8 @@ def simulate_portfolio(model: ReturnModel, weights: np.ndarray, settings: Simula
     rng = np.random.default_rng(s.seed)
     rec = s.record_every or max(1, s.n_steps // 252)
     rec_steps = np.unique(np.concatenate([np.arange(0, s.n_steps + 1, rec), [s.n_steps]]))
-    fee = (1.0 + s.annual_fee_bps / 1e4) ** (1.0 / s.periods_per_year) - 1.0
+    # an annual fee of f (fraction of assets) leaves (1-f) of wealth after one year
+    fee_factor = (1.0 - s.annual_fee_bps / 1e4) ** (1.0 / s.periods_per_year)
     bsz = _batch_size(s, model.n_assets)
 
     paths = np.empty((s.n_paths, len(rec_steps)))
@@ -113,7 +114,7 @@ def simulate_portfolio(model: ReturnModel, weights: np.ndarray, settings: Simula
         for t in range(1, s.n_steps + 1):
             v_start = hold.sum(axis=1)
             hold *= 1.0 + r[:, t - 1, :]
-            hold *= 1.0 - fee
+            hold *= fee_factor
             if s.rebalance_every and t % s.rebalance_every == 0:
                 tot = hold.sum(axis=1, keepdims=True)
                 target = tot * w

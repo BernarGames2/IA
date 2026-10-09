@@ -158,7 +158,7 @@ def sensitivity_analysis(returns: pd.DataFrame, optimizer: Optimizer, pc: Portfo
                 "l1_vs_base": d, **{f"w_{k}": float(v) for k, v in res.weights.items()}}
 
     rows = []
-    for cm in ("sample", "ledoit_wolf", "oas", "ewma", "factor_pca"):
+    for cm in ("sample", "ledoit_wolf", "lw_constant_corr", "oas", "ewma", "factor_pca"):
         rows.append(_row(f"cov={cm}", optimizer(base_mu, estimate_cov(returns, cm, periods).cov, pc)))
     for mm in ("historical", "ewma", "james_stein", "grand_mean"):
         rows.append(_row(f"mu={mm}", optimizer(estimate_mu(returns, mm, periods), base_cov, pc)))

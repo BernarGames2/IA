@@ -44,7 +44,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--horizon-days", type=int, help="horizonte da simulação principal em dias úteis (padrão 252)")
     p.add_argument("--seed", type=int, help="semente (padrão 42)")
     p.add_argument("--sim-model", choices=["gbm", "student_t", "bootstrap", "block_bootstrap", "regime", "garch"])
-    p.add_argument("--cov-method", choices=["sample", "ledoit_wolf", "oas", "ewma", "factor_pca"])
+    p.add_argument("--cov-method", choices=["auto", "sample", "ledoit_wolf", "lw_constant_corr", "oas", "ewma", "factor_pca"],
+                   help="estimador de covariância (padrão auto = escolhido fora da amostra)")
     p.add_argument("--mu-method", choices=["historical", "ewma", "james_stein"])
     p.add_argument("--var-method", choices=["historical", "normal", "student_t", "cornish_fisher", "simulated"])
     p.add_argument("--max-weight", type=float, help="peso máximo por ativo (0-1), além do limite do perfil")

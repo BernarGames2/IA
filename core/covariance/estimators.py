@@ -72,6 +72,44 @@ def oas_cov(r: pd.DataFrame, periods: int = 252) -> CovarianceResult:
                    {"shrinkage": float(o.shrinkage_)})
 
 
+def lw_constant_corr_cov(r: pd.DataFrame, periods: int = 252) -> CovarianceResult:
+    """Ledoit & Wolf (2004) shrinkage toward the constant-correlation target.
+
+    Unlike the scaled-identity target, this target keeps each asset's own sample
+    variance, so it does not distort heterogeneous variances (e.g. a cash-like
+    asset next to crypto). Optimal intensity
+    ``delta = max(0, min(1, (pi - rho) / gamma / T))`` (Ledoit-Wolf 2004, eqs. in App. B).
+    """
+    x = r.to_numpy(dtype=float)
+    t, n = x.shape
+    if t < 3 or n < 2:
+        raise InsufficientDataError("need T >= 3 and N >= 2")
+    x = x - x.mean(axis=0)
+    s = x.T @ x / t
+    var = np.diag(s)
+    if np.any(var <= 0):
+        raise InsufficientDataError("zero-variance asset: constant-correlation target undefined")
+    sd = np.sqrt(var)
+    corr = s / np.outer(sd, sd)
+    rbar = (corr.sum() - n) / (n * (n - 1))
+    f = rbar * np.outer(sd, sd)
+    np.fill_diagonal(f, var)
+    y = x ** 2
+    phi_mat = y.T @ y / t - s ** 2
+    phi = phi_mat.sum()
+    theta = (x ** 3).T @ x / t - var[:, None] * s
+    ratio = np.outer(1.0 / sd, sd)          # sqrt(s_jj / s_ii) at [i, j]
+    off = ~np.eye(n, dtype=bool)
+    rho = np.trace(phi_mat) + rbar * float(np.sum((ratio * theta)[off]))
+    gamma = float(np.sum((f - s) ** 2))
+    kappa = (phi - rho) / gamma if gamma > 0 else 0.0
+    delta = float(max(0.0, min(1.0, kappa / t)))
+    c = delta * f + (1 - delta) * s
+    c = c * t / (t - 1)  # report on the same (ddof=1) scale as the sample estimator
+    return _finish("lw_constant_corr", c * periods, list(r.columns), t,
+                   {"shrinkage": delta, "mean_correlation": float(rbar)})
+
+
 def ewma_cov(r: pd.DataFrame, periods: int = 252, lam: float = 0.94) -> CovarianceResult:
     """Exponentially weighted covariance, weights proportional to lam^(age)."""
     x = r.to_numpy()
@@ -114,6 +152,7 @@ def factor_pca_cov(r: pd.DataFrame, periods: int = 252, k: int | None = None) ->
 ESTIMATORS = {
     "sample": sample_cov,
     "ledoit_wolf": ledoit_wolf_cov,
+    "lw_constant_corr": lw_constant_corr_cov,
     "oas": oas_cov,
     "ewma": ewma_cov,
     "factor_pca": factor_pca_cov,

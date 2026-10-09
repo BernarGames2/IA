@@ -249,12 +249,15 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput) -> Analysi
                                            "configured_cov": cfg.covariance_method.value}
     mu_method = cfg.expected_return_method.value
     cov_method = cfg.covariance_method.value
+    if cov_method == "auto":
+        cov_method = str(sel_cov.get("selected", "lw_constant_corr")) if sel_cov else "lw_constant_corr"
+        sections["estimator_selection"]["cov_used"] = cov_method
+    elif sel_cov and sel_cov.get("selected") != cov_method:
+        warnings.append(f"Avaliação fora da amostra sugere covariância '{sel_cov['selected']}' "
+                        f"(configurada: '{cov_method}'). Mantida a configuração; ver seção de estimadores.")
     mu = estimate_mu(rets, mu_method, P)
     covr = estimate_cov(rets, cov_method, P)
     warnings += [f"Covariância: {w}" for w in covr.warnings]
-    if sel_cov and sel_cov.get("selected") != cov_method:
-        warnings.append(f"Avaliação fora da amostra sugere covariância '{sel_cov['selected']}' "
-                        f"(configurada: '{cov_method}'). Mantida a configuração; ver seção de estimadores.")
     se_mu = np.sqrt(np.diag(covr.cov.to_numpy()) * P / len(rets))
     sections["mu_uncertainty"] = pd.DataFrame({"mu": mu, "se_annual": se_mu,
                                                "t_stat": mu.to_numpy() / se_mu}, index=mu.index)

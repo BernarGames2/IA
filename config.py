@@ -36,7 +36,9 @@ class ReturnMethod(str, Enum):
 
 class CovarianceMethod(str, Enum):
     SAMPLE = "sample"
+    AUTO = "auto"                      # chosen by out-of-sample evaluation (1-SE rule)
     LEDOIT_WOLF = "ledoit_wolf"
+    LW_CONSTANT_CORR = "lw_constant_corr"
     OAS = "oas"
     EWMA = "ewma"
     FACTOR_PCA = "factor_pca"
@@ -101,7 +103,7 @@ class AppConfig(BaseSettings):
 
     # --- estimation ---------------------------------------------------------------
     expected_return_method: ExpectedReturnMethod = ExpectedReturnMethod.JAMES_STEIN
-    covariance_method: CovarianceMethod = CovarianceMethod.LEDOIT_WOLF
+    covariance_method: CovarianceMethod = CovarianceMethod.AUTO
     ewma_lambda: float = Field(0.94, gt=0, lt=1)
 
     # --- portfolio constraints -------------------------------------------------
