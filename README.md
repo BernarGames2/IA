@@ -169,3 +169,36 @@ Resumo (lista completa em [`docs/assumptions_and_limitations.md`](docs/assumptio
 * Limites por fator não são restrições do otimizador (exposições são apenas reportadas).
 * O analista de IA é determinístico (regras + ferramentas); nenhum LLM externo é chamado.
 * Retornos esperados históricos são ruidosos; a demo sintética mostra explicitamente o erro de estimação.
+
+## 9. Site (Vercel)
+
+A versão web fica em `webapp/`: API FastAPI (`webapp/server.py`) + página única (`webapp/static/index.html`)
+com formulário, gráficos interativos (tooltips, tema claro/escuro, layout para celular), tabelas e o analista
+de IA. **O site usa apenas os dados sintéticos** (os termos do Yahoo restringem redistribuir cotações num site
+público, e o modo offline é o caminho validado).
+
+| Endpoint | Função |
+|---|---|
+| `GET /` | página |
+| `POST /api/analisar` | roda a análise (modo `rapido` ou `completo`) e devolve um resumo JSON |
+| `POST /api/perguntar` | pergunta ao analista de IA (mesmas recusas e verificação de números da CLI) |
+| `GET /api/health`, `GET /api/docs` | saúde e documentação OpenAPI |
+
+Entradas são validadas e limitadas (≤ 20.000 simulações, horizonte ≤ 30 anos, pergunta ≤ 500 caracteres).
+
+**Publicar na Vercel:** envie o repositório ao GitHub → em vercel.com/new importe o repositório → Deploy.
+A Vercel lê:
+* `pyproject.toml` — dependências **só do runtime web** (sem matplotlib, yfinance ou pytest) e
+  `[tool.vercel] entrypoint = "webapp.server:app"` (o `main.py` da raiz é a CLI, não um app web);
+* `uv.lock` — versões exatas; `.python-version` — Python 3.13;
+* `.vercelignore` — exclui CLI, testes e documentação do pacote da função.
+
+Medido localmente com exatamente essas dependências: pacote de dependências **256 MB** (limite da Vercel para
+Python: 500 MB); modo rápido ~15 s e completo ~45 s numa máquina de 4 núcleos (no plano gratuito da Vercel a
+duração máxima é 300 s). O deploy na própria Vercel não pôde ser testado a partir deste ambiente.
+
+**Rodar o site localmente:**
+```bash
+pip install -r requirements.txt
+uvicorn webapp.server:app --reload      # http://127.0.0.1:8000
+```

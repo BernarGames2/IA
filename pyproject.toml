@@ -1,0 +1,21 @@
+# Web deployment manifest (Vercel). The CLI/dev environment still uses requirements.txt.
+# Only runtime dependencies of the web API are listed here, to keep the Vercel Python
+# bundle well below its size limit (no matplotlib, yfinance or test tooling).
+[project]
+name = "quant-portfolio-intelligence"
+version = "0.6.0"
+description = "Quant Portfolio Intelligence Engine — web demo (synthetic data only)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "numpy>=2.0,<3",
+    "pandas>=2.2,<4",
+    "scipy>=1.13,<2",
+    "pydantic>=2.6,<3",
+    "pydantic-settings>=2.2,<3",
+    "scikit-learn>=1.4,<2",
+]
+
+[tool.vercel]
+# Explicit entrypoint: main.py at the repository root is the CLI, not a web app.
+entrypoint = "webapp.server:app"

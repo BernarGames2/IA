@@ -1,0 +1,12 @@
+# Not needed by the web function (keeps the bundle small and avoids main.py /
+# requirements.txt being picked up instead of the configured entrypoint).
+tests/
+docs/
+outputs/
+scripts/
+.cache/
+main.py
+requirements.txt
+requirements-lock.txt
+pytest.ini
+.env
