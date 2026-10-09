@@ -1,0 +1,13 @@
+# Exact versions used to run the test-suite and the offline end-to-end run
+# recorded in docs/test_results.md (Python 3.13.16, Linux x86_64).
+numpy==2.5.3
+pandas==3.0.5
+scipy==1.18.1
+matplotlib==3.11.2
+pydantic==2.13.5
+pydantic-settings==2.15.0
+scikit-learn==1.9.1
+requests==2.34.2
+yfinance==1.7.0
+pytest==9.1.1
+pytest-cov==7.1.0

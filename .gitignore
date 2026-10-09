@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+.env
+.venv/
+venv/
+*.egg-info/
+.cache/
+# generated outputs (regenerable via `python main.py --offline`)
+outputs/charts/*
+outputs/reports/*
+outputs/tables/*
+outputs/logs/*
+outputs/runs/*
+!outputs/**/.gitkeep
