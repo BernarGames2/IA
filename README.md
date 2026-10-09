@@ -148,7 +148,7 @@ Christoffersen, Z2 de Acerbi-Szekely).
 ## 7. Testes
 
 ```bash
-python -m pytest                       # suíte completa (offline, determinística; ~1m45s)
+python -m pytest                       # suíte completa (offline, determinística; ~1,5 min)
 python -m pytest --cov=core --cov=models --cov=utils --cov=config
 python -m pytest -m "not slow"         # sem o teste ponta a ponta completo
 python scripts/profile_run.py          # profiling, escalabilidade e reprodutibilidade
