@@ -38,7 +38,9 @@ def configure_logging(log_file: Path | None = None, level: int = logging.INFO,
     """Configure the ``qpi`` logger: human-readable console + JSON-lines file."""
     logger = logging.getLogger("qpi")
     logger.setLevel(level)
-    logger.handlers.clear()
+    for old in list(logger.handlers):  # close file handles before replacing handlers
+        logger.removeHandler(old)
+        old.close()
     logger.propagate = False
     if console:
         h = logging.StreamHandler(sys.stderr)
