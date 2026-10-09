@@ -242,3 +242,14 @@ def check_risk_free(is_fallback: bool, rf: float) -> Check:
     return Check("taxa livre de risco", Status.WARNING if is_fallback else Status.PASS, False,
                  f"rf = {rf:.2%} é FALLBACK DE DEMONSTRAÇÃO (não é cotação)" if is_fallback
                  else f"rf = {rf:.2%} informada pelo usuário")
+
+
+def check_profile_volatility(vol: float, band: tuple[float, float], name: str) -> Check:
+    """Estimated volatility of the selected portfolio vs the profile's reference band."""
+    lo, hi = band
+    if lo <= vol <= hi:
+        return Check("volatilidade vs faixa do perfil", Status.PASS, False,
+                     f"{name}: volatilidade estimada {vol:.2%} dentro da faixa de referência {lo:.0%}–{hi:.0%}")
+    return Check("volatilidade vs faixa do perfil", Status.WARNING, False,
+                 f"{name}: volatilidade estimada {vol:.2%} FORA da faixa de referência {lo:.0%}–{hi:.0%} "
+                 "(faixa é referência de pesquisa, não restrição do otimizador)", {"vol": vol, "band": band})

@@ -567,6 +567,13 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput) -> Analysi
                           sections.get("stress_shocks"), {s: f.value for s, f in ds.quality.per_symbol_flag.items()},
                           (ds.volumes * ds.prices).iloc[-63:].mean() if ds.volumes is not None else None)
     sections["asset_roles"] = roles
+    if synth_truth is not None:
+        tm = synth_truth.true_mu  # type: ignore[attr-defined]
+        ts = synth_truth.true_sigma_calm  # type: ignore[attr-defined]
+        sections["synthetic_truth"] = pd.DataFrame({
+            "drift_continuo_verdadeiro": tm, "vol_calma_verdadeira": ts,
+            "media_aritmetica_estimada": astats["arith_mean_ann"], "mu_usado": mu,
+            "vol_estimada": astats["vol_ann"]})
 
     result = AnalysisResult(
         run_id=run_id, started_at_utc=started, config=cfg, profile_input=profile_input, profile=prof,
@@ -623,6 +630,8 @@ def validate_result(res: AnalysisResult) -> iv.ValidationReport:
     checks.append(iv.check_mc_theory(float(tw.mean()), float(tw.std(ddof=1) / np.sqrt(len(tw))),
                                      float(np.exp(0.08 * 63 / 252)), "GBM E[S_T]=S_0 e^{mu T}"))
     checks.append(iv.check_concentration(res.selected.weights, res.profile.research_limits.max_weight_per_asset))
+    checks.append(iv.check_profile_volatility(res.selected.volatility, res.profile.research_limits.target_volatility_band,
+                                              res.selected_name))
     rob = res.sections.get("robustness", {})
     if isinstance(rob, dict) and "max_sharpe_sensitivity" in rob:
         checks.append(iv.check_sensitivity(rob["max_sharpe_sensitivity"]["mu_perturbation_summary"]))

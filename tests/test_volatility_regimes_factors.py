@@ -127,3 +127,12 @@ def test_factor_regression_recovers_beta():
     assert res["t_hac"]["MKT"] > 10
     p = pca_factors(pd.DataFrame(rng.normal(size=(500, 4))), 2)
     assert len(p["explained"]) == 2 and p["explained"].sum() < 1
+
+
+def test_vectorised_garch_filter_matches_reference_loop():
+    from core.volatility.models import garch_filter_loop
+
+    e = np.random.default_rng(9).normal(0, 0.01, 3000)
+    for gamma in (0.0, 0.06):
+        np.testing.assert_allclose(garch_filter(e, 1e-6, 0.07, 0.9, gamma, 1e-4),
+                                   garch_filter_loop(e, 1e-6, 0.07, 0.9, gamma, 1e-4), rtol=1e-12)

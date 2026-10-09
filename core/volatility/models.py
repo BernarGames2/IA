@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from scipy.optimize import minimize
+from scipy.signal import lfilter
 
 from utils.validation import InsufficientDataError, as_1d_float
 
@@ -67,15 +68,32 @@ class GarchFit:
         return hu + p ** k * (self.last_variance - hu)
 
 
-def garch_filter(e: np.ndarray, omega: float, alpha: float, beta: float, gamma: float,
-                 h0: float) -> np.ndarray:
-    """Return h_1..h_{T+1}: h_t is the variance of e_t given e_1..e_{t-1}."""
+def garch_filter_loop(e: np.ndarray, omega: float, alpha: float, beta: float, gamma: float,
+                      h0: float) -> np.ndarray:
+    """Reference (slow) implementation of :func:`garch_filter`, kept for tests."""
     t = len(e)
     h = np.empty(t + 1)
     h[0] = h0
     for i in range(t):
         h[i + 1] = omega + (alpha + gamma * (e[i] < 0)) * e[i] ** 2 + beta * h[i]
     return h
+
+
+def garch_filter(e: np.ndarray, omega: float, alpha: float, beta: float, gamma: float,
+                 h0: float) -> np.ndarray:
+    """Return h_1..h_{T+1}: h_t is the variance of e_t given e_1..e_{t-1}.
+
+    The recursion ``h_{i+1} = u_i + beta h_i`` with ``u_i = omega + (alpha + gamma 1{e_i<0}) e_i^2``
+    is a first-order linear filter, evaluated exactly with ``scipy.signal.lfilter``
+    (profiling showed the Python loop dominated GARCH estimation time).
+    """
+    e = np.asarray(e, float)
+    u = omega + (alpha + gamma * (e < 0)) * e ** 2
+    out = np.empty(len(e) + 1)
+    out[0] = h0
+    if len(e):
+        out[1:], _ = lfilter([1.0], [1.0, -beta], u, zi=[beta * h0])
+    return out
 
 
 def _negloglik(theta: np.ndarray, e: np.ndarray, h0: float, gjr: bool) -> float:

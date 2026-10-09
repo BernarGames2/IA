@@ -44,7 +44,7 @@ class SimulationSettings:
     annual_fee_bps: float = 0.0
     inflation_annual: float = 0.0
     periods_per_year: int = 252
-    batch_size: int = 5_000
+    batch_size: int = 2_000
     max_floats_per_batch: int = 20_000_000
     record_every: int | None = None
     goal: float | None = None

@@ -190,6 +190,12 @@ def build_report(res, charts: dict[str, str], tables: dict[str, str]) -> str:  #
         a("")
         a(md_table(dm, {"dm_stat": "num2", "p_value": "num3", "mean_loss_diff": "num4", "n": "num0"}))
         a(f"\nSeleção: **{vm['selection']['selected']}** — {vm['selection']['rule']}.")
+    st_ = S.get("synthetic_truth")
+    if isinstance(st_, pd.DataFrame):
+        a("")
+        a("Verdade do gerador sintético vs estimativas (demonstra o erro de estimação com ~5 anos de dados; o "
+          "regime de estresse eleva a volatilidade efetiva acima da 'vol. calma'):")
+        a(md_table(st_, {c: "pct" for c in st_.columns}))
     a("")
     if "correlation" in charts:
         a(f"![Correlação]({charts['correlation']})")

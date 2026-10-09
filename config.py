@@ -118,7 +118,7 @@ class AppConfig(BaseSettings):
     n_simulations: int = Field(20_000, ge=100, le=2_000_000)
     horizon_days: int = Field(252, ge=1)
     simulation_model: SimulationModel = SimulationModel.GBM
-    simulation_batch_size: int = Field(5_000, ge=100)
+    simulation_batch_size: int = Field(2_000, ge=100)  # profiled: ~4x less memory than 20k, same speed
     seed: int = 42
     confidence_levels: list[float] = Field(default_factory=lambda: [0.95, 0.99])
     var_method: VaRMethod = VaRMethod.HISTORICAL
