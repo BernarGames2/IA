@@ -1,0 +1,364 @@
+{
+  "run_id": "20261009T045533Z-5232e4",
+  "app_version": "0.6.0",
+  "git_commit": "7ccad349328480def4ac41a0ead4585da561cee3",
+  "started_at_utc": "2026-10-09T04:55:33.173597+00:00",
+  "finished_at_utc": "2026-10-09T04:56:25.013858+00:00",
+  "timings_s": {
+    "profile": 0.0,
+    "data": 0.035,
+    "asset_stats": 0.012,
+    "estimator_selection": 0.147,
+    "optimization": 0.552,
+    "backtest": 6.397,
+    "risk": 0.145,
+    "black_swan": 5.105,
+    "volatility_models": 0.828,
+    "var_backtest": 6.156,
+    "regimes": 8.213,
+    "factors": 0.012,
+    "robustness": 2.151,
+    "monte_carlo": 21.879,
+    "validation": 0.195
+  },
+  "versions": {
+    "python": "3.13.16",
+    "numpy": "2.5.3",
+    "pandas": "3.0.5",
+    "scipy": "1.18.1",
+    "scikit-learn": "1.9.1",
+    "matplotlib": "3.11.2",
+    "pydantic": "2.13.5",
+    "platform": "Linux-6.18.44-fc-v80-x86_64-with-glibc2.39"
+  },
+  "config": {
+    "tickers": [
+      "PETR4.SA",
+      "VALE3.SA",
+      "ITUB4.SA",
+      "BOVA11.SA",
+      "IVVB11.SA",
+      "KNRI11.SA"
+    ],
+    "benchmark": "BOVA11.SA",
+    "period": "5y",
+    "interval": "1d",
+    "base_currency": "BRL",
+    "offline": true,
+    "cache_dir": ".cache/market_data",
+    "cache_ttl_hours": 24.0,
+    "request_timeout_s": 30.0,
+    "max_retries": 3,
+    "min_seconds_between_requests": 1.0,
+    "min_history": 252,
+    "max_missing_fraction": 0.1,
+    "frozen_price_run": 5,
+    "suspicious_return_abs": 0.4,
+    "trading_days": 252,
+    "return_method": "simple",
+    "risk_free_rate": 0.1,
+    "risk_free_rate_source": "demo_fallback",
+    "expected_return_method": "james_stein",
+    "covariance_method": "auto",
+    "ewma_lambda": 0.94,
+    "allow_short": false,
+    "max_leverage": 1.0,
+    "min_weight": 0.0,
+    "max_weight": null,
+    "transaction_cost_bps": 10.0,
+    "spread_bps": 5.0,
+    "n_simulations": 20000,
+    "horizon_days": 252,
+    "simulation_model": "gbm",
+    "simulation_batch_size": 2000,
+    "seed": 42,
+    "confidence_levels": [
+      0.95,
+      0.99
+    ],
+    "var_method": "historical",
+    "inflation_annual": 0.045,
+    "goal": null,
+    "profile_horizon_simulation": true,
+    "n_resamples": 50,
+    "evt_min_exceedances": 50,
+    "backtest_lookback": 252,
+    "rebalance_every": 21,
+    "slippage_bps": 5.0,
+    "validation_frac": 0.6,
+    "output_dir": "outputs",
+    "make_charts": true,
+    "profile": "moderado",
+    "run_heavy_analyses": true
+  },
+  "seed": 42,
+  "data": {
+    "origin": "synthetic",
+    "synthetic": true,
+    "sha256_prices": "382578cbd3737914bfd461b9f1fe0b7dcc523642d4b8a36afc9f0b764578bcbb",
+    "first_date": "2021-03-03",
+    "last_date": "2025-12-31",
+    "n_obs": 1261,
+    "symbols": [
+      "SINT_RF_POS",
+      "SINT_RF_INFL",
+      "SINT_ACOES_BR",
+      "SINT_ACAO_BR_A",
+      "SINT_ACAO_BR_B",
+      "SINT_ACOES_EUA",
+      "SINT_FII",
+      "SINT_OURO",
+      "SINT_CRIPTO"
+    ],
+    "provenance": {
+      "SINT_RF_POS": {
+        "symbol": "SINT_RF_POS",
+        "provider": "synthetic_generator",
+        "origin": "synthetic",
+        "price_field": "synthetic_total_return_price",
+        "adjusted_for": "synthetic (total return)",
+        "currency": "BRL",
+        "unit": "BRL per share/unit",
+        "frequency": "1d",
+        "first_observation": "2021-03-03",
+        "last_observation": "2025-12-31",
+        "n_observations": 1261,
+        "ingested_at_utc": "2026-10-09T04:55:33.196369+00:00",
+        "published_at_utc": null,
+        "cache_hit": false,
+        "notes": [
+          "DADOS SINTÉTICOS: não representam nenhum ativo real",
+          "seed=42"
+        ]
+      },
+      "SINT_RF_INFL": {
+        "symbol": "SINT_RF_INFL",
+        "provider": "synthetic_generator",
+        "origin": "synthetic",
+        "price_field": "synthetic_total_return_price",
+        "adjusted_for": "synthetic (total return)",
+        "currency": "BRL",
+        "unit": "BRL per share/unit",
+        "frequency": "1d",
+        "first_observation": "2021-03-03",
+        "last_observation": "2025-12-31",
+        "n_observations": 1261,
+        "ingested_at_utc": "2026-10-09T04:55:33.196369+00:00",
+        "published_at_utc": null,
+        "cache_hit": false,
+        "notes": [
+          "DADOS SINTÉTICOS: não representam nenhum ativo real",
+          "seed=42"
+        ]
+      },
+      "SINT_ACOES_BR": {
+        "symbol": "SINT_ACOES_BR",
+        "provider": "synthetic_generator",
+        "origin": "synthetic",
+        "price_field": "synthetic_total_return_price",
+        "adjusted_for": "synthetic (total return)",
+        "currency": "BRL",
+        "unit": "BRL per share/unit",
+        "frequency": "1d",
+        "first_observation": "2021-03-03",
+        "last_observation": "2025-12-31",
+        "n_observations": 1261,
+        "ingested_at_utc": "2026-10-09T04:55:33.196369+00:00",
+        "published_at_utc": null,
+        "cache_hit": false,
+        "notes": [
+          "DADOS SINTÉTICOS: não representam nenhum ativo real",
+          "seed=42"
+        ]
+      },
+      "SINT_ACAO_BR_A": {
+        "symbol": "SINT_ACAO_BR_A",
+        "provider": "synthetic_generator",
+        "origin": "synthetic",
+        "price_field": "synthetic_total_return_price",
+        "adjusted_for": "synthetic (total return)",
+        "currency": "BRL",
+        "unit": "BRL per share/unit",
+        "frequency": "1d",
+        "first_observation": "2021-03-03",
+        "last_observation": "2025-12-31",
+        "n_observations": 1261,
+        "ingested_at_utc": "2026-10-09T04:55:33.196369+00:00",
+        "published_at_utc": null,
+        "cache_hit": false,
+        "notes": [
+          "DADOS SINTÉTICOS: não representam nenhum ativo real",
+          "seed=42"
+        ]
+      },
+      "SINT_ACAO_BR_B": {
+        "symbol": "SINT_ACAO_BR_B",
+        "provider": "synthetic_generator",
+        "origin": "synthetic",
+        "price_field": "synthetic_total_return_price",
+        "adjusted_for": "synthetic (total return)",
+        "currency": "BRL",
+        "unit": "BRL per share/unit",
+        "frequency": "1d",
+        "first_observation": "2021-03-03",
+        "last_observation": "2025-12-31",
+        "n_observations": 1261,
+        "ingested_at_utc": "2026-10-09T04:55:33.196369+00:00",
+        "published_at_utc": null,
+        "cache_hit": false,
+        "notes": [
+          "DADOS SINTÉTICOS: não representam nenhum ativo real",
+          "seed=42"
+        ]
+      },
+      "SINT_ACOES_EUA": {
+        "symbol": "SINT_ACOES_EUA",
+        "provider": "synthetic_generator",
+        "origin": "synthetic",
+        "price_field": "synthetic_total_return_price",
+        "adjusted_for": "synthetic (total return)",
+        "currency": "BRL",
+        "unit": "BRL per share/unit",
+        "frequency": "1d",
+        "first_observation": "2021-03-03",
+        "last_observation": "2025-12-31",
+        "n_observations": 1261,
+        "ingested_at_utc": "2026-10-09T04:55:33.196369+00:00",
+        "published_at_utc": null,
+        "cache_hit": false,
+        "notes": [
+          "DADOS SINTÉTICOS: não representam nenhum ativo real",
+          "seed=42"
+        ]
+      },
+      "SINT_FII": {
+        "symbol": "SINT_FII",
+        "provider": "synthetic_generator",
+        "origin": "synthetic",
+        "price_field": "synthetic_total_return_price",
+        "adjusted_for": "synthetic (total return)",
+        "currency": "BRL",
+        "unit": "BRL per share/unit",
+        "frequency": "1d",
+        "first_observation": "2021-03-03",
+        "last_observation": "2025-12-31",
+        "n_observations": 1261,
+        "ingested_at_utc": "2026-10-09T04:55:33.196369+00:00",
+        "published_at_utc": null,
+        "cache_hit": false,
+        "notes": [
+          "DADOS SINTÉTICOS: não representam nenhum ativo real",
+          "seed=42"
+        ]
+      },
+      "SINT_OURO": {
+        "symbol": "SINT_OURO",
+        "provider": "synthetic_generator",
+        "origin": "synthetic",
+        "price_field": "synthetic_total_return_price",
+        "adjusted_for": "synthetic (total return)",
+        "currency": "BRL",
+        "unit": "BRL per share/unit",
+        "frequency": "1d",
+        "first_observation": "2021-03-03",
+        "last_observation": "2025-12-31",
+        "n_observations": 1261,
+        "ingested_at_utc": "2026-10-09T04:55:33.196369+00:00",
+        "published_at_utc": null,
+        "cache_hit": false,
+        "notes": [
+          "DADOS SINTÉTICOS: não representam nenhum ativo real",
+          "seed=42"
+        ]
+      },
+      "SINT_CRIPTO": {
+        "symbol": "SINT_CRIPTO",
+        "provider": "synthetic_generator",
+        "origin": "synthetic",
+        "price_field": "synthetic_total_return_price",
+        "adjusted_for": "synthetic (total return)",
+        "currency": "BRL",
+        "unit": "BRL per share/unit",
+        "frequency": "1d",
+        "first_observation": "2021-03-03",
+        "last_observation": "2025-12-31",
+        "n_observations": 1261,
+        "ingested_at_utc": "2026-10-09T04:55:33.196369+00:00",
+        "published_at_utc": null,
+        "cache_hit": false,
+        "notes": [
+          "DADOS SINTÉTICOS: não representam nenhum ativo real",
+          "seed=42"
+        ]
+      }
+    },
+    "excluded": {}
+  },
+  "profile": {
+    "investor_id": "demo-moderado",
+    "score_band_suggestion": "moderado",
+    "final_profile": "moderado",
+    "caps_applied": [],
+    "conflicts": [],
+    "missing_information": [],
+    "research_limits": {
+      "max_weight_per_asset": 0.3,
+      "max_class_weight": {
+        "equity": 0.6,
+        "crypto": 0.05,
+        "real_estate": 0.2,
+        "commodity": 0.15
+      },
+      "min_class_weight": {
+        "fixed_income": 0.15
+      },
+      "target_volatility_band": [
+        0.06,
+        0.14
+      ],
+      "max_drawdown_reference": 0.2
+    },
+    "disclaimer": "Classificação quantitativa inicial para pesquisa e simulação. Não constitui suitability regulatório, recomendação de investimento nem garantia de resultado.",
+    "is_synthetic_example": true
+  },
+  "selected_portfolio": "risk_parity",
+  "validation_overall": "WARNING",
+  "validated": true,
+  "warnings": [
+    "Taxa livre de risco 10.00% é FALLBACK DE DEMONSTRAÇÃO para BRL, não uma cotação; informe --risk-free-rate para análises reais.",
+    "Execução em modo OFFLINE com DADOS SINTÉTICOS determinísticos: nenhum número deste relatório descreve ativos reais."
+  ],
+  "outputs": {
+    "charts": {
+      "frontier": "../charts/20261009T045533Z-5232e4_frontier.png",
+      "mc_fan": "../charts/20261009T045533Z-5232e4_mc_fan.png",
+      "mc_hist": "../charts/20261009T045533Z-5232e4_mc_terminal.png",
+      "correlation": "../charts/20261009T045533Z-5232e4_correlation.png",
+      "weights": "../charts/20261009T045533Z-5232e4_weights.png",
+      "stress": "../charts/20261009T045533Z-5232e4_stress.png",
+      "backtest": "../charts/20261009T045533Z-5232e4_backtest.png"
+    },
+    "tables": {
+      "asset_stats": "outputs/tables/20261009T045533Z-5232e4_asset_stats.csv",
+      "frontier": "outputs/tables/20261009T045533Z-5232e4_frontier.csv",
+      "candidates": "outputs/tables/20261009T045533Z-5232e4_candidates.csv",
+      "candidate_weights": "outputs/tables/20261009T045533Z-5232e4_candidate_weights.csv",
+      "risk_contributions": "outputs/tables/20261009T045533Z-5232e4_risk_contributions.csv",
+      "var_es": "outputs/tables/20261009T045533Z-5232e4_var_es.csv",
+      "data_quality": "outputs/tables/20261009T045533Z-5232e4_data_quality.csv",
+      "stress": "outputs/tables/20261009T045533Z-5232e4_stress.csv",
+      "historical_stress": "outputs/tables/20261009T045533Z-5232e4_historical_stress.csv",
+      "parametric_stress": "outputs/tables/20261009T045533Z-5232e4_parametric_stress.csv",
+      "liquidity": "outputs/tables/20261009T045533Z-5232e4_liquidity.csv",
+      "mc_model_comparison": "outputs/tables/20261009T045533Z-5232e4_mc_model_comparison.csv",
+      "asset_roles": "outputs/tables/20261009T045533Z-5232e4_asset_roles.csv",
+      "mc_percentiles": "outputs/tables/20261009T045533Z-5232e4_mc_percentiles.csv",
+      "mc_convergence": "outputs/tables/20261009T045533Z-5232e4_mc_convergence.csv",
+      "mc_profile_percentiles": "outputs/tables/20261009T045533Z-5232e4_mc_profile_percentiles.csv",
+      "backtest_validation": "outputs/tables/20261009T045533Z-5232e4_backtest_validation.csv",
+      "backtest_test": "outputs/tables/20261009T045533Z-5232e4_backtest_test.csv",
+      "backtest_returns": "outputs/tables/20261009T045533Z-5232e4_backtest_returns.csv",
+      "validation": "outputs/tables/20261009T045533Z-5232e4_validation.csv"
+    }
+  }
+}

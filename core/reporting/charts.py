@@ -171,6 +171,7 @@ def stress_chart(table: pd.DataFrame, path: Path, source: str, synthetic: bool) 
     ax.set_yticks(y, table.index, fontsize=7)
     ax.invert_yaxis()
     ax.axvline(0, color=INK2, lw=0.8)
+    ax.margins(x=0.15)  # room for value labels at the bar ends
     ax.xaxis.set_major_formatter(_pct)
     ax.set_xlabel("Retorno da carteira no cenário (%) — cenários são hipóteses, não previsões", color=INK)
     ax.set_title("Cenários de estresse (carteira selecionada)", color=INK, fontsize=11, loc="left")

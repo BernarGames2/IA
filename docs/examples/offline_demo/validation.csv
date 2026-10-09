@@ -1,0 +1,43 @@
+name,status,critical,justification
+dados: preços finitos e positivos,PASS,True,todos os preços alinhados são finitos e > 0
+dados: índice cronológico único,PASS,True,datas ordenadas e sem duplicatas
+dados: histórico mínimo,PASS,True,1261 observações alinhadas vs mínimo 252
+dados: unidades/moeda consistentes,PASS,True,todas as séries em BRL
+dados: relatório de qualidade,PASS,False,status agregado de qualidade = ok (símbolos com FAIL foram excluídos)
+dados: origem,WARNING,False,"dados SINTÉTICOS: resultados demonstram a mecânica, não o mercado real"
+covariância: simetria/PSD/condicionamento,PASS,True,simétrica e PSD
+"equal_weight: soma, limites e grupos",PASS,True,restrições verificadas independentemente
+equal_weight: volatilidade recalculada,PASS,True,recalculada 16.139584% vs reportada 16.139584%
+"min_variance: soma, limites e grupos",PASS,True,restrições verificadas independentemente
+min_variance: volatilidade recalculada,PASS,True,recalculada 6.490775% vs reportada 6.490775%
+"max_sharpe: soma, limites e grupos",PASS,True,restrições verificadas independentemente
+max_sharpe: volatilidade recalculada,PASS,True,recalculada 11.698721% vs reportada 11.698721%
+"risk_parity: soma, limites e grupos",PASS,True,restrições verificadas independentemente
+risk_parity: volatilidade recalculada,PASS,True,recalculada 8.933167% vs reportada 8.933167%
+risk_parity: identidade sum(RC_i) = sigma_p,PASS,True,"sum(RC)=0.08933167, sigma_p=0.08933167"
+"max_diversification: soma, limites e grupos",PASS,True,restrições verificadas independentemente
+max_diversification: volatilidade recalculada,PASS,True,recalculada 7.824563% vs reportada 7.824563%
+"min_cvar: soma, limites e grupos",PASS,True,restrições verificadas independentemente
+min_cvar: volatilidade recalculada,PASS,True,recalculada 6.549261% vs reportada 6.549261%
+"robust_mean_variance: soma, limites e grupos",PASS,True,restrições verificadas independentemente
+robust_mean_variance: volatilidade recalculada,PASS,True,recalculada 7.150532% vs reportada 7.150532%
+"target_volatility: soma, limites e grupos",PASS,True,restrições verificadas independentemente
+target_volatility: volatilidade recalculada,PASS,True,recalculada 11.698721% vs reportada 11.698721%
+"resampled_max_sharpe: soma, limites e grupos",PASS,True,restrições verificadas independentemente
+resampled_max_sharpe: volatilidade recalculada,PASS,True,recalculada 12.241530% vs reportada 12.241530%
+hrp: limites,WARNING,False,carteira de referência viola restrições (não elegível para seleção): SINT_RF_POS: peso 0.9935 > máximo 0.3000
+equal_weight_naive: limites,WARNING,False,carteira de referência viola restrições (não elegível para seleção): class:crypto: exposição 0.1111 > máximo 0.0500
+"VaR/ES: coerência (ES >= VaR, rótulos)",PASS,True,"todas as estimativas têm método, nível e horizonte; ES >= VaR"
+fronteira: consistência com mín. variância e máx. Sharpe,PASS,True,fronteira consistente
+Monte Carlo: reprodutibilidade por semente,PASS,True,mesma semente -> resultados idênticos; semente diferente -> resultados diferentes
+Monte Carlo: caso teórico (GBM E[S_T]=S_0 e^{mu T}),PASS,True,"média simulada 1.019942 vs teórica 1.020201 (|z|=0.36, limite 4)"
+concentração da carteira selecionada,PASS,False,N efetivo = 5.40; peso máximo 30.00% (limite 30.00%)
+volatilidade vs faixa do perfil,PASS,False,risk_parity: volatilidade estimada 8.93% dentro da faixa de referência 6%–14%
+sensibilidade dos pesos a erros em mu,WARNING,False,maior desvio-padrão de peso sob perturbação de mu = 13.75% (limite 10%)
+backtest: invariância a dados futuros (look-ahead),PASS,True,19 decisões inalteradas ao perturbar dados futuros; diferença máx. 0.0
+backtest: viés potencial,WARNING,False,"backtest sobre dados SINTÉTICOS: valida a mecânica, não o desempenho real"
+backtest: viés potencial,WARNING,False,universo atual aplicado ao passado e sem dados point-in-time: resultados potencialmente enviesados (survivorship/look-ahead de universo)
+complexidade vs baseline,WARNING,False,"'risk_parity' vs baseline 'min_variance' na validação: DM=0.57, p=0.569 — ganho NÃO significativo; preferência por simplicidade recomendada"
+taxa livre de risco,WARNING,False,rf = 10.00% é FALLBACK DE DEMONSTRAÇÃO (não é cotação)
+EVT/POT 95%,WARNING,False,EVT VaR 95% = 0.8410% (empírico 0.8338%); p-valor KS aproximado: parâmetros estimados na mesma amostra (teste otimista)
+EVT/POT 99%,WARNING,False,EVT VaR 99% = 1.6914% (empírico 1.6664%); p-valor KS aproximado: parâmetros estimados na mesma amostra (teste otimista)

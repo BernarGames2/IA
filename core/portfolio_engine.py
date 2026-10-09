@@ -314,7 +314,19 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput) -> Analysi
                                        "rebalance": bset.rebalance_every, "cost_bps": bset.cost_bps},
                                 bt.metrics_validation.loc[name].to_dict(), ds.content_hash(), "validation")
             elig = [k for k in bt.strategies if k in cands and cands[k].success and cands[k].feasible]
-            selection = select_strategy(bt, "equal_weight", elig)
+            vol_cap = prof.research_limits.target_volatility_band[1]
+            in_band = [k for k in elig if cands[k].volatility <= vol_cap + 1e-9]
+            if in_band:
+                excluded_band = sorted(set(elig) - set(in_band))
+                elig = in_band
+            else:
+                excluded_band = []
+                warnings.append(f"Nenhuma estratégia elegível tem volatilidade estimada <= {vol_cap:.0%} "
+                                "(teto da faixa do perfil); seleção feita sem esse filtro.")
+            baseline = "equal_weight" if "equal_weight" in elig else elig[0]
+            selection = select_strategy(bt, baseline, elig)
+            selection["excluded_by_volatility_band"] = excluded_band
+            selection["volatility_cap"] = vol_cap
             look = lookahead_invariance_check(rets, strats["min_variance"], bset, cut=len(rets) // 2)
             # cost sensitivity of the selected strategy
             cost_rows = []

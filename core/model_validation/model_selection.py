@@ -44,6 +44,8 @@ def select_strategy(bt: BacktestResult, baseline: str = "equal_weight",
     s = bt.settings
     n_val = len(bt.strategies[baseline].net_returns) * s.validation_frac
     elig_names = [k for k in mv.index if eligible is None or k in eligible]
+    if baseline not in bt.strategies:
+        raise ValueError(f"baseline '{baseline}' was not backtested")
     sharpe = mv.loc[elig_names, "sharpe"].astype(float)
     if sharpe.isna().all():
         return {"selected": baseline, "reason": "Sharpe indefinido para todas as estratégias"}
@@ -58,6 +60,7 @@ def select_strategy(bt: BacktestResult, baseline: str = "equal_weight",
         "excluded_reference_strategies": [k for k in mv.index if k not in elig_names],
         "rule": "1-SE: menor complexidade entre as estratégias elegíveis a 1 EP da melhor",
     }
+    out["baseline"] = baseline
     if chosen != baseline:
         a = bt.strategies[chosen].net_returns.iloc[:n_val_i].to_numpy()
         b = bt.strategies[baseline].net_returns.iloc[:n_val_i].to_numpy()
@@ -79,6 +82,8 @@ def select_strategy(bt: BacktestResult, baseline: str = "equal_weight",
         out["psr_test"] = str(e)
     out["test_metrics_selected"] = bt.metrics_test.loc[chosen].to_dict()
     out["test_metrics_baseline"] = bt.metrics_test.loc[baseline].to_dict()
+    out["test_metrics_equal_weight"] = bt.metrics_test.loc["equal_weight"].to_dict() \
+        if "equal_weight" in bt.metrics_test.index else None
     return out
 
 

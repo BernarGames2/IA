@@ -217,7 +217,10 @@ def build_report(res, charts: dict[str, str], tables: dict[str, str]) -> str:  #
     sel = res.selection
     a(f"Carteira selecionada: **{res.selected_name}**. Regra: {sel.get('rule', '')}.")
     if "excluded_reference_strategies" in sel:
-        a(f"Estratégias de referência não elegíveis: {sel['excluded_reference_strategies']}.")
+        a(f"Estratégias não elegíveis (referências ou violação de limites): {sel['excluded_reference_strategies']}.")
+    if sel.get("excluded_by_volatility_band"):
+        a(f"Excluídas por volatilidade estimada acima do teto da faixa do perfil ({pct(sel['volatility_cap'], 0)}): "
+          f"{sel['excluded_by_volatility_band']}.")
     w = res.selected.weights
     wt = pd.DataFrame({"peso": w, "contribuição de risco (%)": res.risk_contrib["rc_pct"],
                        "classe": [ds.meta[s].asset_class for s in w.index]})

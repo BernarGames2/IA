@@ -229,10 +229,11 @@ def check_complexity_gain(selection: dict[str, object]) -> Check:
         return Check("complexidade vs baseline", Status.PASS, False,
                      "regra 1-EP manteve a estratégia simples (pesos iguais): complexidade adicional não "
                      "demonstrou ganho suficiente na validação")
+    base = selection.get("baseline", "equal_weight")
     if isinstance(vs, dict) and "p_value" in vs:
         sig = vs["p_value"] < 0.10 and vs["dm_stat"] < 0
         return Check("complexidade vs baseline", Status.PASS if sig else Status.WARNING, False,
-                     f"'{sel}' vs pesos iguais na validação: DM={vs['dm_stat']:.2f}, p={vs['p_value']:.3f}"
+                     f"'{sel}' vs baseline '{base}' na validação: DM={vs['dm_stat']:.2f}, p={vs['p_value']:.3f}"
                      + ("" if sig else " — ganho NÃO significativo; preferência por simplicidade recomendada"),
                      vs)
     return Check("complexidade vs baseline", Status.WARNING, False, "teste contra baseline indisponível")
