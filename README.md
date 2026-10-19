@@ -99,6 +99,7 @@ Códigos de saída: `0` concluído e validado (PASS/WARNING); `2` dados indispon
 | `--aporte A --periodicidade {mensal,trimestral,semestral,anual,nenhum}` | aporte periódico do modo propósito |
 | `--motivo "texto"` / `--motivo-file arq.txt` | motivo do investidor (vazio = só a etapa quantitativa) |
 | `--peso-alinhamento 0.3`, `--incluir-sob-revisao`, `--rf MOEDA=TAXA` (repetível), `--classes ...` | slider, governança, uma rf por moeda, macroclasses |
+| `--acao PETR4` (ou nome: `--acao Petrobras`) | "vale a pena?" de uma ação (seção 11); usa `--horizon-years`, `--capital` (valor investido), `--profile` |
 
 Variáveis de ambiente com prefixo `QPI_` (ver `.env.example`) também configuram `config.py`.
 
@@ -193,6 +194,7 @@ troca por dados sintéticos. A análise geral (`/api/analisar`) continua sobre o
 | `POST /api/analisar` | roda a análise (modo `rapido` ou `completo`) e devolve um resumo JSON |
 | `POST /api/perguntar` | pergunta ao analista de IA (mesmas recusas e verificação de números da CLI) |
 | `POST /api/proposito` | carteira com propósito (seção 10): `fonte_dados="real"` (padrão, Yahoo Finance) ou `"sintetico"` |
+| `POST /api/acao` | "vale a pena?" de uma ação digitada (seção 11): veredito por regras + projeção |
 | `GET /api/health`, `GET /api/docs` | saúde e documentação OpenAPI |
 
 Entradas são validadas e limitadas (≤ 20.000 simulações, horizonte ≤ 30 anos, pergunta ≤ 500 caracteres).
@@ -270,4 +272,30 @@ preciso liberar `query1.finance.yahoo.com`, `query2.finance.yahoo.com` e `api.bc
 do ambiente. O modo offline usa um universo **sintético** multimoeda (BRL/USD) e o resultado é marcado "NÃO É UMA
 CARTEIRA FINAL". As tags temáticas dos ativos são curadoria editorial estática; a extração
 de temas é por léxico (não entende ironia nem sinônimos fora da lista).
+
+## 11. "Vale a pena?" — análise de uma ação (`--acao`, `POST /api/acao`)
+
+Você digita o código ou o nome (PETR4, VALE3, WEGE3, AAPL, "Petrobras", "Banco do Brasil"…; nomes curtos
+ambíguos como "vale" só valem sozinhos, e o que não for reconhecido pede o código — nada é adivinhado). O módulo
+`core/stock_check/` baixa ~5 anos de preços ajustados (Yahoo Finance), compara com a renda fixa **da mesma moeda**
+(Selic do BCB para BRL, T-bill `^IRX` para USD) e devolve:
+
+* **Veredito por regras fixas**, iguais para todos os ativos e mostradas no resultado:
+  FAVORÁVEL se a chance de superar a renda fixa no horizonte é ≥ 60% **e** o retorno histórico acima dela tem
+  t ≥ 1; DESFAVORÁVEL se a chance é ≤ 40% **ou** o retorno histórico abaixo dela tem t ≤ −1; NEUTRO nos demais
+  casos (o histórico não separa o ativo da renda fixa). A adequação ao perfil (volatilidade e queda máxima contra
+  os limites do perfil) é informada à parte.
+* **Critérios**: chance de superar a renda fixa, retorno acima dela (com estatística t), Sharpe, volatilidade,
+  queda máxima, VaR 95% diário, % de janelas de 12 meses acima da renda fixa, correlação com Ibovespa/S&P 500,
+  giro financeiro diário (liquidez) e variação de 12 meses (informativa).
+* **Projeção** (Monte Carlo, horizonte e valor escolhidos): leque de percentis com a linha da renda fixa,
+  cenários P90/P50/P10 com retorno anual e "preço equivalente" (reescala, não é preço-alvo), chance de prejuízo e
+  sensibilidade a quatro premissas de retorno.
+* **Retorno esperado da projeção** com encolhimento documentado: referência = rf + beta × prêmio de 4% a.a.;
+  peso do histórico = τ²/(τ² + erro-padrão²) com τ = 10% a.a. Cinco anos de uma ação com 30% de volatilidade
+  pesam ~35%: um passado excepcional não é projetado como se fosse se repetir.
+
+Não avalia fundamentos (lucro, dívida, valuation), dividendos futuros nem notícias, e não é recomendação de compra
+ou venda. Neste ambiente de desenvolvimento só o modo sintético (`SINT_*`) pôde ser executado; o caminho real foi
+testado com dublês (rede bloqueada).
 

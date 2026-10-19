@@ -8,12 +8,12 @@ matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-218 passed, 1 skipped (219 testes; ~4 min)
+245 passed, 1 skipped (246 testes; ~4,5 min)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
 
-(Última execução completa: 216 passed + 2 falhas esperadas em `tests/test_webapp.py` — health e o teste do
-endpoint de propósito ainda assumiam o modo sintético como padrão; ajustados e reexecutados: 13/13.)
+(Em uma execução anterior, 2 testes de `tests/test_webapp.py` falharam porque ainda assumiam o modo sintético
+como padrão do site; foram ajustados ao novo padrão — dados reais — e a suíte completa voltou a passar.)
 
 * 0 falhas. O único teste pulado é o teste **online opcional**, que não pôde ser executado porque a política de
   rede do ambiente bloqueia o Yahoo Finance (o proxy responde HTTP 403 ao `CONNECT`).
@@ -136,4 +136,14 @@ Web (`POST /api/proposito`, 2.000 trajetórias): ~33–37 s localmente; página 
 * Neste ambiente o proxy bloqueia o Yahoo e o BCB (`CONNECT tunnel failed, response 403`): `python main.py
   --proposito …` sem `--offline` termina em ~7 s com código 2 e a lista de tickers sem dados, sem substituir por
   sintético. Portanto **nenhuma carteira com cotações reais foi gerada aqui**.
+
+## 7. "Vale a pena?" (análise de uma ação)
+
+* `tests/test_stock_check.py`: 27 testes (resolução de nomes, regras do veredito, encolhimento, coerência da
+  projeção, linguagem, caminho real com dublês, endpoint e CLI).
+* Execução sintética registrada (`python main.py --offline --acao SINT_TECH_US --horizon-years 5 --capital 20000`):
+  veredito FAVORÁVEL, 61% de chance de superar o T-bill em 5 anos, 29% de chance de prejuízo; o histórico pesa
+  30% no retorno esperado; a chance vai de 37% (sem prêmio) a 87% (se o passado se repetir).
+* Com cotações reais neste ambiente: `python main.py --acao PETR4` termina com código 2 ("erro de rede … 403"),
+  sem estimar nada no lugar. Página verificada com Playwright (1280 px e 390 px, sem erros de console).
 

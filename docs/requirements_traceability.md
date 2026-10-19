@@ -101,3 +101,13 @@ Testes executados e resultados: [`test_results.md`](test_results.md).
 | P13 | Integração CLI e web | `main.py --proposito`, `POST /api/proposito` | `test_cli_purpose_mode`, `test_purpose_endpoint` | OK | códigos de saída 0/2; entradas inválidas → 400/422 |
 | P14 | Dados reais: tickers reais baixados (Yahoo chart v8, preço ajustado), rf por moeda de fontes públicas (Selic BCB, T-bill ^IRX), falha explícita | `core/market_data/yahoo_chart.py`, `core/market_data/risk_free.py`, `engine.run_purpose`, `webapp/server.py` | `tests/test_real_data.py` (12 testes) | NÃO VALIDADO | parsing, fuso da bolsa, nulos, retries/429/404, disjuntor de rede, cache, Selic/T-bill e fluxo completo testados com dublês; sem acesso ao provedor neste ambiente (proxy 403) |
 | P15 | "Onde investir e por quê": valor por ativo, aporte, papel na carteira, ligação com o motivo, estratégia explicada | `engine.run_purpose` (`allocation`, `strategy_text`), `report.py`, `index.html` | `test_engine_real_mode_reports_where_to_invest_and_why`, `test_web_real_mode_and_unavailable_data` | OK | soma dos valores = capital; ordenado por peso |
+
+## "Vale a pena?" — análise de uma ação (pedido do usuário)
+
+| ID | Requisito | Módulo(s) | Teste(s) | Status | Critério de aceitação |
+|---|---|---|---|---|---|
+| S1 | Usuário digita código ou nome; nada é adivinhado | `core/stock_check/resolver.py` | `test_resolver_maps_codes_and_names`, `test_resolver_never_guesses` | OK | "vale a pena?" não vira VALE3; nome desconhecido pede o código |
+| S2 | "Vale a pena ou não": veredito por regras fixas e explicadas, adequação ao perfil à parte | `core/stock_check/analyzer.py` | `test_verdict_rules`, `test_synthetic_check_language_and_labels` | OK | FAVORÁVEL/NEUTRO/DESFAVORÁVEL; linguagem probabilística verificada |
+| S3 | Projeção com incerteza: leque, cenários, chance de superar a renda fixa e de prejuízo, sensibilidade | `analyzer.analyze_stock` | `test_synthetic_check_projection_is_consistent`, `test_shrinkage_weights_history_by_its_precision` | OK | percentis ordenados; EP binomial; retorno esperado = referência + peso × (histórico − referência) |
+| S4 | Dados reais (Yahoo + Selic/T-bill), falha explícita, sem dados inventados | `analyzer._load_real`, `webapp/server.py /api/acao`, `main.py --acao` | `test_real_path_with_test_doubles`, `test_real_path_refuses_short_history_and_missing_data`, `test_web_endpoint_stock`, `test_cli_stock` | NÃO VALIDADO | testado com dublês; rede bloqueada neste ambiente |
+

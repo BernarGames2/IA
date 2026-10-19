@@ -7,6 +7,7 @@ Examples
     python main.py --profile moderado --period 5y --risk-free-rate 0.105
     python main.py --offline --proposito --objetivo 900000 --aporte 2000 --horizon-years 10 \\
         --motivo "Quero investir em saúde e energia limpa"
+    python main.py --acao PETR4 --horizon-years 3 --capital 10000
 
 Exit codes: 0 = completed and validated (PASS/WARNING); 2 = data unavailable or invalid
 input; 3 = completed but NOT validated (critical FAIL in the independent validator).
@@ -90,6 +91,10 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--rf", action="append", default=[], metavar="MOEDA=TAXA",
                    help="taxa livre de risco por moeda, ex. --rf BRL=0.105 --rf USD=0.043 (repita por moeda)")
     g.add_argument("--classes", nargs="+", help="macroclasses do catálogo a considerar (padrão: todas)")
+    a = p.add_argument_group("vale a pena? (análise de uma ação)")
+    a.add_argument("--acao", metavar="CODIGO_OU_NOME",
+                   help="analisa uma ação (ex.: PETR4, VALE3, AAPL, 'Petrobras'): veredito por regras + projeção; "
+                        "usa --horizon-years (padrão 3), --capital como valor investido (padrão 10000), --profile")
     return p
 
 
@@ -227,8 +232,41 @@ def run_purpose_cli(args: argparse.Namespace) -> int:
     return 3 if critical else 0
 
 
+def run_stock_cli(a: argparse.Namespace) -> int:
+    from core.stock_check.analyzer import analyze_stock, render_markdown, to_dict
+
+    offline = bool(a.offline) if a.offline is not None else False
+    try:
+        res = analyze_stock(a.acao, a.horizon_years or 3.0, a.capital or 10_000.0, a.profile or "moderado",
+                            offline=offline, rf=a.risk_free_rate, n_paths=a.simulations or 5_000,
+                            seed=a.seed if a.seed is not None else 42)
+    except DataUnavailableError as e:
+        print(f"ERRO: dados indisponíveis — {e}\nNada foi estimado no lugar.", file=sys.stderr)
+        return 2
+    except ValueError as e:
+        print(f"ERRO: {e}", file=sys.stderr)
+        return 2
+    out = (a.output_dir or Path("outputs")) / "acao"
+    out.mkdir(parents=True, exist_ok=True)
+    stem = res.resolved.ticker.replace(".", "_").replace("^", "")
+    (out / f"{stem}.md").write_text(render_markdown(res), encoding="utf-8")
+    (out / f"{stem}.json").write_text(json.dumps(to_dict(res), ensure_ascii=False, indent=2), encoding="utf-8")
+    v, pj = res.verdict, res.projection
+    print(f"{res.resolved.name} ({res.resolved.ticker}) — veredito do modelo: {v['rotulo']}")
+    print(v["manchete"])
+    print(f"Perfil {res.profile_fit['perfil']}: {res.profile_fit['leitura']}.")
+    for c in pj["cenarios"]:
+        print(f"  {c['cenario']:<18} {res.currency} {c['valor_final']:>12,.0f}  ({c['retorno_anual']:+.1%} a.a.)")
+    for al in res.alerts:
+        print(f"  ! {al}")
+    print(f"Relatório: {out / (stem + '.md')}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.acao:
+        return run_stock_cli(args)
     if args.proposito:
         return run_purpose_cli(args)
     try:

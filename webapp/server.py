@@ -38,6 +38,8 @@ from core.profiler import demo_profile
 from core.purpose.engine import PurposeRequest, PurposeResult, run_purpose
 from core.purpose.report import render_markdown
 from core.purpose.report import to_dict as purpose_to_dict
+from core.stock_check.analyzer import analyze_stock
+from core.stock_check.analyzer import to_dict as stock_to_dict
 from models.investor import InvestorProfileInput, RiskProfile
 from utils.serialization import to_jsonable
 from webapp.summary import build_summary
@@ -100,6 +102,25 @@ class PurposeWebRequest(BaseModel):
         # real prices change every day: cached real results are reused only within the same UTC day
         day = datetime.now(UTC).date().isoformat() if self.fonte_dados == "real" else ""
         return self.model_dump_json() + day
+
+
+class StockRequest(BaseModel):
+    """'Vale a pena?' — one asset typed by the user (ticker or company name) + projection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    acao: str = Field(..., min_length=1, max_length=60)
+    horizonte_anos: float = Field(3.0, ge=0.25, le=30)
+    valor: float = Field(10_000.0, gt=0, le=1e9)
+    perfil: Literal["conservador", "moderado", "arrojado"] = "moderado"
+    fonte_dados: Literal["real", "sintetico"] = "real"
+    taxa_livre_risco: float | None = Field(None, ge=-0.05, le=1.0)
+    n_simulacoes: int = Field(5_000, ge=500, le=20_000)
+    seed: int = Field(42, ge=0, le=2**31 - 1)
+
+    def key(self) -> str:
+        day = datetime.now(UTC).date().isoformat() if self.fonte_dados == "real" else ""
+        return "acao|" + self.model_dump_json() + day
 
 
 app = FastAPI(title=f"{APP_NAME} — web", version=APP_VERSION, docs_url="/api/docs", redoc_url=None,
@@ -236,6 +257,39 @@ def proposito(p: PurposeWebRequest) -> JSONResponse:
                                  "sintética'.") from e
     except (ValueError, ArithmeticError) as e:
         raise HTTPException(400, f"análise não pôde ser executada: {e}") from e
+    finally:
+        _slots.release()
+    with _cache_lock:
+        _purpose_cache[k] = payload
+        while len(_purpose_cache) > _CACHE_SIZE:
+            _purpose_cache.popitem(last=False)
+    return JSONResponse(payload)
+
+
+@app.post("/api/acao")
+def acao(p: StockRequest) -> JSONResponse:
+    k = p.key()
+    with _cache_lock:
+        if k in _purpose_cache:
+            _purpose_cache.move_to_end(k)
+            return JSONResponse(_purpose_cache[k])
+    if not _slots.acquire(timeout=120):
+        raise HTTPException(503, "servidor ocupado; tente novamente em instantes")
+    try:
+        t0 = time.perf_counter()
+        res = analyze_stock(p.acao, p.horizonte_anos, p.valor, p.perfil, offline=p.fonte_dados == "sintetico",
+                            rf=p.taxa_livre_risco, n_paths=p.n_simulacoes, seed=p.seed,
+                            provider=None if p.fonte_dados == "sintetico" else _market_provider(),
+                            rf_fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache")
+        payload = stock_to_dict(res)
+        payload["elapsed_s"] = round(time.perf_counter() - t0, 2)
+    except DataUnavailableError as e:
+        why = str(e)
+        why = why if len(why) <= 240 else why[:240] + "…"
+        raise HTTPException(503, f"dados indisponíveis agora ({why}). Nada foi estimado no lugar: confira o código "
+                                 "da ação ou tente de novo em alguns minutos.") from e
+    except (ValueError, ArithmeticError) as e:
+        raise HTTPException(400, str(e)) from e
     finally:
         _slots.release()
     with _cache_lock:

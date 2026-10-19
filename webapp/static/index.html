@@ -102,6 +102,10 @@ textarea { background: var(--page); border: 1px solid var(--ring); border-radius
 .thesis p { margin: 6px 0; font-size: 0.9rem; }
 .thesis .tag { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em; color: var(--ink2); text-transform: uppercase; }
 details > summary { cursor: pointer; color: var(--ink2); font-size: 0.85rem; margin-top: 8px; }
+.verdict { display: inline-block; padding: 4px 14px; border-radius: 999px; font-weight: 700; color: #fff;
+  background: var(--c); letter-spacing: 0.02em; }
+.verdict-box { border-left: 4px solid var(--c); padding: 8px 14px; margin: 6px 0 12px; }
+.verdict-box p { margin: 8px 0 0; }
 .sev-FAIL { --c: var(--crit); } .sev-WARNING { --c: var(--warn); } .sev-INFO { --c: var(--muted); }
 footer { color: var(--muted); font-size: 0.8rem; margin-top: 28px; }
 svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -126,6 +130,45 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     reais (Yahoo Finance, preço ajustado, baixadas na hora); a análise geral logo abaixo usa um mercado sintético
     determinístico (ativos <code>SINT_*</code>), que não descreve ativos reais.
   </div>
+
+  <section class="card" aria-labelledby="s-title">
+    <h2 id="s-title">Vale a pena? Analise uma ação</h2>
+    <p class="muted">Digite o código ou o nome (PETR4, VALE3, WEGE3, ITUB4, AAPL, "Petrobras"…). O modelo compara o
+      histórico de preços com a renda fixa da mesma moeda (CDI/Selic ou T-bill) e projeta um investimento por Monte
+      Carlo. Regras fixas e explicadas no resultado; não avalia fundamentos nem notícias e não é recomendação.</p>
+    <form id="s-form">
+      <label class="span-all">Ação<input name="acao" maxlength="60" required placeholder="Ex.: PETR4, VALE3, AAPL ou Petrobras"></label>
+      <label>Horizonte
+        <select name="horizonte_anos"><option value="1">1 ano</option><option value="3" selected>3 anos</option>
+          <option value="5">5 anos</option><option value="10">10 anos</option></select>
+      </label>
+      <label>Valor a investir<input name="valor" type="number" min="1" step="any" value="10000" required></label>
+      <label>Perfil
+        <select name="perfil"><option value="conservador">Conservador</option><option value="moderado" selected>Moderado</option>
+          <option value="arrojado">Arrojado</option></select>
+      </label>
+      <label>Dados
+        <select name="fonte_dados"><option value="real" selected>Cotações reais (Yahoo Finance)</option>
+          <option value="sintetico">Demonstração sintética (SINT_*)</option></select>
+      </label>
+      <label>Taxa livre de risco (% a.a., opcional)<input name="taxa" type="number" min="-5" max="100" step="any" placeholder="auto: Selic / T-bill"></label>
+      <button id="s-run" type="submit">Analisar</button>
+    </form>
+    <div class="chips" id="s-chips"></div>
+    <div class="status" id="s-status" role="status" aria-live="polite"></div>
+    <div id="s-results" class="hidden">
+      <div class="verdict-box" id="s-verdict"></div>
+      <div class="kpis" id="s-kpis"></div>
+      <div class="grid2">
+        <section><h3>Critérios do veredito</h3><div class="tbl" id="s-criteria"></div></section>
+        <section><h3 id="s-fan-title">Projeção</h3><div class="legend" id="s-fan-legend"></div><div class="chart" id="s-fan"></div></section>
+      </div>
+      <h3>Cenários no horizonte</h3><div class="tbl" id="s-scen"></div>
+      <h3>Sensibilidade às premissas</h3><div class="tbl" id="s-sens"></div>
+      <h3>Como foi calculado e avisos</h3><ul class="clean" id="s-notes"></ul>
+      <p><a id="s-download" href="#" download="analise_acao.md">Baixar análise (Markdown)</a></p>
+    </div>
+  </section>
 
   <section class="card" aria-labelledby="f-title">
     <h2 id="f-title">Parâmetros (hipotéticos)</h2>
@@ -802,6 +845,116 @@ $("p-form").addEventListener("submit", async (ev) => {
   } finally { btn.disabled = false; }
 });
 
+// ---------- single-asset check ("vale a pena?")
+const CCY = { BRL: "R$", USD: "US$", EUR: "€" };
+function moneyIn(ccy) {
+  const sym = CCY[ccy] || ccy + " ";
+  const full = (x) => (x === null || x === undefined || !isFinite(x)) ? "n/d" : sym + " " + Math.round(x).toLocaleString("pt-BR");
+  const short = (x) => Math.abs(x) >= 1e6 ? sym + " " + (x / 1e6).toFixed(1).replace(".", ",") + " mi"
+    : Math.abs(x) >= 1e4 ? sym + " " + Math.round(x / 1000).toLocaleString("pt-BR") + " mil" : sym + " " + Math.round(x).toLocaleString("pt-BR");
+  return { full, short };
+}
+function drawFan(id, f, money, refLine, refLabel) {
+  const W = widthOf(id, 560), H = 320, L = 84, R = 14, T = 12, B = 40;
+  const last = f.years[f.years.length - 1];
+  const x = lin(0, last, L, W - R);
+  const lows = f.p5.concat(refLine || []), highs = f.p95.concat(refLine || []);
+  const ymin = Math.min(...lows) * 0.95, ymax = Math.max(...highs) * 1.03;
+  const y = lin(ymin, ymax, H - B, T);
+  const svg = frame(W, H);
+  gridY(svg, y, ticks(ymin, ymax, 5), L, W - R, money.short);
+  gridX(svg, x, ticks(0, last, 5), T, H - B, (v) => fmtNum(v, v % 1 ? 1 : 0));
+  const band = (lo, hi, fill) => {
+    const d = f.years.map((t, i) => (i ? "L" : "M") + x(t) + " " + y(hi[i])).join(" ") + " " +
+      f.years.slice().reverse().map((t, j) => "L" + x(t) + " " + y(lo[f.years.length - 1 - j])).join(" ") + " Z";
+    svg.append(s("path", { d, fill, stroke: "none" }));
+  };
+  band(f.p5, f.p95, "var(--seq2)"); band(f.p25, f.p75, "var(--seq4)");
+  svg.append(s("path", { d: f.years.map((t, i) => (i ? "L" : "M") + x(t) + " " + y(f.p50[i])).join(" "), fill: "none", stroke: "var(--seq7)", "stroke-width": 2 }));
+  if (refLine) svg.append(s("path", { d: f.years.map((t, i) => (i ? "L" : "M") + x(t) + " " + y(refLine[i])).join(" "), fill: "none", stroke: "var(--ink2)", "stroke-width": 1.5, "stroke-dasharray": "5 4" }));
+  crosshair(svg, f.years, x, T, H - B, (i) => `Ano ${fmtNum(f.years[i], 2)}\nP95: ${money.full(f.p95[i])}\nP75: ${money.full(f.p75[i])}\nMediana: ${money.full(f.p50[i])}\nP25: ${money.full(f.p25[i])}\nP5: ${money.full(f.p5[i])}` + (refLine ? `\n${refLabel}: ${money.full(refLine[i])}` : ""));
+  axisLabel(svg, (L + W) / 2, H - 6, "Horizonte (anos)");
+  axisLabel(svg, 11, (T + H - B) / 2, "Valor do investimento", true);
+  setChildren(id, svg);
+}
+let stockData = null, stockUrl = null;
+function renderStock(d) {
+  stockData = d;
+  $("s-results").classList.remove("hidden");
+  const v = d.veredito, pj = d.projecao, m = moneyIn(d.moeda);
+  const tone = { good: "var(--good)", warn: "var(--warn)", crit: "var(--crit)" }[v.tom] || "var(--muted)";
+  const box = $("s-verdict");
+  box.style.setProperty("--c", tone);
+  box.replaceChildren(
+    el("div", {}, el("strong", {}, `${d.nome} (${d.ticker}) · `), el("span", { class: "verdict", style: "--c:" + tone + (v.tom === "warn" ? ";color:#1d1d1b" : "") }, v.rotulo),
+      el("span", { class: "muted" }, ` segundo as regras do modelo · ${d.origem === "real" ? "cotações reais" : "DADOS SINTÉTICOS"} até ${d.periodo[1]}`)),
+    el("p", {}, v.manchete),
+    el("p", { class: "muted" }, "Para o seu perfil: " + d.perfil.leitura + "."),
+    el("p", { class: "muted" }, d.negocio ? "Negócio: " + d.negocio : "Negócio: não descrito (ativo fora do catálogo)."),
+    el("p", { class: "kind" }, "Regras do veredito: " + v.regras));
+  const p50 = pj.cenarios.find((c) => c.cenario.startsWith("base")), p10 = pj.cenarios.find((c) => c.cenario.startsWith("pess")),
+    p90 = pj.cenarios.find((c) => c.cenario.startsWith("otim"));
+  setChildren("s-kpis",
+    kpi(`Chance de superar o ${d.nome_taxa_livre_risco}`, fmtPct(pj.p_superar_rf, 0), `em ${fmtNum(pj.horizonte_anos, 0)} anos · erro padrão ${fmtPct(pj.p_superar_rf_ep, 1)}`),
+    kpi("Chance de prejuízo", fmtPct(pj.p_prejuizo, 0), "terminar abaixo do valor investido"),
+    kpi("Cenário base (mediana)", m.full(p50.valor_final), `${fmtPct(p50.retorno_anual, 1)} ao ano`),
+    kpi("Faixa provável (P10–P90)", `${m.short(p10.valor_final)} – ${m.short(p90.valor_final)}`, `investindo ${m.full(pj.valor_investido)}`),
+    kpi(`Na renda fixa (${d.nome_taxa_livre_risco})`, m.full(pj.valor_rf_no_horizonte), `taxa ${fmtPct(d.taxa_livre_risco)} a.a.`));
+  const fmtV = (c) => c.formato === "pct" ? fmtPct(c.valor, 1) : c.formato === "money" ? m.short(c.valor) : fmtNum(c.valor);
+  setChildren("s-criteria", table(["Critério", "Resultado", "Leitura"], v.criterios.map((c) => [c.criterio, fmtV(c), c.leitura]), [1]));
+  $("s-fan-title").textContent = `Projeção de ${m.full(pj.valor_investido)} [S]`;
+  setChildren("s-fan-legend",
+    el("span", {}, el("i", { style: "background:var(--seq7)" }), "mediana"),
+    el("span", {}, el("i", { style: "background:var(--seq4)" }), "50% central"),
+    el("span", {}, el("i", { style: "background:var(--seq2)" }), "90% central"),
+    el("span", {}, el("i", { style: "background:var(--ink2)" }), d.nome_taxa_livre_risco + " (tracejado)"));
+  drawFan("s-fan", pj.fan, m, pj.fan.rf_line, d.nome_taxa_livre_risco);
+  setChildren("s-scen", table(["Cenário", "Valor final", "Retorno ao ano", "Preço equivalente*"],
+    pj.cenarios.map((c) => [c.cenario, m.full(c.valor_final), fmtPct(c.retorno_anual, 1), (CCY[d.moeda] || d.moeda) + " " + fmtNum(c.preco_equivalente)]), [1, 2, 3]));
+  setChildren("s-sens", table(["Premissa de retorno", `Chance de superar o ${d.nome_taxa_livre_risco}`, "Chance de prejuízo", "Mediana final"],
+    pj.sensibilidade.map((r) => [r.modelo, fmtPct(r.p_superar_rf, 0), fmtPct(r.p_prejuizo, 0), m.full(r.mediana_final)]), [1, 2, 3]));
+  const e = d.retorno_esperado;
+  setChildren("s-notes",
+    el("li", {}, `* Preço equivalente = último preço (${(CCY[d.moeda] || d.moeda)} ${fmtNum(d.ultimo_preco)} em ${d.periodo[1]}) reescalado pelo valor simulado; não é preço-alvo.`),
+    el("li", {}, `Dados: ${d.fonte}, ${d.periodo[0]} a ${d.periodo[1]} (${d.n_obs} pregões). Taxa livre de risco ${fmtPct(d.taxa_livre_risco)} — ${d.fonte_taxa_livre_risco}.`),
+    el("li", {}, `Retorno esperado da projeção ${fmtPct(e.retorno_esperado, 1)} a.a.: referência ${fmtPct(e.prior, 1)} (taxa livre de risco + beta ${fmtNum(e.beta_usado)} × prêmio ${fmtPct(e.erp, 0)}) ajustada em ${fmtPct(e.peso_historico, 0)} na direção da média histórica ${fmtPct(e.retorno_historico, 1)} — quanto mais incerta a média, menos ela pesa.`),
+    ...d.alertas.map((a) => el("li", {}, a)), ...d.qualidade.map((q) => el("li", { class: "muted" }, "qualidade dos dados: " + q)),
+    el("li", { class: "muted" }, d.aviso));
+  if (stockUrl) URL.revokeObjectURL(stockUrl);
+  stockUrl = URL.createObjectURL(new Blob([d.markdown], { type: "text/markdown;charset=utf-8" }));
+  $("s-download").href = stockUrl;
+}
+async function runStock() {
+  const f = new FormData($("s-form"));
+  const body = { acao: String(f.get("acao") || "").trim(), horizonte_anos: Number(f.get("horizonte_anos")), valor: Number(f.get("valor")),
+    perfil: f.get("perfil"), fonte_dados: f.get("fonte_dados") };
+  if (String(f.get("taxa") || "").trim() !== "") body.taxa_livre_risco = Number(f.get("taxa")) / 100;
+  if (!body.acao) return;
+  const btn = $("s-run"); btn.disabled = true;
+  const st = $("s-status");
+  st.replaceChildren(el("span", { class: "spinner" }), ` Analisando ${body.acao}…`);
+  const t0 = performance.now();
+  try {
+    const d = await post("/api/acao", body);
+    renderStock(d);
+    st.textContent = `Pronto em ${((performance.now() - t0) / 1000).toFixed(1).replace(".", ",")} s (interpretado como ${d.interpretacao}).`;
+  } catch (e) {
+    st.textContent = "Erro: " + e.message;
+  } finally { btn.disabled = false; }
+}
+$("s-form").addEventListener("submit", (ev) => { ev.preventDefault(); runStock(); });
+function stockChips() {
+  const syn = $("s-form").elements["fonte_dados"].value === "sintetico";
+  const list = syn ? ["SINT_ENERGIA3", "SINT_PETRO4", "SINT_TECH_US", "SINT_SAUDE3"] : ["PETR4", "VALE3", "ITUB4", "WEGE3", "BBAS3", "AAPL", "BOVA11"];
+  setChildren("s-chips", ...list.map((t) => {
+    const b = el("button", { class: "chip", type: "button" }, t);
+    b.addEventListener("click", () => { $("s-form").elements["acao"].value = t; runStock(); });
+    return b;
+  }));
+}
+$("s-form").elements["fonte_dados"].addEventListener("change", stockChips);
+stockChips();
+
 const SUGGESTIONS = ["Qual o risco da carteira e como ela se comporta em estresse?", "Simule o patrimônio em um ano.",
   "Compare as carteiras.", "Posso confiar nesta análise?", "O SINT_CRIPTO vai subir amanhã? Devo comprar?"];
 const chips = $("chips");
@@ -833,7 +986,7 @@ $("ask-form").addEventListener("submit", async (ev) => {
 let resizeTimer = null;
 window.addEventListener("resize", () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { if (lastData) render(lastData); }, 200);
+  resizeTimer = setTimeout(() => { if (lastData) render(lastData); if (stockData) renderStock(stockData); }, 200);
 });
 
 $("theme").addEventListener("click", () => {
