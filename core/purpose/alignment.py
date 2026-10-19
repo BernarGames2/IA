@@ -29,7 +29,7 @@ from models.portfolio import PortfolioConstraints
 THEME_TO_TAGS: dict[str, tuple[str, ...]] = {
     "saude": ("saude",),
     "educacao": ("educacao",),
-    "sustentabilidade": ("energia_limpa", "sustentabilidade"),
+    "sustentabilidade": ("energia_limpa", "sustentabilidade", "saneamento"),
     "tecnologia": ("tecnologia", "inovacao"),
     "moradia": ("imoveis",),
     "renda": ("renda_recorrente",),

@@ -165,7 +165,7 @@ def _benchmark_symbol(cfg: AppConfig, ds: PriceDataset) -> str | None:
 def _strategies(pc: PortfolioConstraints, cfg: AppConfig, rf: float, mu_method: str, cov_method: str,
                 benchmark: str | None, symbols: list[str]) -> dict[str, object]:
     P = cfg.trading_days
-    s = opt.SolverSettings(n_starts=3, seed=cfg.seed)
+    s = opt.SolverSettings(n_starts=1 if cfg.backtest_light else 3, seed=cfg.seed)
 
     def wrap(fn):  # noqa: ANN001, ANN202
         def strat(train: pd.DataFrame, prev: np.ndarray | None) -> np.ndarray:
@@ -191,6 +191,9 @@ def _strategies(pc: PortfolioConstraints, cfg: AppConfig, rf: float, mu_method: 
             estimate_mu(t, mu_method, P), cov(t), pc, len(t), rf, settings=s)),
         "hrp": wrap(lambda t: opt.hrp(cov(t), pc)),
     }
+    if cfg.backtest_light:   # large universes on the web: drop the two costliest near-duplicates
+        strategies.pop("max_diversification")
+        strategies.pop("robust_mean_variance")
     if benchmark is not None:
         wb = np.array([1.0 if x == benchmark else 0.0 for x in symbols])
         strategies["benchmark"] = lambda train, prev: wb
@@ -290,16 +293,18 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput,
             cands["equal_weight"] = OptimizationResult(
                 "equal_weight", w, True, "projeção viável de 1/N", float(ewf @ mu.to_numpy()), vol,
                 (float(ewf @ mu.to_numpy()) - rf) / vol, True)
-        cands["min_variance"] = opt.min_variance(cov, pc, mu, rf)
-        cands["max_sharpe"] = opt.max_sharpe(mu, cov, pc, rf)
-        cands["risk_parity"] = opt.risk_parity(cov, pc, mu, rf)
-        cands["max_diversification"] = opt.max_diversification(cov, pc, mu, rf)
+        ss = opt.SolverSettings(n_starts=2, seed=cfg.seed) if cfg.backtest_light else None
+        cands["min_variance"] = opt.min_variance(cov, pc, mu, rf, settings=ss)
+        cands["max_sharpe"] = opt.max_sharpe(mu, cov, pc, rf, ss)
+        cands["risk_parity"] = opt.risk_parity(cov, pc, mu, rf, settings=ss)
+        cands["max_diversification"] = opt.max_diversification(cov, pc, mu, rf, settings=ss)
         cands["hrp"] = opt.hrp(cov, pc, mu, rf)
         cands["min_cvar"] = opt.min_cvar(rets.to_numpy(), pc, 0.95, mu, cov, rf)
-        cands["robust_mean_variance"] = robust_mean_variance(mu, cov, pc, len(rets), rf, periods=P)
+        cands["robust_mean_variance"] = robust_mean_variance(mu, cov, pc, len(rets), rf, periods=P, settings=ss)
         band = prof.research_limits.target_volatility_band
-        cands["target_volatility"] = opt.target_volatility(mu, cov, pc, band[1], rf)
-        frontier = opt.efficient_frontier(mu, cov, pc, rf, n_points=25) if feas.feasible else pd.DataFrame()
+        cands["target_volatility"] = opt.target_volatility(mu, cov, pc, band[1], rf, settings=ss)
+        frontier = (opt.efficient_frontier(mu, cov, pc, rf, n_points=10 if cfg.backtest_light else 25, settings=ss)
+                    if feas.feasible else pd.DataFrame())
 
     # ------------------------------------------------------------- backtest + selection
     registry = StrategyRegistry(cfg.logs_dir / f"strategy_registry_{run_id}.jsonl")
@@ -344,10 +349,10 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput,
             selection["excluded_by_volatility_band"] = excluded_band
             selection["volatility_cap"] = vol_cap
             look = lookahead_invariance_check(rets, strats["min_variance"], bset, cut=len(rets) // 2)
-            # cost sensitivity of the selected strategy
+            # cost sensitivity of the selected strategy (skipped in light mode: not shown on the web)
             cost_rows = []
             sel_fn = strats[selection["selected"]]
-            for c in (0.0, bset.cost_bps, 3 * bset.cost_bps):
+            for c in (() if cfg.backtest_light else (0.0, bset.cost_bps, 3 * bset.cost_bps)):
                 b2 = BacktestSettings(**{**bset.__dict__, "cost_bps": c})
                 from core.backtesting.walk_forward import run_strategy
                 r2 = run_strategy("x", sel_fn, rets, b2)

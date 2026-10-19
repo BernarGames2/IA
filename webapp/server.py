@@ -102,6 +102,8 @@ class PurposeWebRequest(BaseModel):
     peso_alinhamento: float = Field(0.30, ge=0.0, le=1.0)
     n_simulacoes: int = Field(3_000, ge=500, le=10_000)
     seed: int = Field(42, ge=0, le=2**31 - 1)
+    universo: Literal["completo", "curado"] = "completo"
+    max_ativos: int = Field(40, ge=10, le=60)            # bounded so a request fits the platform time limit
 
     def key(self) -> str:
         # real prices change every day: cached real results are reused only within the same UTC day

@@ -145,6 +145,7 @@ class AppConfig(BaseSettings):
     profile: str = "moderado"
     run_heavy_analyses: bool = True
     run_backtest: bool | None = None   # None: follows run_heavy_analyses
+    backtest_light: bool = False       # web: 1 solver start per rebalance and a reduced strategy set
 
     @field_validator("tickers")
     @classmethod

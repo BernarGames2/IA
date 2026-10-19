@@ -171,7 +171,7 @@ def test_engine_real_mode_reports_where_to_invest_and_why(tmp_path):
 
     req = PurposeRequest(capital_inicial=100_000, aporte_periodico=1_000, valor_alvo=250_000, horizonte_anos=5,
                          motivo_investidor="Quero investir em saúde e tecnologia.", offline=False,
-                         classes=["acoes_br", "acoes_eua", "renda_fixa_br"], n_simulacoes=500)
+                         classes=["acoes_br", "acoes_eua", "renda_fixa_br"], n_simulacoes=500, max_ativos=20)
     r = run_purpose(req, output_dir=tmp_path, provider=_Prov(_fake_market(_real_symbols())), cache_dir=tmp_path,
                     rf_fetch=lambda url, t: (200, b'[{"data":"16/10/2026","valor":"15.00"}]'))
     assert not r.is_synthetic and r.is_final_portfolio and r.universe["origem"].startswith("real")

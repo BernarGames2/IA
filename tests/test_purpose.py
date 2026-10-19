@@ -163,7 +163,8 @@ def test_guarantee_language_detected():
 def test_catalog_expansion_lists_individual_tickers():
     assert all("_" not in a.ticker or a.ticker.startswith("SINT_") for a in SYNTHETIC_CATALOG)
     fii = expand(REAL_CATALOG, ["fii"])
-    assert {a.ticker for a in fii} == {"KNRI11.SA", "HGLG11.SA"}
+    assert {"KNRI11.SA", "HGLG11.SA"} <= {a.ticker for a in fii} and all(a.macro_class == "fii" for a in fii)
+    assert len(REAL_CATALOG) >= 200 and len({a.ticker for a in REAL_CATALOG}) == len(REAL_CATALOG)
     with pytest.raises(ValueError):
         expand(REAL_CATALOG, ["classe_inexistente"])
 

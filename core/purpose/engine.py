@@ -44,6 +44,7 @@ from core.optimization.constraints import verify_weights
 from core.portfolio_engine import AnalysisResult, run_analysis
 from core.purpose.alignment import (
     THEME_LABEL,
+    THEME_TO_TAGS,
     AlignmentResult,
     CombinedPortfolio,
     combine,
@@ -53,7 +54,6 @@ from core.purpose.catalog import (
     REAL_CATALOG,
     SYNTHETIC_CATALOG,
     CatalogAsset,
-    by_ticker,
     expand,
 )
 from core.purpose.governance import GovernanceResult, apply_governance
@@ -68,6 +68,8 @@ from core.simulation.engine import (
     simulate_portfolio,
 )
 from core.simulation.models import BlockBootstrapModel, GBMModel
+from core.universe.listings import load_market_listings
+from core.universe.screen import Funnel, preselect
 from models.investor import InvestorProfileInput, LossCapacity, Objective, RiskProfile
 from models.market_data import PriceDataset
 from models.portfolio import PortfolioConstraints
@@ -100,6 +102,8 @@ class PurposeRequest(BaseModel):
     peso_alinhamento: float = Field(0.30, ge=0.0, le=1.0, description="slider: 0.30 = 70% quant / 30% alinhamento")
     orcamento_tracking_error: float = Field(0.05, gt=0.0, le=0.30)
     classes: list[str] | None = None
+    universo: Literal["completo", "curado"] = "completo"   # completo: exchange listings + curated catalogue
+    max_ativos: int = Field(60, ge=10, le=400)            # candidates handed to the optimiser
     n_simulacoes: int = Field(10_000, ge=500, le=200_000)
     seed: int = Field(42, ge=0, le=2**31 - 1)
     offline: bool = True
@@ -419,7 +423,9 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
                 rf_fetch: FetchFn | None = None, progress: Callable[[str], None] | None = None,
                 fast: bool = False, download_budget_s: float | None = None) -> PurposeResult:
     """``fast`` (web): quarterly instead of monthly rebalancing in the walk-forward backtest and
-    fewer paths in the sensitivity runs; ``download_budget_s`` bounds the total download time."""
+    fewer paths in the sensitivity runs; ``download_budget_s`` bounds the total download time.
+    ``rf_fetch`` is the HTTP function for the public non-price sources (Selic at the BCB and the
+    exchange listings); None = standard library."""
     steps: list[dict[str, object]] = []
     alerts: list[Alert] = []
 
@@ -435,13 +441,23 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
         alerts.append(Alert("objetivo", "FAIL", reqc.explanation))
 
     # 2 ---------------------------------------------------------------- eligible universe
-    catalog = SYNTHETIC_CATALOG if req.offline else REAL_CATALOG
-    assets = expand(catalog, req.classes)
     cache_root = cache_dir or Path(".cache") / "market_data"
+    funnel: Funnel | None = None
+    if req.offline:
+        assets = expand(SYNTHETIC_CATALOG, req.classes)
+    else:
+        listings = None
+        if req.universo == "completo":
+            say("lendo as listagens completas da B3 e dos EUA…")
+            listings = load_market_listings(cache_root, rf_fetch)
+        pre = extract_themes(req.motivo_investidor)          # themes only steer the theme slots
+        pre_tags = {tag for t in pre.themes if t.name in THEME_TO_TAGS for tag in THEME_TO_TAGS[t.name]}
+        assets, funnel = preselect(expand(REAL_CATALOG, req.classes), listings, pre_tags, req.max_ativos,
+                                   req.classes)
     live: dict[str, RiskFreeQuote] = {}
     live_errors: dict[str, str] = {}
     if not req.offline:
-        say(f"baixando cotações reais de {len(assets)} ativos e as taxas livres de risco…")
+        say(f"baixando cotações reais de {len(assets)} ativos pré-selecionados e as taxas livres de risco…")
         provider = provider or _default_provider(cache_root, progress, download_budget_s)
         need = ({a.currency for a in assets} | {req.moeda_objetivo}) - set(req.taxa_livre_risco)
         live, live_errors = fetch_live_rates(need, provider, rf_fetch)  # type: ignore[arg-type]
@@ -452,7 +468,7 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
                     else "user",
                     run_heavy_analyses=False, run_backtest=True, n_simulations=1000, horizon_days=21,
                     profile_horizon_simulation=False, make_charts=False, n_resamples=0, evt_bootstrap=0,
-                    seed=req.seed, rebalance_every=63 if fast else 21,
+                    seed=req.seed, rebalance_every=126 if fast else 21, backtest_light=fast,
                     output_dir=output_dir or Path("outputs") / "proposito")
     try:
         ds_all, truth = _load_universe(req, assets, cfg, provider)
@@ -464,7 +480,7 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
             raise DataUnavailableError(f"{len(fails)} de {len(assets)} tickers sem cotação; exemplo — {first}") from e
         raise
     excluded_data = dict(ds_all.quality.excluded_symbols)
-    cat = by_ticker(catalog)
+    cat = {a.ticker: a for a in assets}
     providers = sorted({p.provider for p in ds_all.provenance.values()})
     last_quote = str(ds_all.prices.index[-1].date())
     fetched = max((p.ingested_at_utc for p in ds_all.provenance.values() if p.ingested_at_utc), default="")
@@ -475,9 +491,28 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
                 "excluidos_por_dados": excluded_data, "min_observacoes": MIN_OBS,
                 "n_datas": len(ds_all.prices), "periodo": f"{ds_all.prices.index[0].date()} a "
                                                          f"{ds_all.prices.index[-1].date()}"}
+    funnel_txt = ""
+    if funnel is not None:
+        universe["funil"] = funnel.as_dict()
+        listed = (f"{funnel.listed_b3} na B3 e {funnel.listed_us} nos EUA listados → " if funnel.used_listings
+                  else "catálogo curado (listagens completas indisponíveis) → ")
+        funnel_txt = (f"{listed}{funnel.eligible} elegíveis por liquidez/tamanho → {funnel.selected} "
+                      f"pré-selecionados → ")
     steps.append({"etapa": 2, "titulo": "Universo elegível",
-                  "resultado": f"{len(ds_all.symbols)} de {len(assets)} tickers com série validada "
+                  "resultado": f"{funnel_txt}{len(ds_all.symbols)} de {len(assets)} tickers com série validada "
                                f"(>= {MIN_OBS} observações); excluídos: {excluded_data or 'nenhum'}"})
+    if funnel is not None:
+        if funnel.used_listings:
+            alerts.append(Alert("dados", "INFO",
+                                f"Universo: todas as ações listadas lidas ({funnel.listed_b3} na B3, {funnel.listed_us} "
+                                f"nos EUA; fontes: {', '.join(funnel.sources.values())}) → {funnel.eligible} elegíveis "
+                                f"→ {funnel.selected} levados à otimização. Critérios: {funnel.criteria}."))
+        else:
+            why = "; ".join(f"{k}: {v}" for k, v in funnel.errors.items()) or "modo curado escolhido"
+            alerts.append(Alert("dados", "WARNING" if funnel.errors else "INFO",
+                                f"Listagens completas da B3/EUA não usadas ({why}): universo = catálogo curado de "
+                                f"{len(REAL_CATALOG)} ativos → {funnel.selected} levados à otimização. "
+                                f"Critérios: {funnel.criteria}."))
     if ds_all.is_synthetic:
         alerts.append(Alert("dados", "FAIL",
                             "DADOS SINTÉTICOS: os tickers SINT_* não existem no mercado. Este resultado é uma "
@@ -518,7 +553,8 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
     res = run_analysis(cfg, _profile_input(req), dataset=(ds, truth))
     if fast:
         alerts.append(Alert("backtest", "INFO", "modo rápido do site: backtest walk-forward com rebalanceamento "
-                                                "trimestral (a linha de comando usa mensal)"))
+                                                "semestral, 6 estratégias e menos pontos de partida no otimizador "
+                                                "(a linha de comando usa rebalanceamento mensal e 8 estratégias)"))
     w_q = res.selected.weights
     sel = res.selection
     how = (f"escolhida por {sel.get('rule', 'regra 1-EP')} no walk-forward fora da amostra" if res.backtest is not None

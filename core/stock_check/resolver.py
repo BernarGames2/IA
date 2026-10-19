@@ -13,10 +13,13 @@ from dataclasses import dataclass
 
 from core.purpose.catalog import REAL_CATALOG, SYNTHETIC_CATALOG, CatalogAsset
 from core.purpose.themes import _fold
+from core.universe.listings import ListedAsset, MarketListings
 
 B3_CODE = re.compile(r"^[A-Z]{4}\d{1,2}$")
 B3_IN_TEXT = re.compile(r"\b([A-Za-z]{4}\d{1,2})\b")
 TICKER = re.compile(r"^[A-Z0-9][A-Z0-9.\-^=]{0,14}$")
+US_TICKER = re.compile(r"^[A-Z]{1,5}(-[A-Z])?$")
+CRYPTO_TICKER = re.compile(r"^[A-Z0-9]{2,6}-USD$")
 
 # well-known names outside the analysis catalogue: (ticker, name, factual one-line business)
 EXTRA: dict[str, tuple[str, str, str]] = {
@@ -85,7 +88,24 @@ def _from_ticker(t: str, how: str) -> Resolved:
     return Resolved(t, t, None, None, how)
 
 
-def resolve(text: str) -> Resolved:
+def _from_listing(a: ListedAsset, how: str) -> Resolved:
+    r = _from_ticker(a.ticker, how)
+    if r.asset is not None or r.business is not None:
+        return r                                       # curated metadata wins
+    business = (f"{a.industry} ({a.sector}) — classificação setorial da Nasdaq" if a.industry or a.sector
+                else None)
+    return Resolved(a.ticker, a.name, business, None, how)
+
+
+def is_plain_code(r: Resolved) -> bool:
+    """True when the input was taken as a bare code that no catalogue/alias recognises."""
+    return r.asset is None and r.business is None and r.how.startswith("código ") and \
+        not r.how.startswith(("código B3", "código sintético"))
+
+
+def resolve(text: str, listings: MarketListings | None = None) -> Resolved:
+    """``listings`` (full B3/US listings, optional) enables name search over every listed
+    company and checks bare codes against the listed tickers."""
     raw = (text or "").strip()
     if not raw or len(raw) > 60:
         raise ValueError("informe o código ou o nome de uma ação (até 60 caracteres)")
@@ -101,7 +121,18 @@ def resolve(text: str) -> Resolved:
         return _from_ticker(ALIASES[folded], f"nome '{raw}'")
     if folded in EXTRA:
         return _from_ticker(EXTRA[folded][0], f"nome '{raw}'")
+    has_listing = listings is not None and listings.available
     if " " not in raw and TICKER.match(up):
+        plausible = bool(US_TICKER.match(up) or CRYPTO_TICKER.match(up)) or any(c in up for c in "^=.")
+        if has_listing:
+            known = listings.by_ticker()  # type: ignore[union-attr]
+            if up in known:
+                return _from_listing(known[up], f"código {up} (listado)")
+            hit = listings.search(raw)  # type: ignore[union-attr]
+            if hit is not None:
+                return _from_listing(hit, f"nome '{raw}' encontrado na listagem ({hit.ticker})")
+            if not plausible:
+                raise ValueError(f"não encontrei {raw!r} nas listagens da B3 e dos EUA: confira o código ou o nome")
         return _from_ticker(up, f"código {up}")
     m = B3_IN_TEXT.search(raw)
     if m and B3_CODE.match(m.group(1).upper()):
@@ -113,4 +144,8 @@ def resolve(text: str) -> Resolved:
             continue
         if re.search(r"(?<![a-z0-9])" + re.escape(name) + r"(?![a-z0-9])", folded):
             return _from_ticker(tk, f"nome '{name}' encontrado no texto")
+    if has_listing:
+        hit = listings.search(raw)  # type: ignore[union-attr]
+        if hit is not None:
+            return _from_listing(hit, f"nome '{raw}' encontrado na listagem ({hit.ticker})")
     raise ValueError(f"não reconheci a ação em {raw!r}: digite o código (ex.: PETR4, VALE3, AAPL)")

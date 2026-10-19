@@ -8,7 +8,7 @@ matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-250 passed, 1 skipped (251 testes; ~4 min)
+260 passed, 1 skipped (261 testes; ~4 min)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
 
@@ -159,4 +159,15 @@ Web (`POST /api/proposito`, 2.000 trajetórias): ~33–37 s localmente; página 
   progresso e `ping`, e mensagem clara no lugar de "Load failed". Medido: 31 ativos ~15 s (rápido) / ~27 s
   (completo); carteira sintética no site 8 s (antes ~35 s). Testes novos: probe/paralelo/disjuntor/orçamento,
   progresso e o formato do stream (resultado e erro).
+
+## 9. Universo completo (B3 + EUA)
+
+* `tests/test_universe.py` (10 testes): COTAHIST montado com o layout oficial de posições fixas (ações, FII, ETF;
+  BDR, fracionário e derivativos descartados), arquivo do último dia útil, screener Nasdaq (warrants/preferenciais
+  descartados, BRK/B → BRK-B), diretório de símbolos, cache de 24 h, busca por nome, funil e o motor com universo
+  completo.
+* Tempo de cálculo medido (dados de teste, modo rápido do site): 25 ativos ~7 s, 40 ativos ~12 s, 60 ativos ~22 s
+  (antes de otimizar o modo rápido, 50 ativos levavam ~51 s e 80 ativos ~87 s).
+* Neste ambiente as listagens (B3, Nasdaq) e o Yahoo estão bloqueados (proxy 403): o funil caiu no catálogo curado
+  e avisou; nenhum dado foi inventado.
 

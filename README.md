@@ -270,11 +270,18 @@ por período, o papel na carteira (estabilizador, motor de retorno, crescimento,
 capital, risco e retorno esperado [E]), a ligação com o motivo declarado e o negócio da empresa; e explica qual
 estratégia quantitativa foi escolhida e por quê.
 
-**Dados reais** (`--proposito` sem `--offline`, ou o site): ~30 tickers individuais (ações B3 como PETR4, VALE3,
-ITUB4, WEGE3, EGIE3, RADL3, FLRY3, RDOR3, HAPV3, COGN3, YDUQ3, TOTS3…, FIIs, ETFs de renda fixa, ações/ETFs dos
-EUA, ouro e bitcoin) baixados do Yahoo Finance; ticker com menos de 252 observações é excluído e listado. Se o
-provedor estiver inacessível, um disjuntor encerra após 3 tickers seguidos sem resposta (falha em segundos, não
-minutos).
+**Universo = o mercado inteiro, com funil transparente** (`core/universe/`): com `universo="completo"` (padrão) o
+motor lê as listagens completas — **B3**: arquivo oficial diário de cotações COTAHIST (todas as ações, units, FIIs
+e ETFs negociados, com o volume financeiro do dia); **EUA (NYSE, Nasdaq, NYSE American)**: screener da Nasdaq
+(setor, indústria e valor de mercado de todas as ações; reserva: diretório oficial de símbolos da Nasdaq Trader).
+Como otimizar milhares de ativos por pedido não é viável nem estatisticamente sensato, um funil pré-seleciona os
+`max_ativos` candidatos (padrão 60 na CLI, 40 no site; 25/40/60 na tela) **sem usar desempenho passado**: pisos de
+liquidez/tamanho (B3: R$ 5 mi negociados no dia; EUA: US$ 2 bi de valor de mercado), núcleo de diversificação
+(renda fixa, índices, ouro), ativos ligados aos temas do seu motivo (setores da Nasdaq e do catálogo) e os maiores
+de cada setor, alternando B3 e EUA. Se as listagens não responderem, usa-se o **catálogo curado de 215 ativos**
+(84 ações da B3, 79 ações/REITs dos EUA, 11 FIIs, ETFs de renda fixa, índices, setores, ouro e cripto) e o relatório
+avisa. Os preços dos pré-selecionados vêm do Yahoo Finance; ticker com menos de 252 observações é excluído e listado.
+Se o provedor estiver inacessível, um disjuntor encerra após 3 tickers seguidos sem resposta (falha em segundos).
 
 **Limites honestos:** neste ambiente de desenvolvimento o Yahoo Finance e o Banco Central estão bloqueados pela
 política de rede, então o caminho com dados reais foi testado só com provedores simulados; para rodá-lo aqui é
@@ -285,8 +292,10 @@ de temas é por léxico (não entende ironia nem sinônimos fora da lista).
 
 ## 11. "Vale a pena?" — análise de uma ação (`--acao`, `POST /api/acao`)
 
-Você digita o código ou o nome (PETR4, VALE3, WEGE3, AAPL, "Petrobras", "Banco do Brasil"…; nomes curtos
-ambíguos como "vale" só valem sozinhos, e o que não for reconhecido pede o código — nada é adivinhado). O módulo
+Você digita o código ou o nome de **qualquer ação da B3 ou dos EUA** (PETR4, VALE3, WEGE3, AAPL, "Petrobras",
+"Banco do Brasil"…; nomes que não estão na lista conhecida são procurados nas listagens completas da B3 e da
+Nasdaq; nomes curtos ambíguos como "vale" só valem sozinhos, e o que não for encontrado pede o código — nada é
+adivinhado). O módulo
 `core/stock_check/` baixa ~5 anos de preços ajustados (Yahoo Finance), compara com a renda fixa **da mesma moeda**
 (Selic do BCB para BRL, T-bill `^IRX` para USD) e devolve:
 

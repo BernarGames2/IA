@@ -50,7 +50,8 @@ from core.simulation.engine import (
     simulate_portfolio,
 )
 from core.simulation.models import BlockBootstrapModel, GBMModel
-from core.stock_check.resolver import Resolved, resolve
+from core.stock_check.resolver import Resolved, is_plain_code, resolve
+from core.universe.listings import load_market_listings
 from models.investor import RiskProfile
 from models.market_data import AssetMeta, QualityReport
 from utils.validation import InsufficientDataError
@@ -229,7 +230,20 @@ def analyze_stock(query: str, horizon_years: float = 3.0, amount: float = 10_000
         raise ValueError("horizonte deve estar entre 0,25 e 30 anos")
     if not 0 < amount <= 1e10:
         raise ValueError("valor a investir deve ser positivo")
-    res = resolve(query)
+    try:
+        res: Resolved | None = resolve(query)
+        first_error = None
+    except ValueError as e:
+        res, first_error = None, e
+    if not offline and (res is None or is_plain_code(res)):
+        # not a known code or name: look it up among every company listed on the B3 and in the US
+        if progress is not None:
+            progress("procurando nas listagens completas da B3 e dos EUA…")
+        listings = load_market_listings(cache_dir or Path(".cache") / "market_data", rf_fetch)
+        if listings.available:
+            res = resolve(query, listings)
+    if res is None:
+        raise first_error if first_error else ValueError("ação não reconhecida")
     if offline and not res.ticker.startswith("SINT_"):
         raise ValueError("no modo sintético use um código SINT_* (ex.: SINT_ENERGIA3, SINT_TECH_US)")
     if not offline and res.ticker.startswith("SINT_"):

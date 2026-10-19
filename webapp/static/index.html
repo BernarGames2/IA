@@ -133,7 +133,8 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 
   <section class="card" aria-labelledby="s-title">
     <h2 id="s-title">Vale a pena? Analise uma ação</h2>
-    <p class="muted">Digite o código ou o nome (PETR4, VALE3, WEGE3, ITUB4, AAPL, "Petrobras"…). O modelo compara o
+    <p class="muted">Digite o código ou o nome de qualquer ação da B3 ou dos EUA (PETR4, VALE3, AAPL, "Petrobras",
+      "Raízen"…; nomes fora da lista conhecida são procurados nas listagens completas). O modelo compara o
       histórico de preços com a renda fixa da mesma moeda (CDI/Selic ou T-bill) e projeta um investimento por Monte
       Carlo. Regras fixas e explicadas no resultado; não avalia fundamentos nem notícias e não é recomendação.</p>
     <form id="s-form">
@@ -206,8 +207,10 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 
   <section class="card" aria-labelledby="p-title">
     <h2 id="p-title">Carteira com propósito</h2>
-    <p class="muted">Escolhe entre ações e fundos reais da B3 e dos EUA (cotações diárias do Yahoo Finance) a
-      carteira que respeita o seu perfil e mostra quanto colocar em cada ativo e por quê. O motivo que você escrever
+    <p class="muted">Parte de <strong>todas as ações listadas na B3 e nos EUA</strong> (listagens oficiais: arquivo
+      diário de cotações da B3 e listagem da Nasdaq/NYSE), pré-seleciona os mais líquidos, os ligados ao seu motivo e
+      os maiores de cada setor, e otimiza com cotações diárias reais a carteira que respeita o seu perfil — mostrando
+      quanto colocar em cada ativo e por quê. O motivo que você escrever
       é lido por regras determinísticas (sem modelo de linguagem): só entram temas que você escreveu, com a citação
       literal. Leva cerca de 1 minuto com cotações reais (baixa ~30 séries de preço, faz backtest e simulação);
       o andamento aparece abaixo do botão — mantenha a tela aberta.</p>
@@ -243,6 +246,14 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
       <label>rf USD (% a.a., opcional)<input name="rf_usd" type="number" min="-5" max="100" step="any" placeholder="auto: T-bill (^IRX)"></label>
       <label>Simulações
         <select name="n_simulacoes"><option value="2000">2.000</option><option value="3000" selected>3.000</option><option value="5000">5.000</option><option value="10000">10.000</option></select>
+      </label>
+      <label>Universo
+        <select name="universo"><option value="completo" selected>Completo: todas as ações da B3 e dos EUA</option>
+          <option value="curado">Curado: 215 ativos conhecidos</option></select>
+      </label>
+      <label>Ativos levados à otimização
+        <select name="max_ativos"><option value="25">25 (mais rápido)</option><option value="40" selected>40</option>
+          <option value="60">60 (mais lento)</option></select>
       </label>
       <label class="check"><input name="incluir_sob_revisao" type="checkbox"> Incluir ativos sob revisão de governança</label>
       <button id="p-run" type="submit">Montar carteira</button>
@@ -845,6 +856,7 @@ function readPurpose() {
     periodicidade: f.get("periodicidade"), horizonte_anos: Number(f.get("horizonte_anos")), perfil_risco: f.get("perfil_risco"),
     peso_alinhamento: Number(f.get("peso_alinhamento")) / 100, taxa_livre_risco: rf, fonte_dados: f.get("fonte_dados"),
     incluir_sob_revisao: f.get("incluir_sob_revisao") === "on", n_simulacoes: Number(f.get("n_simulacoes")),
+    universo: f.get("universo"), max_ativos: Number(f.get("max_ativos")),
   };
 }
 let purposeUrl = null;
@@ -853,7 +865,11 @@ function renderPurpose(d) {
   $("p-banner").textContent = d.dados_sinteticos
     ? "DEMONSTRAÇÃO COM DADOS SINTÉTICOS — NÃO É UMA CARTEIRA FINAL. Os tickers SINT_* não existem no mercado. " + d.aviso
     : `Dados reais: ${d.universo.origem}; período ${d.universo.periodo}; última cotação ${d.universo.ultima_cotacao}. ` + d.aviso;
-  $("p-strategy").textContent = d.estrategia_texto || "";
+  const fu = d.universo && d.universo.funil;
+  const funnel = !fu ? "" : (fu.used_listings
+    ? `Universo: ${fu.listed_b3.toLocaleString("pt-BR")} ativos listados na B3 e ${fu.listed_us.toLocaleString("pt-BR")} nos EUA → ${fu.eligible} elegíveis por liquidez/tamanho → ${fu.selected} levados à otimização → ${d.universo.validados.length} com dados válidos. `
+    : `Universo: catálogo curado (listagens completas indisponíveis agora) → ${fu.selected} levados à otimização → ${d.universo.validados.length} com dados válidos. `);
+  $("p-strategy").textContent = funnel + (d.estrategia_texto || "");
   setChildren("p-alloc", table(["Ativo", "Peso", "Valor inicial", "Aporte/período", "Alinhamento", "Moeda", "Por quê"],
     d.onde_investir.map((a) => {
       const row = d.carteira.find((r) => r.ticker === a.ticker) || {};

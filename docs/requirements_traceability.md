@@ -111,3 +111,12 @@ Testes executados e resultados: [`test_results.md`](test_results.md).
 | S3 | Projeção com incerteza: leque, cenários, chance de superar a renda fixa e de prejuízo, sensibilidade | `analyzer.analyze_stock` | `test_synthetic_check_projection_is_consistent`, `test_shrinkage_weights_history_by_its_precision` | OK | percentis ordenados; EP binomial; retorno esperado = referência + peso × (histórico − referência) |
 | S4 | Dados reais (Yahoo + Selic/T-bill), falha explícita, sem dados inventados | `analyzer._load_real`, `webapp/server.py /api/acao`, `main.py --acao` | `test_real_path_with_test_doubles`, `test_real_path_refuses_short_history_and_missing_data`, `test_web_endpoint_stock`, `test_cli_stock` | NÃO VALIDADO | testado com dublês; rede bloqueada neste ambiente |
 
+## Universo completo (pedido do usuário: "todos da bolsa brasileira e americana")
+
+| ID | Requisito | Módulo(s) | Teste(s) | Status | Critério de aceitação |
+|---|---|---|---|---|---|
+| U1 | Listagens completas: B3 (COTAHIST oficial) e EUA (screener Nasdaq; reserva: diretório Nasdaq Trader), cache 24 h, falha explícita | `core/universe/listings.py` | `test_parse_cotahist_keeps_shares_fiis_etfs_and_drops_the_rest`, `test_fetch_b3_listing_walks_back_to_the_last_business_day`, `test_parse_nasdaq_screener_and_symbol_directory`, `test_load_market_listings_and_cache` | NÃO VALIDADO | formatos testados com arquivos construídos pelo layout oficial; fontes reais bloqueadas neste ambiente |
+| U2 | Funil sem uso de desempenho passado: pisos de liquidez/tamanho, núcleo, temas, maiores por setor, cap `max_ativos` | `core/universe/screen.py`, `engine.run_purpose` | `test_preselect_funnel_respects_floors_core_themes_and_cap`, `test_engine_complete_universe_reports_the_funnel` | OK | funil relatado (listados → elegíveis → pré-selecionados → com dados) |
+| U3 | Catálogo curado ampliado (215 ativos) como reserva | `core/purpose/catalog.py` | `test_catalog_expansion_lists_individual_tickers` | OK | tickers únicos; cada um validado com dados em tempo de execução |
+| U4 | "Vale a pena?" para qualquer ação listada, inclusive por nome | `core/stock_check/resolver.py`, `analyzer.py` | `test_resolver_uses_listings_for_unknown_names`, `test_name_search_prefers_exact_then_size` | NÃO VALIDADO | busca testada com listagens de teste |
+
