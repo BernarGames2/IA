@@ -6,8 +6,18 @@ from collections.abc import Mapping
 
 import pandas as pd
 
-from core.market_data.base import DataUnavailableError, MarketDataProvider, RawSeries
-from core.market_data.quality import QualitySettings, align_prices, clean_series, staleness_check
+from core.market_data.base import (
+    DataUnavailableError,
+    MarketDataProvider,
+    RawSeries,
+    last_per_date,
+)
+from core.market_data.quality import (
+    QualitySettings,
+    align_prices,
+    clean_series,
+    staleness_check,
+)
 from core.market_data.universe import meta_for
 from models.market_data import (
     AssetMeta,
@@ -35,7 +45,7 @@ def convert_currency(close: pd.Series, fx: pd.Series, max_fx_staleness_days: int
     exchange calendars differ). Asset prices are never forward-filled; dates without
     a recent FX quote become missing. Returns (converted, n_dates_without_fx).
     """
-    fx = fx.sort_index()
+    fx = last_per_date(fx).sort_index()
     aligned = fx.reindex(close.index, method="ffill",
                          tolerance=pd.Timedelta(days=max_fx_staleness_days))
     converted = close * aligned
@@ -110,7 +120,7 @@ def load_price_dataset(
         natives[s] = native_x
         native_ccys[s] = native_ccy
         if rs.volume is not None:
-            volumes[s] = rs.volume.reindex(x.index)
+            volumes[s] = last_per_date(rs.volume).reindex(x.index)
         prov[s] = SeriesProvenance(
             symbol=s, provider=rs.provider,
             origin=DataOrigin.CACHE if rs.cache_hit else origin,

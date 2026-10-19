@@ -8,7 +8,7 @@ matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-321 passed, 1 skipped (322 testes)
+326 passed, 1 skipped (327 testes)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
 
@@ -187,3 +187,22 @@ Web (`POST /api/proposito`, 2.000 trajetórias): ~33–37 s localmente; página 
 * Neste ambiente as listagens (B3, Nasdaq) e o Yahoo estão bloqueados (proxy 403): o funil caiu no catálogo curado
   e avisou; nenhum dado foi inventado.
 
+
+## 10. Erro "cannot reindex on an axis with duplicate labels" no site — diagnóstico e correção
+
+* Sintoma relatado: no site, "Montar carteira" com cotações reais e universo **Completo** terminava em
+  "Erro: análise não pôde ser executada: cannot reindex on an axis with duplicate labels".
+* Causa: o Yahoo às vezes devolve o pregão do dia **duas vezes** (a barra diária e uma barra "ao vivo" com a mesma
+  data). A camada de qualidade já removia a data repetida dos preços, mas o **volume** (`core/data_loader.py`) e a
+  série do **dólar** usada na conversão para reais (`convert_currency`) eram realinhados com a data repetida — o
+  pandas recusa isso. O universo Completo mistura B3 e EUA, então sempre passa pela conversão; a análise de uma ação
+  ("Vale a pena?") tinha o mesmo risco no volume.
+* Reprodução: dados de teste com a barra repetida reproduziram exatamente o erro (linha 113 de `data_loader.py`).
+* Correção: o parser do Yahoo mantém uma cotação por dia (a última) e registra isso nas notas da série; volume e
+  câmbio passam por `last_per_date`, o que também cobre séries gravadas no cache antes da correção. Erros que
+  surgem dentro de bibliotecas (pandas, numpy) passam a ser informados como **erro interno** (HTTP 500, "falha do
+  sistema, não dos valores informados"), separados de entradas inválidas (HTTP 400).
+* `tests/test_production_like.py` (5 testes): listagens completas da B3 e dos EUA, respostas no formato do Yahoo com
+  barra ao vivo repetida, volume ausente, preço nulo, feriados diferentes no Brasil e nos EUA e tickers inexistentes
+  (404), passando pelo endpoint em stream — carteira com ativos em reais e em dólares, começando com capital 1 e com
+  capital 0 —, e a análise de uma ação (PGMN3 e AAPL).

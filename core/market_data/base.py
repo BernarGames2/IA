@@ -41,6 +41,13 @@ class RawSeries:
     notes: list[str] = field(default_factory=list)
 
 
+def last_per_date(s: pd.Series) -> pd.Series:
+    """One observation per date, the last one in the given order. Yahoo can repeat the current
+    trading day as a separate "live" bar with the same date; reindexing a series with repeated
+    dates raises in pandas, so every alignment of raw provider data goes through this."""
+    return s[~s.index.duplicated(keep="last")] if s.index.has_duplicates else s
+
+
 @runtime_checkable
 class MarketDataProvider(Protocol):
     name: str

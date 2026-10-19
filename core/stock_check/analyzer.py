@@ -40,7 +40,7 @@ import pandas as pd
 from config import DEMO_RISK_FREE_FALLBACK
 from core.backtesting.overfitting import psr
 from core.extreme_risk.var_es import empirical_var_es
-from core.market_data.base import DataUnavailableError, RawSeries
+from core.market_data.base import DataUnavailableError, RawSeries, last_per_date
 from core.market_data.cache import SeriesCache
 from core.market_data.quality import QualitySettings, clean_series
 from core.market_data.risk_free import fetch_live_rates
@@ -309,7 +309,7 @@ def analyze_stock(query: str, horizon_years: float = 3.0, amount: float = 10_000
         b = clean_series(bench_rs, AssetMeta(bench_rs.symbol, "equity", "indice", "?", bench_rs.currency, "?",
                                              cal, "provider"), QualityReport(), QualitySettings(min_history=MIN_OBS))
         bench_px = b.dropna() if b is not None else None
-    vol_s = rs.volume.reindex(px.index) if rs.volume is not None else None
+    vol_s = last_per_date(rs.volume).reindex(px.index) if rs.volume is not None else None
     st = _stats(px, bench_px, rf_val, vol_s)
     exp = _expected(st, rf_val, erp, tau)
 

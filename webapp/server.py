@@ -194,8 +194,8 @@ def analisar(p: AnalyzeRequest, stream: bool = False) -> Response:
             res, elapsed = _analysis(p)
         except HTTPException:
             raise
-        except (ValueError, ArithmeticError) as e:   # invalid combination of inputs -> client error
-            raise HTTPException(400, f"análise não pôde ser executada: {e}") from e
+        except (ValueError, ArithmeticError) as e:   # invalid inputs -> 400; library failure -> 500
+            raise _analysis_error(e) from e
         return build_summary(res, p.mode, elapsed)
 
     return _respond(compute, stream)
@@ -208,7 +208,7 @@ def perguntar(req: AskRequest) -> JSONResponse:
     except HTTPException:
         raise
     except (ValueError, ArithmeticError) as e:
-        raise HTTPException(400, f"análise não pôde ser executada: {e}") from e
+        raise _analysis_error(e) from e
     analyst = ResearchAnalyst(AnalysisContext.from_result(res))
     ans = analyst.ask(req.question)
     return JSONResponse(to_jsonable({
@@ -271,7 +271,7 @@ def proposito(p: PurposeWebRequest, stream: bool = False) -> Response:
                                      "usado em substituição: tente de novo em alguns minutos (as cotações já "
                                      "baixadas ficam guardadas) ou escolha 'Demonstração sintética'.") from e
         except (ValueError, ArithmeticError) as e:
-            raise HTTPException(400, f"análise não pôde ser executada: {e}") from e
+            raise _analysis_error(e) from e
         finally:
             _slots.release()
         with _cache_lock:
@@ -306,6 +306,8 @@ def acao(p: StockRequest, stream: bool = False) -> Response:
             raise HTTPException(503, f"dados indisponíveis agora ({_short(e)}). Nada foi estimado no lugar: confira "
                                      "o código da ação ou tente de novo em alguns minutos.") from e
         except (ValueError, ArithmeticError) as e:
+            if _raised_in_library(e) and not isinstance(e, ValidationError):
+                raise _analysis_error(e) from e         # 500: a defect, not the user's input
             raise HTTPException(400, str(e)) from e
         finally:
             _slots.release()
@@ -316,6 +318,24 @@ def acao(p: StockRequest, stream: bool = False) -> Response:
         return payload
 
     return _respond(compute, stream)
+
+
+def _raised_in_library(e: BaseException) -> bool:
+    """True when the error surfaced inside a third-party library (pandas, numpy, scipy…): a defect of
+    this service with valid inputs, not an invalid combination of inputs."""
+    tb, last = e.__traceback__, None
+    while tb is not None:
+        last, tb = tb, tb.tb_next
+    return last is not None and any(d in last.tb_frame.f_code.co_filename for d in ("site-packages", "dist-packages"))
+
+
+def _analysis_error(e: Exception) -> HTTPException:
+    if isinstance(e, ValidationError) or not _raised_in_library(e):
+        return HTTPException(400, f"análise não pôde ser executada: {e}")
+    log.error("internal failure while computing", exc_info=e)
+    return HTTPException(500, "erro interno ao processar os dados: é uma falha do sistema, não dos valores que você "
+                              f"informou (detalhe técnico: {_short(e, 160)}). Tente de novo em instantes; se o erro "
+                              "se repetir, ele precisa ser corrigido no código.")
 
 
 def _short(e: Exception, n: int = 240) -> str:

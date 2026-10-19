@@ -105,6 +105,11 @@ def parse_chart(symbol: str, payload: dict, provider: str = "yahoo_chart_v8") ->
     if close.empty:
         raise EmptyDataError(f"{symbol}: todos os preços são nulos")
     notes = [f"bolsa {meta.get('exchangeName', '?')} ({tz}); instrumento {meta.get('instrumentType', '?')}"]
+    repeated = close.index.duplicated(keep="last")     # the current day can come twice (daily + live bar)
+    if repeated.any():
+        close = close[~repeated]
+        volume = volume[~repeated] if volume is not None else None
+        notes.append(f"{int(repeated.sum())} data(s) repetida(s) na resposta: mantida a última cotação de cada dia")
     if adj is None:
         notes.append("sem série ajustada na resposta: usado o fechamento ajustado só por desdobramentos")
     return RawSeries(symbol=symbol, close=close, volume=volume, provider=provider,
