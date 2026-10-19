@@ -26,6 +26,7 @@ Fit with the investor profile (volatility, drawdown) is reported separately, nev
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -222,7 +223,8 @@ def analyze_stock(query: str, horizon_years: float = 3.0, amount: float = 10_000
                   profile: str = "moderado", offline: bool = False, rf: float | None = None,
                   n_paths: int = 5_000, seed: int = 42, erp: float = 0.04, tau: float = 0.10,
                   provider: object | None = None, rf_fetch: FetchFn | None = None,
-                  cache_dir: Path | None = None) -> StockCheckResult:
+                  cache_dir: Path | None = None, progress: Callable[[str], None] | None = None,
+                  download_budget_s: float | None = None) -> StockCheckResult:
     if not 0.25 <= horizon_years <= 30:
         raise ValueError("horizonte deve estar entre 0,25 e 30 anos")
     if not 0 < amount <= 1e10:
@@ -232,6 +234,11 @@ def analyze_stock(query: str, horizon_years: float = 3.0, amount: float = 10_000
         raise ValueError("no modo sintético use um código SINT_* (ex.: SINT_ENERGIA3, SINT_TECH_US)")
     if not offline and res.ticker.startswith("SINT_"):
         raise ValueError("códigos SINT_* são sintéticos: escolha 'Demonstração sintética'")
+    if progress is not None:
+        progress(f"baixando o histórico de {res.ticker} e do índice de referência…")
+    if not offline and provider is None:
+        provider = YahooChartProvider(cache=SeriesCache(cache_dir or Path(".cache") / "market_data", 12.0),
+                                      time_budget_s=download_budget_s)
     rs, bench_rs, source, bench_name = (_load_synthetic(res, seed) if offline
                                         else _load_real(res, provider, cache_dir))
     ccy = rs.currency if rs.currency and rs.currency != "UNKNOWN" else "BRL"
@@ -270,6 +277,8 @@ def analyze_stock(query: str, horizon_years: float = 3.0, amount: float = 10_000
     exp = _expected(st, rf_val, erp, tau)
 
     # projection ------------------------------------------------------------
+    if progress is not None:
+        progress("simulando a projeção (Monte Carlo)…")
     main = _sim(_gbm(float(exp["retorno_esperado"]), float(st["vol_log"])), amount, horizon_years, n_paths, seed)
     T = main.settings["n_steps"] / P  # type: ignore[operator]
     rf_final = amount * (1 + rf_val) ** T

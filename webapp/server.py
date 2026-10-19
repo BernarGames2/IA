@@ -16,17 +16,20 @@ Local run:  uvicorn webapp.server:app --reload   ->  http://127.0.0.1:8000
 
 from __future__ import annotations
 
+import json
 import logging
+import queue
 import tempfile
 import threading
 import time
 from collections import OrderedDict
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from config import APP_NAME, APP_VERSION, AppConfig
@@ -50,6 +53,8 @@ _INDEX_HTML = (Path(__file__).parent / "static" / "index.html").read_text(encodi
 _OUTPUT_DIR = Path(tempfile.gettempdir()) / "qpi-web"   # only /tmp is writable on serverless hosts
 _MAX_CONCURRENT = 2
 _CACHE_SIZE = 4
+_DOWNLOAD_BUDGET_S = 45.0     # total time allowed for downloading real quotes in one request
+_PING_EVERY_S = 5.0           # keep-alive event interval of streamed responses
 
 
 class AnalyzeRequest(BaseModel):
@@ -180,14 +185,18 @@ def health() -> dict[str, str]:
 
 
 @app.post("/api/analisar")
-def analisar(p: AnalyzeRequest) -> JSONResponse:
-    try:
-        res, elapsed = _analysis(p)
-    except HTTPException:
-        raise
-    except (ValueError, ArithmeticError) as e:   # invalid combination of inputs -> client error
-        raise HTTPException(400, f"análise não pôde ser executada: {e}") from e
-    return JSONResponse(build_summary(res, p.mode, elapsed))
+def analisar(p: AnalyzeRequest, stream: bool = False) -> Response:
+    def compute(progress: Callable[[str], None]) -> dict[str, object]:
+        progress("calculando a análise " + ("completa (alguns minutos)…" if p.mode == "completo" else "rápida…"))
+        try:
+            res, elapsed = _analysis(p)
+        except HTTPException:
+            raise
+        except (ValueError, ArithmeticError) as e:   # invalid combination of inputs -> client error
+            raise HTTPException(400, f"análise não pôde ser executada: {e}") from e
+        return build_summary(res, p.mode, elapsed)
+
+    return _respond(compute, stream)
 
 
 @app.post("/api/perguntar")
@@ -231,69 +240,124 @@ def _purpose_payload(res: PurposeResult, elapsed: float) -> dict[str, object]:
 
 
 @app.post("/api/proposito")
-def proposito(p: PurposeWebRequest) -> JSONResponse:
-    k = p.key()
-    with _cache_lock:
-        if k in _purpose_cache:
-            _purpose_cache.move_to_end(k)
-            return JSONResponse(_purpose_cache[k])
+def proposito(p: PurposeWebRequest, stream: bool = False) -> Response:
     offline = p.fonte_dados == "sintetico"
     try:
         req = PurposeRequest(**p.model_dump(exclude={"fonte_dados"}), offline=offline)
     except ValueError as e:
         raise HTTPException(400, f"entrada inválida: {e}") from e
-    if not _slots.acquire(timeout=120):
-        raise HTTPException(503, "servidor ocupado; tente novamente em instantes")
-    try:
-        t0 = time.perf_counter()
-        res = run_purpose(req, output_dir=_OUTPUT_DIR / "proposito", cache_dir=_OUTPUT_DIR / "cache",
-                          provider=None if offline else _market_provider(), rf_fetch=_rf_fetch())
-        payload = _purpose_payload(res, time.perf_counter() - t0)
-    except DataUnavailableError as e:
-        why = str(e)
-        why = why if len(why) <= 240 else why[:240] + "…"
-        raise HTTPException(503, f"dados reais indisponíveis agora ({why}). Nenhum dado sintético foi usado em "
-                                 "substituição: tente de novo em alguns minutos ou escolha 'Demonstração "
-                                 "sintética'.") from e
-    except (ValueError, ArithmeticError) as e:
-        raise HTTPException(400, f"análise não pôde ser executada: {e}") from e
-    finally:
-        _slots.release()
-    with _cache_lock:
-        _purpose_cache[k] = payload
-        while len(_purpose_cache) > _CACHE_SIZE:
-            _purpose_cache.popitem(last=False)
-    return JSONResponse(payload)
+
+    def compute(progress: Callable[[str], None]) -> dict[str, object]:
+        k = p.key()
+        with _cache_lock:
+            if k in _purpose_cache:
+                _purpose_cache.move_to_end(k)
+                return _purpose_cache[k]
+        if not _slots.acquire(timeout=120):
+            raise HTTPException(503, "servidor ocupado; tente novamente em instantes")
+        try:
+            t0 = time.perf_counter()
+            res = run_purpose(req, output_dir=_OUTPUT_DIR / "proposito", cache_dir=_OUTPUT_DIR / "cache",
+                              provider=None if offline else _market_provider(), rf_fetch=_rf_fetch(),
+                              progress=progress, fast=True, download_budget_s=_DOWNLOAD_BUDGET_S)
+            payload = _purpose_payload(res, time.perf_counter() - t0)
+        except DataUnavailableError as e:
+            raise HTTPException(503, f"dados reais indisponíveis agora ({_short(e)}). Nenhum dado sintético foi "
+                                     "usado em substituição: tente de novo em alguns minutos (as cotações já "
+                                     "baixadas ficam guardadas) ou escolha 'Demonstração sintética'.") from e
+        except (ValueError, ArithmeticError) as e:
+            raise HTTPException(400, f"análise não pôde ser executada: {e}") from e
+        finally:
+            _slots.release()
+        with _cache_lock:
+            _purpose_cache[k] = payload
+            while len(_purpose_cache) > _CACHE_SIZE:
+                _purpose_cache.popitem(last=False)
+        return payload
+
+    return _respond(compute, stream)
 
 
 @app.post("/api/acao")
-def acao(p: StockRequest) -> JSONResponse:
-    k = p.key()
-    with _cache_lock:
-        if k in _purpose_cache:
-            _purpose_cache.move_to_end(k)
-            return JSONResponse(_purpose_cache[k])
-    if not _slots.acquire(timeout=120):
-        raise HTTPException(503, "servidor ocupado; tente novamente em instantes")
-    try:
-        t0 = time.perf_counter()
-        res = analyze_stock(p.acao, p.horizonte_anos, p.valor, p.perfil, offline=p.fonte_dados == "sintetico",
-                            rf=p.taxa_livre_risco, n_paths=p.n_simulacoes, seed=p.seed,
-                            provider=None if p.fonte_dados == "sintetico" else _market_provider(),
-                            rf_fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache")
-        payload = stock_to_dict(res)
-        payload["elapsed_s"] = round(time.perf_counter() - t0, 2)
-    except DataUnavailableError as e:
-        why = str(e)
-        why = why if len(why) <= 240 else why[:240] + "…"
-        raise HTTPException(503, f"dados indisponíveis agora ({why}). Nada foi estimado no lugar: confira o código "
-                                 "da ação ou tente de novo em alguns minutos.") from e
-    except (ValueError, ArithmeticError) as e:
-        raise HTTPException(400, str(e)) from e
-    finally:
-        _slots.release()
-    with _cache_lock:
-        _purpose_cache[k] = payload
-        while len(_purpose_cache) > _CACHE_SIZE:
-            _purpose_cache.popitem(last=False)
-    return JSONResponse(payload)
+def acao(p: StockRequest, stream: bool = False) -> Response:
+    def compute(progress: Callable[[str], None]) -> dict[str, object]:
+        k = p.key()
+        with _cache_lock:
+            if k in _purpose_cache:
+                _purpose_cache.move_to_end(k)
+                return _purpose_cache[k]
+        if not _slots.acquire(timeout=120):
+            raise HTTPException(503, "servidor ocupado; tente novamente em instantes")
+        try:
+            t0 = time.perf_counter()
+            res = analyze_stock(p.acao, p.horizonte_anos, p.valor, p.perfil, offline=p.fonte_dados == "sintetico",
+                                rf=p.taxa_livre_risco, n_paths=p.n_simulacoes, seed=p.seed,
+                                provider=None if p.fonte_dados == "sintetico" else _market_provider(),
+                                rf_fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache", progress=progress,
+                                download_budget_s=_DOWNLOAD_BUDGET_S)
+            payload = stock_to_dict(res)
+            payload["elapsed_s"] = round(time.perf_counter() - t0, 2)
+        except DataUnavailableError as e:
+            raise HTTPException(503, f"dados indisponíveis agora ({_short(e)}). Nada foi estimado no lugar: confira "
+                                     "o código da ação ou tente de novo em alguns minutos.") from e
+        except (ValueError, ArithmeticError) as e:
+            raise HTTPException(400, str(e)) from e
+        finally:
+            _slots.release()
+        with _cache_lock:
+            _purpose_cache[k] = payload
+            while len(_purpose_cache) > _CACHE_SIZE:
+                _purpose_cache.popitem(last=False)
+        return payload
+
+    return _respond(compute, stream)
+
+
+def _short(e: Exception, n: int = 240) -> str:
+    why = str(e)
+    return why if len(why) <= n else why[:n] + "…"
+
+
+def _line(obj: object) -> str:
+    return json.dumps(to_jsonable(obj), ensure_ascii=False) + "\n"
+
+
+def _respond(compute: Callable[[Callable[[str], None]], dict[str, object]], stream: bool) -> Response:
+    """Plain JSON, or (``?stream=1``) newline-delimited JSON events while the job runs:
+    {"tipo":"progresso","msg":...} ... {"tipo":"ping"} every few seconds of silence, then exactly one
+    {"tipo":"resultado","dados":{...}} or {"tipo":"erro","status":...,"detail":...}. The stream keeps
+    the connection busy (mobile browsers and proxies drop idle requests) and shows progress."""
+    if not stream:
+        return JSONResponse(compute(lambda msg: None))
+    events: queue.Queue[tuple[str, object]] = queue.Queue()
+
+    def worker() -> None:
+        try:
+            events.put(("resultado", compute(lambda msg: events.put(("progresso", msg)))))
+        except HTTPException as e:
+            events.put(("erro", {"status": e.status_code, "detail": e.detail}))
+        except Exception:  # the stream must always end with an answer
+            log.exception("streamed job failed")
+            events.put(("erro", {"status": 500, "detail": "erro interno inesperado; tente novamente"}))
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    def gen() -> Iterator[str]:
+        yield _line({"tipo": "progresso", "msg": "pedido recebido"})
+        while True:
+            try:
+                kind, data = events.get(timeout=_PING_EVERY_S)
+            except queue.Empty:
+                yield _line({"tipo": "ping"})
+                continue
+            if kind == "progresso":
+                yield _line({"tipo": "progresso", "msg": data})
+            elif kind == "resultado":
+                yield _line({"tipo": "resultado", "dados": data})
+                return
+            else:
+                yield _line({"tipo": "erro", **data})  # type: ignore[dict-item]
+                return
+
+    return StreamingResponse(gen(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})

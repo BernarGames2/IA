@@ -20,11 +20,13 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
 import numpy as np
@@ -113,14 +115,31 @@ def parse_chart(symbol: str, payload: dict, provider: str = "yahoo_chart_v8") ->
                      ingested_at_utc=datetime.now(UTC).isoformat(), notes=notes)
 
 
+class ThrottledError(DownloadError):
+    """The provider kept answering 429/5xx (rate limiting or outage) until the retries ran out."""
+
+
 class YahooChartProvider:
-    """MarketDataProvider over the chart endpoint. ``fetch_fn`` is injectable for tests."""
+    """MarketDataProvider over the chart endpoint. ``fetch_fn`` is injectable for tests.
+
+    Speed and robustness for interactive use (a web request must not hang for minutes):
+    * the first missing symbols are fetched one at a time until one succeeds (a cheap probe);
+      the rest are then downloaded in parallel (``max_workers``) under a shared rate limiter;
+    * a circuit breaker stops after ``max_consecutive_failures`` symbols in a row failed for
+      network or throttling reasons — the provider is unreachable or rate limiting us;
+    * an optional ``time_budget_s`` (for the provider's whole lifetime) bounds the total
+      download time; symbols not started in time are reported as such;
+    * ``progress`` receives one short message per symbol.
+    """
 
     name = "yahoo_chart_v8"
 
     def __init__(self, cache: SeriesCache | None = None, timeout_s: float = 20.0, max_retries: int = 3,
-                 min_interval_s: float = 0.35, fetch_fn: FetchFn | None = None,
-                 sleep: Callable[[float], None] = time.sleep, max_consecutive_network_failures: int = 3) -> None:
+                 min_interval_s: float = 0.15, fetch_fn: FetchFn | None = None,
+                 sleep: Callable[[float], None] = time.sleep, max_consecutive_failures: int = 3,
+                 max_workers: int = 6, time_budget_s: float | None = None,
+                 progress: Callable[[str], None] | None = None,
+                 clock: Callable[[], float] = time.monotonic) -> None:
         self.cache = cache
         self.timeout_s = timeout_s
         self.max_retries = max_retries
@@ -129,55 +148,122 @@ class YahooChartProvider:
         self.limiter = RateLimiter(min_interval_s, sleep=sleep)
         self.failures: dict[str, str] = {}
         self.n_requests = 0
-        # circuit breaker: when the host is unreachable, stop after a few symbols instead of
-        # spending minutes in backoff for every remaining ticker
-        self.max_consecutive_network_failures = max_consecutive_network_failures
-        self._net_fail_streak = 0
+        self.max_consecutive_failures = max_consecutive_failures
+        self.max_workers = max(1, int(max_workers))
+        self.time_budget_s = time_budget_s
+        self.progress = progress
+        self._clock = clock
+        self._deadline: float | None = None
+        self._streak = 0
+        self._lock = threading.Lock()
+        self._limit_lock = threading.Lock()
 
+    # -- public -------------------------------------------------------------------------
     def fetch(self, symbols: list[str], period: str, interval: str) -> dict[str, RawSeries]:
         out: dict[str, RawSeries] = {}
+        total = len(symbols)
+        state = {"done": 0}
+
+        def report(sym: str, ok: bool) -> None:
+            with self._lock:
+                state["done"] += 1
+                done = state["done"]
+            if self.progress is not None:
+                self.progress(f"cotações {done}/{total}: {sym} {'ok' if ok else 'sem dados'}")
+
+        pending = []
         for s in symbols:
-            if self.cache is not None:
-                hit = self.cache.get(self.name, s, period, interval)
-                if hit is not None:
-                    out[s] = hit
-                    continue
-            if self._net_fail_streak >= self.max_consecutive_network_failures:
-                self.failures[s] = ("não tentado: provedor inacessível (falhas de rede em "
-                                    f"{self._net_fail_streak} tickers seguidos)")
-                continue
-            try:
-                rs = self._download(s, period, interval)
-            except NetworkDownloadError as e:
-                self._net_fail_streak += 1
-                self.failures[s] = str(e)
-                log.warning("download failed (network)", extra={"symbol": s, "error": str(e)})
-                continue
-            except (DownloadError, EmptyDataError) as e:
-                self._net_fail_streak = 0
-                self.failures[s] = str(e)
-                log.warning("download failed", extra={"symbol": s, "error": str(e)})
-                continue
-            self._net_fail_streak = 0
-            out[s] = rs
-            if self.cache is not None:
-                try:
-                    self.cache.put(rs, period, interval)
-                except OSError as e:                      # read-only file system etc.: keep going
-                    log.warning("cache write failed", extra={"symbol": s, "error": str(e)})
+            hit = self.cache.get(self.name, s, period, interval) if self.cache is not None else None
+            if hit is not None:
+                out[s] = hit
+                report(s, True)
+            else:
+                pending.append(s)
+        if not pending:
+            return out
+        if self.time_budget_s is not None and self._deadline is None:
+            self._deadline = self._clock() + self.time_budget_s
+        i = 0
+        while i < len(pending) and not self._circuit_open():       # probe until one success
+            sym = pending[i]
+            i += 1
+            if self._one(sym, period, interval, out, report):
+                break
+        rest = pending[i:]
+        if rest and self.max_workers > 1 and not self._circuit_open():
+            with ThreadPoolExecutor(max_workers=min(self.max_workers, len(rest))) as ex:
+                list(ex.map(lambda sym: self._one(sym, period, interval, out, report), rest))
+        else:
+            for sym in rest:
+                self._one(sym, period, interval, out, report)
         return out
+
+    # -- internals ----------------------------------------------------------------------
+    def _circuit_open(self) -> bool:
+        return self._streak >= self.max_consecutive_failures
+
+    def _remaining(self) -> float | None:
+        return None if self._deadline is None else self._deadline - self._clock()
+
+    def _one(self, sym: str, period: str, interval: str, out: dict[str, RawSeries],
+             report: Callable[[str, bool], None]) -> bool:
+        if self._circuit_open():
+            self.failures[sym] = (f"não tentado: provedor inacessível ou limitando requisições ({self._streak} "
+                                  "tickers seguidos falharam)")
+            report(sym, False)
+            return False
+        rem = self._remaining()
+        if rem is not None and rem <= 0:
+            self.failures[sym] = "não tentado: tempo de download esgotado"
+            report(sym, False)
+            return False
+        try:
+            rs = self._download(sym, period, interval)
+        except (NetworkDownloadError, ThrottledError) as e:
+            with self._lock:
+                self._streak += 1
+            self.failures[sym] = str(e)
+            log.warning("download failed (provider)", extra={"symbol": sym, "error": str(e)})
+            report(sym, False)
+            return False
+        except (DownloadError, EmptyDataError) as e:           # definitive for this symbol only
+            with self._lock:
+                self._streak = 0
+            self.failures[sym] = str(e)
+            log.warning("download failed", extra={"symbol": sym, "error": str(e)})
+            report(sym, False)
+            return False
+        with self._lock:
+            self._streak = 0
+        out[sym] = rs
+        if self.cache is not None:
+            try:
+                self.cache.put(rs, period, interval)
+            except OSError as e:                              # read-only file system etc.: keep going
+                log.warning("cache write failed", extra={"symbol": sym, "error": str(e)})
+        report(sym, True)
+        return True
 
     def _download(self, symbol: str, period: str, interval: str) -> RawSeries:
         last = "sem tentativa"
         net_errors = 0
+        throttled = False
         for attempt in range(self.max_retries + 1):
             if attempt:
-                self._sleep(min(2.0 ** (attempt - 1), 8.0))
-            self.limiter.wait()
+                rem = self._remaining()
+                wait = min(2.0 ** (attempt - 1), 8.0)
+                if rem is not None and rem <= wait:
+                    raise ThrottledError(f"{symbol}: tempo de download esgotado ({last})")
+                self._sleep(wait)
+            with self._limit_lock:
+                self.limiter.wait()
             url = chart_url(symbol, period, interval, HOSTS[attempt % len(HOSTS)])
-            self.n_requests += 1
+            with self._lock:
+                self.n_requests += 1
+            rem = self._remaining()
+            timeout = self.timeout_s if rem is None else max(1.0, min(self.timeout_s, rem))
             try:
-                status, body = self._fetch(url, self.timeout_s)
+                status, body = self._fetch(url, timeout)
             except (urllib.error.URLError, TimeoutError, OSError) as e:
                 last = f"erro de rede: {e}"
                 net_errors += 1
@@ -189,11 +275,16 @@ class YahooChartProvider:
                     payload = json.loads(body.decode("utf-8"))
                 except (UnicodeDecodeError, json.JSONDecodeError) as e:
                     last = f"resposta inválida: {e}"
+                    throttled = False
                     continue
                 return parse_chart(symbol, payload, self.name)
             if status == 404:
                 raise DownloadError(f"{symbol}: ticker não encontrado no provedor (HTTP 404)")
+            if status in (401, 403):              # the provider refuses this client, not just this ticker
+                raise ThrottledError(f"{symbol}: provedor recusou o acesso (HTTP {status})")
             last = f"HTTP {status}"
             if status not in _RETRY_STATUS:
                 raise DownloadError(f"{symbol}: {last}")
-        raise DownloadError(f"{symbol}: falhou após {self.max_retries + 1} tentativas ({last})")
+            throttled = True
+        err = ThrottledError if throttled else DownloadError
+        raise err(f"{symbol}: falhou após {self.max_retries + 1} tentativas ({last})")

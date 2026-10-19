@@ -8,7 +8,7 @@ matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-245 passed, 1 skipped (246 testes; ~4,5 min)
+250 passed, 1 skipped (251 testes; ~4 min)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
 
@@ -146,4 +146,17 @@ Web (`POST /api/proposito`, 2.000 trajetórias): ~33–37 s localmente; página 
   30% no retorno esperado; a chance vai de 37% (sem prêmio) a 87% (se o passado se repetir).
 * Com cotações reais neste ambiente: `python main.py --acao PETR4` termina com código 2 ("erro de rede … 403"),
   sem estimar nada no lugar. Página verificada com Playwright (1280 px e 390 px, sem erros de console).
+
+## 8. "Load failed" no site (celular) — diagnóstico e correção
+
+* Sintoma relatado: no iPhone, "Montar carteira" com cotações reais terminava em "Erro: Load failed" (o Safari
+  mostra isso quando a conexão cai sem resposta HTTP). Não foi possível acessar o deploy daqui (proxy 403), então
+  a causa foi medida localmente: com 31 tickers e dados instantâneos, o cálculo levava ~98 s (sob cProfile) —
+  Monte Carlo diário 63 s e backtest 26 s —, antes mesmo de ~30 downloads sequenciais com novas tentativas.
+* Correções: simulação do objetivo em passos mensais (P(objetivo) 72,4% vs 71,8% na diária, z = 1,2;
+  teste `test_monthly_goal_simulation_matches_daily`), modo rápido no site (backtest trimestral), downloads
+  paralelos com sondagem, disjuntor (rede, 401/403/429/5xx) e orçamento total de tempo, respostas em stream com
+  progresso e `ping`, e mensagem clara no lugar de "Load failed". Medido: 31 ativos ~15 s (rápido) / ~27 s
+  (completo); carteira sintética no site 8 s (antes ~35 s). Testes novos: probe/paralelo/disjuntor/orçamento,
+  progresso e o formato do stream (resultado e erro).
 

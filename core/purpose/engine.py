@@ -25,6 +25,7 @@ validation alerts. All language is probabilistic (checked by :mod:`core.purpose.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -34,6 +35,7 @@ import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from config import DEMO_RISK_FREE_FALLBACK, AppConfig
+from core.market_data.base import DataUnavailableError
 from core.market_data.cache import SeriesCache
 from core.market_data.quality import QualitySettings
 from core.market_data.risk_free import RiskFreeQuote, fetch_live_rates
@@ -217,9 +219,11 @@ def _profile_input(req: PurposeRequest) -> InvestorProfileInput:
     )
 
 
-def _default_provider(cache_dir: Path) -> YahooChartProvider:
-    """Real prices: Yahoo chart endpoint through the standard library, with a file cache."""
-    return YahooChartProvider(cache=SeriesCache(cache_dir, 12.0))
+def _default_provider(cache_dir: Path, progress: Callable[[str], None] | None = None,
+                      budget_s: float | None = None) -> YahooChartProvider:
+    """Real prices: Yahoo chart endpoint through the standard library, with a file cache,
+    parallel downloads and an optional total time budget."""
+    return YahooChartProvider(cache=SeriesCache(cache_dir, 12.0), progress=progress, time_budget_s=budget_s)
 
 
 STRATEGY_PT = {
@@ -266,12 +270,27 @@ def _load_universe(req: PurposeRequest, assets: list[CatalogAsset], cfg: AppConf
     return ds, None
 
 
+SIM_STEPS_PER_YEAR = 12     # the goal simulation runs on MONTHLY steps (see _simulate)
+
+
 def _gbm_estimator(res: AnalysisResult, cols: list[str], drift_shift: float = 0.0) -> GBMModel:
+    """Multivariate GBM on monthly steps, centred on the optimiser's expected returns [E]."""
     P = res.config.trading_days
     hist = GBMModel.from_log_returns(res.log_returns[cols], P)
     mu_vec = res.mu.loc[cols].to_numpy()
     mu_c = P * np.log1p(mu_vec / P) + drift_shift
-    return GBMModel(mu_c, hist.cov, hist.dt)
+    return GBMModel(mu_c, hist.cov, 1.0 / SIM_STEPS_PER_YEAR)
+
+
+def _monthly_bootstrap(res: AnalysisResult, cols: list[str]) -> BlockBootstrapModel:
+    """Bootstrap of overlapping 21-day compounded returns, shifted so that the mean monthly return
+    matches the optimiser's expected return [E] (same centring as the GBM)."""
+    P = res.config.trading_days
+    g = np.log1p(res.returns[cols].to_numpy())
+    cs = np.vstack([np.zeros((1, g.shape[1])), np.cumsum(g, axis=0)])
+    monthly = np.expm1(cs[21:] - cs[:-21])
+    target = (1.0 + res.mu.loc[cols].to_numpy() / P) ** 21 - 1.0
+    return BlockBootstrapModel(monthly + (target - monthly.mean(axis=0)), 1)
 
 
 def _equiv_cagr(req: PurposeRequest, wealth: float) -> float | None:
@@ -284,16 +303,20 @@ def _equiv_cagr(req: PurposeRequest, wealth: float) -> float | None:
 
 def _simulate(req: PurposeRequest, res: AnalysisResult, model: object, w: np.ndarray, n_paths: int,
               seed: int) -> SimulationResult:
+    """Monthly steps: the portfolio is rebalanced monthly and contributions are monthly,
+    quarterly, semiannual or annual, so nothing happens between month ends. For a GBM the
+    monthly lognormal increment is EXACT (same terminal distribution as daily steps), at 1/21
+    of the cost; intra-month drawdowns are not resolved (they are not reported here)."""
     cfg = res.config
-    P = cfg.trading_days
+    S = SIM_STEPS_PER_YEAR
     m = PERIODS_PER_YEAR[req.periodicidade]
     cf = CashflowPlan(monthly_contribution=req.aporte_periodico if m else 0.0,
-                      steps_per_month=(P // m) if m else 0, contribution_cost_bps=cfg.transaction_cost_bps)
-    ss = SimulationSettings(n_paths=n_paths, n_steps=round(req.horizonte_anos * P), seed=seed,
-                            initial_capital=req.capital_inicial, rebalance_every=21,
+                      steps_per_month=(S // m) if m else 0, contribution_cost_bps=cfg.transaction_cost_bps)
+    ss = SimulationSettings(n_paths=n_paths, n_steps=round(req.horizonte_anos * S), seed=seed,
+                            initial_capital=req.capital_inicial, rebalance_every=1,
                             rebalance_cost_bps=cfg.transaction_cost_bps + cfg.spread_bps,
-                            inflation_annual=cfg.inflation_annual, periods_per_year=P,
-                            batch_size=cfg.simulation_batch_size, goal=req.valor_alvo, record_every=21)
+                            inflation_annual=cfg.inflation_annual, periods_per_year=S,
+                            batch_size=cfg.simulation_batch_size, goal=req.valor_alvo, record_every=1)
     return simulate_portfolio(model, w, ss, cf)  # type: ignore[arg-type]
 
 
@@ -393,9 +416,16 @@ def _purpose_thesis(a: CatalogAsset, s: str, al: AlignmentResult, themes: ThemeE
 # ----------------------------------------------------------------------------- main
 def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: object | None = None,
                 governance_path: Path | None = None, cache_dir: Path | None = None,
-                rf_fetch: FetchFn | None = None) -> PurposeResult:
+                rf_fetch: FetchFn | None = None, progress: Callable[[str], None] | None = None,
+                fast: bool = False, download_budget_s: float | None = None) -> PurposeResult:
+    """``fast`` (web): quarterly instead of monthly rebalancing in the walk-forward backtest and
+    fewer paths in the sensitivity runs; ``download_budget_s`` bounds the total download time."""
     steps: list[dict[str, object]] = []
     alerts: list[Alert] = []
+
+    def say(msg: str) -> None:
+        if progress is not None:
+            progress(msg)
 
     # 1 ---------------------------------------------------------------- required CAGR
     reqc = required_cagr(req.capital_inicial, req.aporte_periodico, req.periodicidade, req.valor_alvo,
@@ -411,7 +441,8 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
     live: dict[str, RiskFreeQuote] = {}
     live_errors: dict[str, str] = {}
     if not req.offline:
-        provider = provider or _default_provider(cache_root)
+        say(f"baixando cotações reais de {len(assets)} ativos e as taxas livres de risco…")
+        provider = provider or _default_provider(cache_root, progress, download_budget_s)
         need = ({a.currency for a in assets} | {req.moeda_objetivo}) - set(req.taxa_livre_risco)
         live, live_errors = fetch_live_rates(need, provider, rf_fetch)  # type: ignore[arg-type]
     rf0, rf0_src = _resolve_rf(req, set(), live)    # objective-currency rf (never silently 0)
@@ -421,9 +452,17 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
                     else "user",
                     run_heavy_analyses=False, run_backtest=True, n_simulations=1000, horizon_days=21,
                     profile_horizon_simulation=False, make_charts=False, n_resamples=0, evt_bootstrap=0,
-                    seed=req.seed,
+                    seed=req.seed, rebalance_every=63 if fast else 21,
                     output_dir=output_dir or Path("outputs") / "proposito")
-    ds_all, truth = _load_universe(req, assets, cfg, provider)
+    try:
+        ds_all, truth = _load_universe(req, assets, cfg, provider)
+    except DataUnavailableError as e:
+        wanted = {a.ticker for a in assets}
+        fails = {k: v for k, v in (getattr(provider, "failures", {}) or {}).items() if k in wanted}
+        if fails:
+            first = next(iter(fails.values()))
+            raise DataUnavailableError(f"{len(fails)} de {len(assets)} tickers sem cotação; exemplo — {first}") from e
+        raise
     excluded_data = dict(ds_all.quality.excluded_symbols)
     cat = by_ticker(catalog)
     providers = sorted({p.provider for p in ds_all.provenance.values()})
@@ -475,7 +514,11 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
         raise ValueError("menos de dois ativos elegíveis após dados e governança")
 
     # 4 ---------------------------------------------------------------- quant optimisation
+    say(f"otimizando e validando no backtest walk-forward ({len(ds.symbols)} ativos)…")
     res = run_analysis(cfg, _profile_input(req), dataset=(ds, truth))
+    if fast:
+        alerts.append(Alert("backtest", "INFO", "modo rápido do site: backtest walk-forward com rebalanceamento "
+                                                "trimestral (a linha de comando usa mensal)"))
     w_q = res.selected.weights
     sel = res.selection
     how = (f"escolhida por {sel.get('rule', 'regra 1-EP')} no walk-forward fora da amostra" if res.backtest is not None
@@ -501,6 +544,7 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
         alerts.append(Alert("governanca", "WARNING", f"flag de governança de {t} ignorada: {why}"))
 
     # 6-7 -------------------------------------------------------------- themes + alignment
+    say("lendo o seu motivo e pontuando o alinhamento…")
     themes = extract_themes(req.motivo_investidor)
     elig_assets = [cat[s] for s in ds.symbols]
     al = score_assets(themes, elig_assets)
@@ -620,6 +664,7 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
         return v / v.sum()
 
     wf_np, wq_np = _vec(w_f), _vec(comb.quant)
+    say("simulando o patrimônio até o objetivo (Monte Carlo)…")
     gbm = _gbm_estimator(res, cols)
     mc_f = _simulate(req, res, gbm, wf_np, req.n_simulacoes, req.seed)
     mc_q = _simulate(req, res, gbm, wq_np, req.n_simulacoes, req.seed)     # common random numbers
@@ -634,24 +679,24 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
     sm = mc_f.summary
     goal = {"valor_alvo": req.valor_alvo, "p_objetivo": sm["p_goal"], "erro_padrao": sm["p_goal_mc_se"],
             "ic95": _wilson(sm["p_goal"], sm["n_paths"]),
-            "n_trajetorias": sm["n_paths"], "modelo": "GBM multivariado centrado no retorno esperado [E] do otimizador, "
-                                                      "rebalanceamento mensal com custos, aportes no fim de cada período",
+            "n_trajetorias": sm["n_paths"], "modelo": "GBM multivariado em passos mensais, centrado no retorno esperado [E] do "
+                                                      "otimizador; rebalanceamento mensal com custos, aportes no fim "
+                                                      "de cada período",
             "p_objetivo_carteira_quant": mc_q.summary["p_goal"], "erro_padrao_quant": mc_q.summary["p_goal_mc_se"],
             "p_abaixo_do_aportado": sm["p_below_net_invested"], "total_aportado": sm["net_invested"],
             "inflacao_hipotetica": res.config.inflation_annual}
     # model / estimation-error sensitivity
     P = res.config.trading_days
-    n_sens = min(req.n_simulacoes, 2000)
+    n_sens = min(req.n_simulacoes, 1000 if fast else 2000)
     vol_p = float(np.sqrt(wf_np @ (gbm.cov) @ wf_np))
     se_p = vol_p * np.sqrt(P / len(res.returns))
-    rets = res.returns[cols]
-    shift_simple = res.mu.loc[cols].to_numpy() / P - rets.mean().to_numpy()
+    hist_gbm = GBMModel.from_log_returns(res.log_returns[cols], P)
     sens_models = {
         "GBM, retorno [E] (principal)": gbm,
         "GBM, retorno [E] − 1 erro-padrão": _gbm_estimator(res, cols, -se_p),
         "GBM, retorno [E] + 1 erro-padrão": _gbm_estimator(res, cols, +se_p),
-        "bootstrap em blocos (21d), centrado em [E]": BlockBootstrapModel(rets.to_numpy() + shift_simple, 21),
-        "GBM, deriva histórica": GBMModel.from_log_returns(res.log_returns[cols], P),
+        "bootstrap de retornos mensais históricos, centrado em [E]": _monthly_bootstrap(res, cols),
+        "GBM, deriva histórica": GBMModel(hist_gbm.mu, hist_gbm.cov, 1.0 / SIM_STEPS_PER_YEAR),
     }
     srows = []
     for name, mdl in sens_models.items():
@@ -724,6 +769,7 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
                         allocation, strategy_text)
     from core.purpose.report import render_markdown
 
+    say("montando o relatório…")
     text = render_markdown(out)
     for quote in [req.motivo_investidor, *themes.why_clauses, *(e for t in themes.themes for e in t.evidence)]:
         if quote:

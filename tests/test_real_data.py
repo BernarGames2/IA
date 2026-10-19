@@ -218,3 +218,69 @@ def test_web_real_mode_and_unavailable_data(monkeypatch):
     assert d["dados_sinteticos"] is False and d["carteira_final"] is True
     assert d["onde_investir"] and {"ticker", "nome", "peso", "valor_inicial", "por_que"} <= set(d["onde_investir"][0])
     assert d["universo"]["ultima_cotacao"] == "2026-10-16"
+
+
+# ----------------------------------------------------------------------------- robustness for web use
+def test_provider_parallel_after_probe_and_throttling_breaker():
+    seen = []
+
+    def ok(url, timeout):
+        seen.append(url)
+        return 200, OK_BODY
+
+    syms = [f"T{i:02d}" for i in range(12)]
+    p = YahooChartProvider(fetch_fn=ok, sleep=lambda s: None, min_interval_s=0, max_workers=4)
+    got = p.fetch(syms, "5y", "1d")
+    assert set(got) == set(syms) and p.failures == {} and len(seen) == 12
+
+    q = YahooChartProvider(fetch_fn=_Http([(429, b"")]), sleep=lambda s: None, min_interval_s=0, max_retries=2)
+    assert q.fetch(syms, "5y", "1d") == {}
+    assert q.n_requests == 3 * 3                       # 3 probes x 3 attempts, then the breaker opens
+    assert "HTTP 429" in q.failures["T00"] and "não tentado" in q.failures["T11"]
+
+
+def test_provider_time_budget_marks_unstarted_symbols():
+    now = {"t": 0.0}
+
+    def slow(url, timeout):
+        now["t"] += 4.0                                 # every request "takes" 4 s on the fake clock
+        return 200, OK_BODY
+
+    p = YahooChartProvider(fetch_fn=slow, sleep=lambda s: None, min_interval_s=0, max_workers=1,
+                           time_budget_s=10.0, clock=lambda: now["t"])
+    got = p.fetch(["A1", "A2", "A3", "A4", "A5"], "5y", "1d")
+    assert len(got) == 3 and "tempo de download esgotado" in p.failures["A5"]
+
+
+def test_provider_reports_progress():
+    msgs = []
+    p = YahooChartProvider(fetch_fn=_Http([(200, OK_BODY)]), sleep=lambda s: None, min_interval_s=0,
+                           progress=msgs.append)
+    p.fetch(["X1", "X2"], "5y", "1d")
+    assert len(msgs) == 2 and all(m.startswith("cotações ") for m in msgs) and "2/2" in msgs[-1]
+
+
+def _events(text):
+    return [json.loads(line) for line in text.splitlines() if line.strip()]
+
+
+def test_streamed_endpoints_end_with_result_or_error(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    import webapp.server as srv
+
+    c = TestClient(srv.app)
+    r = c.post("/api/acao?stream=1", json={"acao": "SINT_SAUDE3", "fonte_dados": "sintetico", "n_simulacoes": 500})
+    assert r.status_code == 200 and r.headers["content-type"].startswith("application/x-ndjson")
+    ev = _events(r.text)
+    assert ev[0]["tipo"] == "progresso" and ev[-1]["tipo"] == "resultado"
+    assert ev[-1]["dados"]["ticker"] == "SINT_SAUDE3" and any("simulando" in e.get("msg", "") for e in ev)
+    monkeypatch.setattr(srv, "_market_provider", lambda: _Prov({}))
+    monkeypatch.setattr(srv, "_rf_fetch", lambda: (lambda url, t: (500, b"")))
+    ev = _events(c.post("/api/proposito?stream=1", json={"valor_alvo": 300_000, "n_simulacoes": 500,
+                                                         "seed": 11}).text)
+    assert ev[-1]["tipo"] == "erro" and ev[-1]["status"] == 503 and "indisponíveis" in ev[-1]["detail"]
+    ev = _events(c.post("/api/analisar?stream=1", json={"profile": "conservador", "simulations": 500,
+                                                        "horizon_years": 1}).text)
+    assert ev[-1]["tipo"] == "resultado" and "meta" in ev[-1]["dados"]
+    assert c.post("/api/acao?stream=1", json={"acao": "SINT_SAUDE3", "valor": -1}).status_code == 422

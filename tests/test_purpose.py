@@ -347,3 +347,32 @@ def test_engine_infeasible_profile_is_flagged_not_hidden(tmp_path):
     assert "backtest NÃO executado" in step4
     lo, hi = r.goal["ic95"]
     assert 0.0 <= lo <= r.goal["p_objetivo"] <= hi <= 1.0
+
+
+def test_monthly_goal_simulation_matches_daily():
+    """The goal simulation runs on monthly steps (monthly rebalancing and contributions): for a GBM
+    this is exact in distribution, so it must agree with the daily simulation within MC error."""
+    from types import SimpleNamespace
+
+    from config import AppConfig
+    from core.purpose.engine import PurposeRequest, _simulate
+    from core.simulation.engine import (
+        CashflowPlan,
+        SimulationSettings,
+        simulate_portfolio,
+    )
+    from core.simulation.models import GBMModel
+
+    cfg = AppConfig(offline=True, risk_free_rate=0.1)
+    mu, cov, w = np.array([0.10, 0.06]), np.array([[0.04, 0.006], [0.006, 0.01]]), np.array([0.6, 0.4])
+    req = PurposeRequest(capital_inicial=10_000, aporte_periodico=200, valor_alvo=19_500, horizonte_anos=3)
+    m = _simulate(req, SimpleNamespace(config=cfg), GBMModel(mu, cov, 1 / 12), w, 20_000, 1)
+    d = simulate_portfolio(GBMModel(mu, cov, 1 / 252), w, SimulationSettings(
+        n_paths=20_000, n_steps=756, seed=2, initial_capital=10_000, rebalance_every=21,
+        rebalance_cost_bps=cfg.transaction_cost_bps + cfg.spread_bps, inflation_annual=cfg.inflation_annual,
+        periods_per_year=252, goal=19_500, record_every=21), CashflowPlan(200, 0, 21, cfg.transaction_cost_bps))
+    se = np.hypot(m.summary["p_goal_mc_se"], d.summary["p_goal_mc_se"])
+    assert 0.05 < d.summary["p_goal"] < 0.95
+    assert abs(m.summary["p_goal"] - d.summary["p_goal"]) < 4 * se
+    assert m.summary["net_invested"] == d.summary["net_invested"] == 10_000 + 200 * 36
+

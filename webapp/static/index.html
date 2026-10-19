@@ -209,7 +209,8 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     <p class="muted">Escolhe entre ações e fundos reais da B3 e dos EUA (cotações diárias do Yahoo Finance) a
       carteira que respeita o seu perfil e mostra quanto colocar em cada ativo e por quê. O motivo que você escrever
       é lido por regras determinísticas (sem modelo de linguagem): só entram temas que você escreveu, com a citação
-      literal. Pode levar 1–2 minutos (baixa ~30 séries de preço, faz backtest e simulação).</p>
+      literal. Leva cerca de 1 minuto com cotações reais (baixa ~30 séries de preço, faz backtest e simulação);
+      o andamento aparece abaixo do botão — mantenha a tela aberta.</p>
     <form id="p-form">
       <label>Dados
         <select name="fonte_dados">
@@ -737,8 +738,70 @@ function readParams() {
   if (rf !== null && String(rf).trim() !== "") p.risk_free_rate = Number(rf) / 100;
   return p;
 }
+const NET_ERR = "A conexão caiu antes da resposta (rede instável, tela bloqueada ou o servidor demorou demais). " +
+  "Tente de novo — as cotações já baixadas ficam guardadas e a segunda tentativa costuma ser mais rápida. " +
+  "Se persistir, escolha 'Demonstração sintética'.";
+async function httpError(r) {
+  let data = null;
+  try { data = await r.json(); } catch (e) { data = null; }
+  let msg = "HTTP " + r.status;
+  if (data && data.detail) msg = typeof data.detail === "string" ? data.detail : data.detail.map((x) => (x.loc || []).slice(1).join(".") + ": " + x.msg).join("; ");
+  else if (r.status === 504) msg = "o servidor passou do tempo limite; tente de novo (a segunda tentativa usa os dados já baixados)";
+  return new Error(msg);
+}
+// streamed request: newline-delimited JSON events (progresso / ping / resultado / erro)
+async function postStream(url, body, onProgress) {
+  let r;
+  try {
+    r = await fetch(url + "?stream=1", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch (e) { throw new Error(NET_ERR); }
+  if (!r.ok) throw await httpError(r);
+  let result = null, err = null, buf = "";
+  const handle = (line) => {
+    line = line.trim();
+    if (!line) return;
+    const ev = JSON.parse(line);
+    if (ev.tipo === "progresso" && onProgress) onProgress(ev.msg);
+    else if (ev.tipo === "resultado") result = ev.dados;
+    else if (ev.tipo === "erro") err = ev.detail || ("HTTP " + ev.status);
+  };
+  try {
+    if (r.body && r.body.getReader) {
+      const reader = r.body.getReader(), dec = new TextDecoder();
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let i;
+        while ((i = buf.indexOf("\n")) >= 0) { handle(buf.slice(0, i)); buf = buf.slice(i + 1); }
+      }
+    } else {
+      buf = await r.text();
+    }
+    buf.split("\n").forEach(handle);
+  } catch (e) {
+    if (e instanceof SyntaxError) throw new Error("resposta inválida do servidor");
+    throw new Error(NET_ERR);
+  }
+  if (err) throw new Error(err);
+  if (!result) throw new Error(NET_ERR);
+  return result;
+}
+// status line with the current step and a live elapsed-time counter
+function liveStatus(st, first) {
+  const t0 = performance.now();
+  let msg = first;
+  const paint = () => st.replaceChildren(el("span", { class: "spinner" }),
+    ` ${msg} · ${Math.round((performance.now() - t0) / 1000)} s`);
+  paint();
+  const timer = setInterval(paint, 1000);
+  return { update: (m) => { msg = m; paint(); }, stop: () => clearInterval(timer), secs: () => (performance.now() - t0) / 1000 };
+}
 async function post(url, body) {
-  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  let r;
+  try {
+    r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch (e) { throw new Error(NET_ERR); }
   let data = null;
   try { data = await r.json(); } catch (e) { data = null; }
   if (!r.ok) {
@@ -753,14 +816,15 @@ $("form").addEventListener("submit", async (ev) => {
   const p = readParams();
   const btn = $("run"); btn.disabled = true;
   const st = $("status");
-  st.replaceChildren(el("span", { class: "spinner" }), " Calculando " + (p.mode === "completo" ? "(modo completo pode levar alguns minutos)…" : "…"));
-  const t0 = performance.now();
+  const live = liveStatus(st, "Calculando" + (p.mode === "completo" ? " (modo completo pode levar alguns minutos)…" : "…"));
   try {
-    const d = await post("/api/analisar", p);
+    const d = await postStream("/api/analisar", p, live.update);
+    live.stop();
     lastParams = p;
     render(d);
-    st.textContent = `Pronto em ${((performance.now() - t0) / 1000).toFixed(1).replace(".", ",")} s.`;
+    st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s.`;
   } catch (e) {
+    live.stop();
     st.textContent = "Erro: " + e.message;
   } finally { btn.disabled = false; }
 });
@@ -832,15 +896,15 @@ $("p-form").addEventListener("submit", async (ev) => {
   const p = readPurpose();
   const btn = $("p-run"); btn.disabled = true;
   const st = $("p-status");
-  st.replaceChildren(el("span", { class: "spinner" }), p.fonte_dados === "real"
-    ? " Baixando cotações reais e montando a carteira (1–2 min)…"
-    : " Montando a carteira de demonstração (~30–60 s)…");
-  const t0 = performance.now();
+  const live = liveStatus(st, p.fonte_dados === "real" ? "Enviando o pedido (cotações reais; cerca de 1 min)…"
+    : "Enviando o pedido (demonstração)…");
   try {
-    const d = await post("/api/proposito", p);
+    const d = await postStream("/api/proposito", p, live.update);
+    live.stop();
     renderPurpose(d);
-    st.textContent = `Pronto em ${((performance.now() - t0) / 1000).toFixed(1).replace(".", ",")} s.`;
+    st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s.`;
   } catch (e) {
+    live.stop();
     st.textContent = "Erro: " + e.message;
   } finally { btn.disabled = false; }
 });
@@ -932,13 +996,14 @@ async function runStock() {
   if (!body.acao) return;
   const btn = $("s-run"); btn.disabled = true;
   const st = $("s-status");
-  st.replaceChildren(el("span", { class: "spinner" }), ` Analisando ${body.acao}…`);
-  const t0 = performance.now();
+  const live = liveStatus(st, `Analisando ${body.acao}…`);
   try {
-    const d = await post("/api/acao", body);
+    const d = await postStream("/api/acao", body, live.update);
+    live.stop();
     renderStock(d);
-    st.textContent = `Pronto em ${((performance.now() - t0) / 1000).toFixed(1).replace(".", ",")} s (interpretado como ${d.interpretacao}).`;
+    st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s (interpretado como ${d.interpretacao}).`;
   } catch (e) {
+    live.stop();
     st.textContent = "Erro: " + e.message;
   } finally { btn.disabled = false; }
 }

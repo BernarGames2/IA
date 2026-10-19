@@ -199,6 +199,16 @@ troca por dados sintéticos. A análise geral (`/api/analisar`) continua sobre o
 
 Entradas são validadas e limitadas (≤ 20.000 simulações, horizonte ≤ 30 anos, pergunta ≤ 500 caracteres).
 
+**Pedidos longos sem "Load failed":** `/api/analisar`, `/api/proposito` e `/api/acao` aceitam `?stream=1` (usado
+pela página) e respondem em JSON por linha — eventos de progresso ("baixando cotações 12/31…", "otimizando…",
+"simulando…"), um `ping` a cada 5 s de silêncio e, no fim, exatamente um `resultado` ou `erro`. A conexão nunca
+fica ociosa (navegadores de celular e proxies derrubam pedidos parados) e a tela mostra a etapa e os segundos.
+Sem `?stream=1` a resposta continua sendo um JSON único. No site, a carteira com propósito roda em modo rápido
+(backtest com rebalanceamento trimestral; a CLI usa mensal), as cotações são baixadas em paralelo com limite
+total de 45 s, e um disjuntor encerra em segundos se o Yahoo recusar ou limitar o acesso (HTTP 401/403/429).
+A simulação do objetivo usa passos mensais (exata para o GBM com rebalanceamento mensal; testada contra a
+diária): a carteira com 31 ativos caiu de ~98 s para ~15 s de cálculo.
+
 **Publicar na Vercel:** envie o repositório ao GitHub → em vercel.com/new importe o repositório → Deploy.
 A Vercel lê:
 * `pyproject.toml` — dependências **só do runtime web** (sem matplotlib, yfinance ou pytest) e
