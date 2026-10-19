@@ -71,6 +71,8 @@ def load_price_dataset(
     metas = {s: (meta or {}).get(s) or meta_for(s) for s in symbols}
     fx_cache: dict[str, RawSeries | None] = {}
     cleaned: dict[str, pd.Series] = {}
+    natives: dict[str, pd.Series] = {}
+    native_ccys: dict[str, str] = {}
     volumes: dict[str, pd.Series] = {}
     prov: dict[str, SeriesProvenance] = {}
     for s, rs in raw.items():
@@ -85,6 +87,7 @@ def load_price_dataset(
                                     "currency unknown; assumed to be base currency"))
             notes.append(f"currency unknown, ASSUMED {base_currency}")
             ccy = base_currency
+        native_x, native_ccy = x.copy(), ccy
         if ccy != base_currency:
             fx_sym = fx_symbol(ccy, base_currency)
             if fx_sym not in fx_cache:
@@ -104,6 +107,8 @@ def load_price_dataset(
             notes.append(f"converted {ccy}->{base_currency} with {fx_sym} (provider {fx_rs.provider})")
             ccy = base_currency
         cleaned[s] = x
+        natives[s] = native_x
+        native_ccys[s] = native_ccy
         if rs.volume is not None:
             volumes[s] = rs.volume.reindex(x.index)
         prov[s] = SeriesProvenance(
@@ -133,7 +138,9 @@ def load_price_dataset(
                                       "origin": origin.value})
     return PriceDataset(prices=prices, raw_prices=cleaned, provenance=prov, quality=report,
                         meta={s: metas[s] for s in prices.columns}, origin=origin,
-                        alignment=desc, volumes=vol_df)
+                        alignment=desc, volumes=vol_df,
+                        native_prices={s: natives[s].reindex(prices.index) for s in prices.columns},
+                        native_currency={s: native_ccys[s] for s in prices.columns})
 
 
 def load_synthetic_dataset(seed: int = 42, n_days: int = 1260,

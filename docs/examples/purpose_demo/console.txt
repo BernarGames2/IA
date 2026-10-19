@@ -1,0 +1,19 @@
+Quant Portfolio Intelligence Engine v0.6.0 — modo propósito, execução 20261010T041531Z-d20719
+DEMONSTRAÇÃO COM DADOS SINTÉTICOS — NÃO É UMA CARTEIRA FINAL
+CAGR necessário 14.60% | CAGR esperado (mediana simulada) 16.93%
+P(atingir o objetivo) segundo a simulação: 73.5% (erro padrão 0.44%)
+  SINT_IPCA      renda_fixa_br   25.3%  alinhamento 0.00  BRL
+  SINT_SELIC     renda_fixa_br   25.2%  alinhamento 0.00  BRL
+  SINT_ENERGIA3  acoes_br        22.7%  alinhamento 0.40  BRL
+  SINT_SAUDE_US  acoes_eua       20.1%  alinhamento 0.40  USD
+  SINT_SAUDE3    acoes_br         3.1%  alinhamento 0.40  BRL
+  SINT_TREAS_US  etf_eua          2.2%  alinhamento 0.00  USD
+  SINT_LOGI11    fii              1.4%  alinhamento 0.00  BRL
+  ! [FAIL] DADOS SINTÉTICOS: os tickers SINT_* não existem no mercado. Este resultado é uma DEMONSTRAÇÃO do método e NÃO é uma carteira final; para tickers reais rode no modo online com acesso ao provedor.
+  ! [WARNING] backtest sobre dados SINTÉTICOS: valida a mecânica, não o desempenho real
+  ! [WARNING] universo atual aplicado ao passado e sem dados point-in-time: resultados potencialmente enviesados (survivorship/look-ahead de universo)
+  ! [WARNING] viés de sobrevivência/seleção: o catálogo é uma lista estática escolhida hoje; ativos deslistados ou que fracassaram não estão no histórico.
+  ! [WARNING] maior peso 25.3% (SINT_IPCA); N efetivo 4.5; por moeda: BRL 78%, USD 22%; por classe: acoes_br 26%, acoes_eua 20%, etf_eua 2%, fii 1%, renda_fixa_br 51%
+  ! [WARNING] P(objetivo) varia de 23.1% a 98.2% quando o retorno esperado da carteira muda ±1 erro-padrão (±4.43% a.a.): resultado SENSÍVEL a erro de estimativa.
+Relatório: outputs/proposito/20261010T041531Z-d20719_proposito.md
+JSON: outputs/proposito/20261010T041531Z-d20719_proposito.json

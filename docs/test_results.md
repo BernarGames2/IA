@@ -89,3 +89,38 @@ Monte Carlo GBM, 9 ativos, 252 passos (tempo e pico de memória medidos com `tra
 O resultado é idêntico para qualquer tamanho de lote (mesma sequência do gerador); o padrão passou a 2.000
 trajetórias por lote. Reprodutibilidade: duas execuções com a mesma semente produziram o mesmo digest
 (`42d81e5236a98b1d`). Paralelização não foi adotada: nenhum ganho foi medido que a justificasse.
+
+## 5. Carteira com propósito (`python main.py --offline --proposito …`)
+
+Comando registrado (saída completa em [`docs/examples/purpose_demo/`](examples/purpose_demo/report.md)):
+
+```
+python main.py --offline --proposito --objetivo 900000 --capital 100000 --aporte 2000 --periodicidade mensal \
+  --horizon-years 10 --profile moderado --rf BRL=0.105 --rf USD=0.043 \
+  --motivo "Quero apoiar saúde e energia limpa porque perdi meu pai para o câncer e me preocupo com o planeta. O objetivo é pagar a faculdade dos meus filhos."
+```
+
+* Código de saída 0; ~43 s (10.000 trajetórias × 10 anos + backtest walk-forward). Universo **sintético**
+  multimoeda (9 ativos BRL + 5 USD com câmbio sintético); `SINT_BANCO4` removido pela governança (exemplo
+  sintético "sob revisão").
+* Etapa 1: CAGR necessário **14,60% a.a.** (R$ 340.000 aportados no total para chegar a R$ 900.000).
+* Etapa 6: temas saúde ("saúde", "câncer"), sustentabilidade ("planeta", "energia limpa"), educação
+  ("faculdade") e família/legado ("filhos", citado mas não pontuado); porquê literal: "objetivo é pagar a
+  faculdade dos meus filhos"; confiança alta.
+* Etapa 8: tracking error da carteira final em relação à quantitativa = 1,50% (= 30% × orçamento de 5%);
+  volatilidade [E] 8,3% → 9,6% (teto do perfil moderado: 14%).
+* Saída: CAGR esperado (mediana simulada) **16,93%**; P(objetivo) **73,5%** (erro padrão MC 0,44%) contra
+  74,2% da carteira só-quantitativa nas mesmas trajetórias (custo do alinhamento ≈ 0,7 p.p.).
+* Sensibilidade: com o retorno esperado da carteira −1 / +1 erro-padrão (±4,4% a.a.), P(objetivo) vai de
+  **23,1% a 98,3%** — a incerteza de estimação domina o ruído do Monte Carlo, e o relatório diz isso.
+* Caso de borda registrado: perfil conservador com universo só de ações (`--classes acoes_br`) → restrições
+  inviáveis; o motor não esconde: alertas FAIL (inviabilidade, violação de limites, validador) e código de
+  saída 3.
+
+Defeito encontrado pelos testes novos e corrigido: "Não me importo com sustentabilidade" era contado como tema
+(janela de negação de 3 palavras). A negação agora vale até 5 palavras antes, dentro da mesma oração, e é
+interrompida por "mas/porém/contudo…" (`test_negated_themes_are_not_counted`).
+
+Web (`POST /api/proposito`, 2.000 trajetórias): ~33–37 s localmente; página verificada com Playwright em
+1280 px e 390 px — sem erros de console e sem rolagem horizontal.
+

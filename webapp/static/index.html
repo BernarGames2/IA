@@ -94,6 +94,14 @@ code { font-size: 0.8rem; }
   border: 1px solid var(--ring); box-shadow: 0 4px 16px rgba(0,0,0,0.14); border-radius: 8px; padding: 6px 9px;
   font-size: 0.8rem; white-space: pre-line; display: none; max-width: 280px; }
 .hidden { display: none !important; }
+textarea { background: var(--page); border: 1px solid var(--ring); border-radius: 8px; padding: 7px 9px; min-height: 76px; resize: vertical; }
+.span-all { grid-column: 1 / -1; }
+.check { flex-direction: row; align-items: center; gap: 8px; }
+.thesis { border: 1px solid var(--ring); border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
+.thesis h3 { margin: 0 0 6px; font-size: 0.98rem; }
+.thesis p { margin: 6px 0; font-size: 0.9rem; }
+.thesis .tag { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em; color: var(--ink2); text-transform: uppercase; }
+.sev-FAIL { --c: var(--crit); } .sev-WARNING { --c: var(--warn); } .sev-INFO { --c: var(--muted); }
 footer { color: var(--muted); font-size: 0.8rem; margin-top: 28px; }
 svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 </style>
@@ -150,6 +158,57 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     </form>
     <div class="status" id="status" role="status" aria-live="polite"></div>
   </section>
+
+  <section class="card" aria-labelledby="p-title">
+    <h2 id="p-title">Carteira com propósito</h2>
+    <p class="muted">Combina a otimização quantitativa com o motivo que você declarar. O texto é lido por regras
+      determinísticas (sem modelo de linguagem): só entram temas que você escreveu, com a citação literal.
+      Universo sintético multimoeda (BRL e USD) — demonstração do método, não uma carteira final.</p>
+    <form id="p-form">
+      <label class="span-all">Por que você está investindo? (opcional)
+        <textarea name="motivo_investidor" maxlength="1000" placeholder="Ex.: Quero apoiar saúde e energia limpa. O objetivo é pagar a faculdade dos meus filhos."></textarea>
+      </label>
+      <label>Valor-alvo (R$)<input name="valor_alvo" type="number" min="1" step="any" value="900000" required></label>
+      <label>Capital inicial (R$)<input name="capital_inicial" type="number" min="1" step="any" value="100000" required></label>
+      <label>Aporte (R$)<input name="aporte_periodico" type="number" min="0" step="any" value="2000"></label>
+      <label>Periodicidade
+        <select name="periodicidade">
+          <option value="mensal" selected>Mensal</option><option value="trimestral">Trimestral</option>
+          <option value="semestral">Semestral</option><option value="anual">Anual</option><option value="nenhum">Sem aportes</option>
+        </select>
+      </label>
+      <label>Horizonte (anos)<input name="horizonte_anos" type="number" min="0.5" max="30" step="0.5" value="10"></label>
+      <label>Perfil de risco
+        <select name="perfil_risco">
+          <option value="conservador">Conservador</option><option value="moderado" selected>Moderado</option><option value="arrojado">Arrojado</option>
+        </select>
+      </label>
+      <label>Peso do alinhamento: <span id="p-slider-lab">70% quant / 30% alinhamento</span>
+        <input name="peso_alinhamento" id="p-slider" type="range" min="0" max="100" step="5" value="30">
+      </label>
+      <label>rf BRL (% a.a., opcional)<input name="rf_brl" type="number" min="-5" max="100" step="any" placeholder="10 (demonstração)"></label>
+      <label>rf USD (% a.a., opcional)<input name="rf_usd" type="number" min="-5" max="100" step="any" placeholder="4 (demonstração)"></label>
+      <label>Simulações
+        <select name="n_simulacoes"><option value="2000">2.000</option><option value="3000" selected>3.000</option><option value="5000">5.000</option><option value="10000">10.000</option></select>
+      </label>
+      <label class="check"><input name="incluir_sob_revisao" type="checkbox"> Incluir ativos sob revisão de governança</label>
+      <button id="p-run" type="submit">Montar carteira</button>
+    </form>
+    <div class="status" id="p-status" role="status" aria-live="polite"></div>
+  </section>
+
+  <div id="p-results" class="hidden">
+    <div class="banner" id="p-banner"></div>
+    <div class="kpis" id="p-kpis"></div>
+    <section class="card"><h2>Carteira</h2><div class="tbl" id="p-table"></div><ul class="clean" id="p-reasons"></ul></section>
+    <section class="card"><h2>Justificativa por ativo</h2><p class="muted" id="p-why"></p><div id="p-theses"></div></section>
+    <div class="grid2">
+      <section class="card"><h2>Cenários no horizonte</h2><div class="tbl" id="p-scen"></div></section>
+      <section class="card"><h2>Probabilidade de atingir o objetivo</h2><p id="p-goal"></p><div class="tbl" id="p-sens"></div></section>
+    </div>
+    <section class="card"><h2>Alertas de validação</h2><ul class="clean" id="p-alerts"></ul>
+      <p><a id="p-download" href="#" download="carteira_proposito.md">Baixar relatório completo (Markdown)</a></p></section>
+  </div>
 
   <div id="results" class="hidden">
     <div class="kpis" id="kpis"></div>
@@ -644,6 +703,76 @@ $("form").addEventListener("submit", async (ev) => {
     const d = await post("/api/analisar", p);
     lastParams = p;
     render(d);
+    st.textContent = `Pronto em ${((performance.now() - t0) / 1000).toFixed(1).replace(".", ",")} s.`;
+  } catch (e) {
+    st.textContent = "Erro: " + e.message;
+  } finally { btn.disabled = false; }
+});
+
+// ---------- purpose engine
+$("p-slider").addEventListener("input", (ev) => {
+  const a = Number(ev.target.value);
+  $("p-slider-lab").textContent = `${100 - a}% quant / ${a}% alinhamento`;
+});
+function readPurpose() {
+  const f = new FormData($("p-form"));
+  const rf = {};
+  if (String(f.get("rf_brl") || "").trim() !== "") rf.BRL = Number(f.get("rf_brl")) / 100;
+  if (String(f.get("rf_usd") || "").trim() !== "") rf.USD = Number(f.get("rf_usd")) / 100;
+  return {
+    motivo_investidor: String(f.get("motivo_investidor") || ""), valor_alvo: Number(f.get("valor_alvo")),
+    capital_inicial: Number(f.get("capital_inicial")), aporte_periodico: Number(f.get("aporte_periodico") || 0),
+    periodicidade: f.get("periodicidade"), horizonte_anos: Number(f.get("horizonte_anos")), perfil_risco: f.get("perfil_risco"),
+    peso_alinhamento: Number(f.get("peso_alinhamento")) / 100, taxa_livre_risco: rf,
+    incluir_sob_revisao: f.get("incluir_sob_revisao") === "on", n_simulacoes: Number(f.get("n_simulacoes")),
+  };
+}
+let purposeUrl = null;
+function renderPurpose(d) {
+  $("p-results").classList.remove("hidden");
+  $("p-banner").textContent = d.dados_sinteticos
+    ? "DEMONSTRAÇÃO COM DADOS SINTÉTICOS — NÃO É UMA CARTEIRA FINAL. Os tickers SINT_* não existem no mercado. " + d.aviso
+    : d.aviso;
+  const c = d.cagr, g = d.objetivo;
+  setChildren("p-kpis",
+    kpi("CAGR necessário", fmtPct(c.necessario), "para atingir o valor-alvo no prazo"),
+    kpi("CAGR esperado (mediana [S])", fmtPct(c.cagr_esperado_mediano_simulado), "taxa equivalente do cenário base"),
+    kpi("Diferença", c.gap === null ? "n/d" : (c.gap >= 0 ? "+" : "") + fmtPct(c.gap), "esperado − necessário"),
+    kpi("P(atingir o objetivo)", fmtPct(g.p_objetivo, 1), "erro padrão " + fmtPct(g.erro_padrao) + " · " + g.n_trajetorias + " trajetórias"),
+    kpi("Retorno médio [E]", fmtPct(c.retorno_esperado_efetivo_E), "± " + fmtPct(c.erro_padrao_retorno_carteira) + " (1 erro-padrão)"));
+  const rows = d.carteira.filter((r) => r.peso > 0 || r.peso_quant >= 0.005);
+  setChildren("p-table", table(["ticker", "classe", "peso", "score_alinhamento", "moeda", "peso só-quant"],
+    rows.map((r) => [r.ticker, r.classe, fmtPct(r.peso, 1), r.score_alinhamento === null ? "não calculado" : fmtNum(r.score_alinhamento),
+      r.moeda, fmtPct(r.peso_quant, 1)]), [2, 3, 5]));
+  setChildren("p-reasons", ...rows.map((r) => el("li", { class: "muted" }, r.ticker + ": " + r.motivo_score)));
+  $("p-why").textContent = d.temas.porque ? `Porquê declarado (citação literal): "${d.temas.porque}" · confiança da extração: ${d.temas.confianca}`
+    : `Confiança da extração de temas: ${d.temas.confianca}.`;
+  setChildren("p-theses", ...d.teses.map((t) => el("div", { class: "thesis" },
+    el("h3", {}, t.ticker + " — " + t.nome),
+    el("p", {}, el("span", { class: "tag" }, "(a) Tese financeira · "), t.tese_financeira),
+    el("p", {}, el("span", { class: "tag" }, "(b) Tese de propósito · "), t.tese_proposito))));
+  setChildren("p-scen", table(["cenário", "patrimônio nominal", "real", "CAGR equivalente", "atinge?"],
+    d.cenarios.map((r) => [r.cenario, fmtMoney(r.patrimonio_final), fmtMoney(r.patrimonio_final_real), fmtPct(r.cagr_equivalente), r.atinge_objetivo ? "sim" : "não"]), [1, 2, 3]));
+  $("p-goal").textContent = `Segundo a simulação, P(patrimônio ≥ ${fmtMoney(g.valor_alvo)}) = ${fmtPct(g.p_objetivo, 1)} (erro padrão ${fmtPct(g.erro_padrao)}; IC95% ${fmtPct(g.ic95[0], 1)}–${fmtPct(g.ic95[1], 1)}). Carteira só-quant nas mesmas trajetórias: ${fmtPct(g.p_objetivo_carteira_quant, 1)}. Sensibilidade a modelo e a erro de estimativa:`;
+  setChildren("p-sens", table(["modelo", "P(objetivo)", "EP", "mediana final", "CAGR equiv."],
+    d.sensibilidade.map((r) => [r.modelo, fmtPct(r.p_objetivo, 1), fmtPct(r.erro_padrao), fmtMoney(r.mediana_final), fmtPct(r.cagr_equivalente_mediano)]), [1, 2, 3, 4]));
+  const order = { FAIL: 0, WARNING: 1, INFO: 2 };
+  setChildren("p-alerts", ...d.alertas.slice().sort((a, b) => order[a.severity] - order[b.severity]).map((a) =>
+    el("li", {}, statusBadge(a.severity), " [" + a.category + "] " + a.message)));
+  if (purposeUrl) URL.revokeObjectURL(purposeUrl);
+  purposeUrl = URL.createObjectURL(new Blob([d.markdown], { type: "text/markdown;charset=utf-8" }));
+  $("p-download").href = purposeUrl;
+}
+$("p-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const p = readPurpose();
+  const btn = $("p-run"); btn.disabled = true;
+  const st = $("p-status");
+  st.replaceChildren(el("span", { class: "spinner" }), " Montando a carteira (otimização, backtest e simulação; ~30–60 s)…");
+  const t0 = performance.now();
+  try {
+    const d = await post("/api/proposito", p);
+    renderPurpose(d);
     st.textContent = `Pronto em ${((performance.now() - t0) / 1000).toFixed(1).replace(".", ",")} s.`;
   } catch (e) {
     st.textContent = "Erro: " + e.message;

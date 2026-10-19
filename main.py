@@ -5,6 +5,8 @@ Examples
     python main.py --offline
     python main.py --offline --profile arrojado --simulations 5000 --fast
     python main.py --profile moderado --period 5y --risk-free-rate 0.105
+    python main.py --offline --proposito --objetivo 900000 --aporte 2000 --horizon-years 10 \\
+        --motivo "Quero investir em saúde e energia limpa"
 
 Exit codes: 0 = completed and validated (PASS/WARNING); 2 = data unavailable or invalid
 input; 3 = completed but NOT validated (critical FAIL in the independent validator).
@@ -17,6 +19,7 @@ import json
 import logging
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from pydantic import ValidationError as PydanticValidationError
 
@@ -25,6 +28,9 @@ from core.market_data.base import DataUnavailableError
 from core.profiler import demo_profile
 from models.investor import InvestorProfileInput, RiskProfile
 from utils.logging_config import configure_logging
+
+if TYPE_CHECKING:
+    from core.purpose.engine import PurposeRequest
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -68,6 +74,22 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--external-file", type=Path, action="append", default=[],
                    help="documento externo (texto) tratado como dado NÃO confiável pelo analista")
     p.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+    g = p.add_argument_group("modo propósito (carteira alinhada ao motivo do investidor)")
+    g.add_argument("--proposito", action="store_true",
+                   help="roda o motor de seleção alinhado ao propósito (etapas 1-9) em vez da análise padrão")
+    g.add_argument("--objetivo", type=float, help="valor-alvo nominal na moeda do objetivo (obrigatório no modo propósito)")
+    g.add_argument("--aporte", type=float, help="aporte periódico (padrão 0)")
+    g.add_argument("--periodicidade", choices=["mensal", "trimestral", "semestral", "anual", "nenhum"],
+                   help="periodicidade do aporte (padrão mensal)")
+    g.add_argument("--motivo", help="motivo do investidor em texto livre (vazio = só etapa quantitativa)")
+    g.add_argument("--motivo-file", type=Path, help="arquivo de texto com o motivo do investidor")
+    g.add_argument("--peso-alinhamento", type=float, help="peso do alinhamento no slider, 0-1 (padrão 0.30)")
+    g.add_argument("--incluir-sob-revisao", action="store_true", help="inclui ativos com governança sob revisão")
+    g.add_argument("--governanca-file", type=Path,
+                   help="JSON com restrições de governança por ticker ({\"flags\": {TICKER: {status, reason, source}}})")
+    g.add_argument("--rf", action="append", default=[], metavar="MOEDA=TAXA",
+                   help="taxa livre de risco por moeda, ex. --rf BRL=0.105 --rf USD=0.043 (repita por moeda)")
+    g.add_argument("--classes", nargs="+", help="macroclasses do catálogo a considerar (padrão: todas)")
     return p
 
 
@@ -116,8 +138,99 @@ def profile_from_args(a: argparse.Namespace, cfg: AppConfig) -> InvestorProfileI
     return InvestorProfileInput(**{**p.model_dump(), **upd})
 
 
+def purpose_request_from_args(a: argparse.Namespace, cfg: AppConfig) -> PurposeRequest:
+    from core.purpose.engine import PurposeRequest
+
+    if a.objetivo is None:
+        raise ValueError("--objetivo (valor-alvo) é obrigatório no modo --proposito")
+    rf: dict[str, float] = {}
+    for item in a.rf:
+        ccy, sep, val = item.partition("=")
+        if not sep:
+            raise ValueError(f"--rf espera MOEDA=TAXA (ex. BRL=0.105), recebido {item!r}")
+        rf[ccy.strip().upper()] = float(val)
+    if a.risk_free_rate is not None:
+        rf.setdefault(cfg.base_currency, float(a.risk_free_rate))
+    motivo = a.motivo or ""
+    if a.motivo_file:
+        motivo = a.motivo_file.read_text(encoding="utf-8")
+    flags: dict[str, object] = {}
+    if a.governanca_file:
+        raw = json.loads(a.governanca_file.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError("--governanca-file deve conter um objeto JSON")
+        flags = raw.get("flags", raw)
+    prof = demo_profile(RiskProfile(cfg.profile))
+    data: dict[str, object] = {
+        "capital_inicial": a.capital if a.capital is not None else prof.capital,
+        "aporte_periodico": a.aporte if a.aporte is not None else 0.0,
+        "valor_alvo": a.objetivo, "moeda_objetivo": cfg.base_currency,
+        "horizonte_anos": a.horizon_years if a.horizon_years is not None else prof.horizon_years,
+        "perfil_risco": cfg.profile, "taxa_livre_risco": rf, "incluir_sob_revisao": a.incluir_sob_revisao,
+        "restricoes_governanca": flags,
+        "motivo_investidor": motivo, "seed": cfg.seed, "offline": cfg.offline, "classes": a.classes,
+    }
+    if a.periodicidade is not None:
+        data["periodicidade"] = a.periodicidade
+    elif not data["aporte_periodico"]:
+        data["periodicidade"] = "nenhum"
+    if a.peso_alinhamento is not None:
+        data["peso_alinhamento"] = a.peso_alinhamento
+    if a.simulations is not None:
+        data["n_simulacoes"] = a.simulations
+    return PurposeRequest(**data)
+
+
+def run_purpose_cli(args: argparse.Namespace) -> int:
+    try:
+        cfg = config_from_args(args)
+        req = purpose_request_from_args(args, cfg)
+    except (PydanticValidationError, ValueError, TypeError, OSError, UnicodeDecodeError) as e:
+        print(f"ERRO de configuração/entrada: {e}", file=sys.stderr)
+        return 2
+    import pandas as pd
+
+    from core.purpose.engine import run_purpose
+    from core.purpose.report import write_purpose_outputs
+
+    out_dir = cfg.output_dir / "proposito"
+    try:
+        res = run_purpose(req, output_dir=out_dir)
+    except DataUnavailableError as e:
+        print(f"ERRO: dados indisponíveis — {e}\nNenhum dado sintético foi usado em substituição. "
+              "Para demonstração sem internet use --offline.", file=sys.stderr)
+        return 2
+    except ValueError as e:
+        print(f"ERRO: {e}", file=sys.stderr)
+        return 2
+    files = write_purpose_outputs(res, out_dir)
+    e = res.expected
+    print(f"{APP_NAME} v{APP_VERSION} — modo propósito, execução {res.analysis.run_id}")
+    if res.is_synthetic:
+        print("DEMONSTRAÇÃO COM DADOS SINTÉTICOS — NÃO É UMA CARTEIRA FINAL")
+    rate = res.required.rate
+    exp = e["cagr_esperado_mediano_simulado"]
+    print(f"CAGR necessário {'indisponível' if rate is None else f'{rate:.2%}'} | CAGR esperado (mediana simulada) "
+          f"{'indisponível' if exp is None else f'{exp:.2%}'}")
+    print(f"P(atingir o objetivo) segundo a simulação: {res.goal['p_objetivo']:.1%} "
+          f"(erro padrão {res.goal['erro_padrao']:.2%})")
+    for t, row in res.table[res.table["peso"] > 0].iterrows():
+        sc = row["score_alinhamento"]
+        print(f"  {t:<14} {row['classe']:<14} {row['peso']:6.1%}  alinhamento "
+              f"{'n/c' if pd.isna(sc) else f'{sc:.2f}'}  {row['moeda']}")
+    for a in res.alerts:
+        if a.severity != "INFO":
+            print(f"  ! [{a.severity}] {a.message}")
+    print(f"Relatório: {files['report']}")
+    print(f"JSON: {files['json']}")
+    critical = [a for a in res.alerts if a.severity == "FAIL" and a.category in ("validacao", "linguagem")]
+    return 3 if critical else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.proposito:
+        return run_purpose_cli(args)
     try:
         cfg = config_from_args(args)
         cfg.ensure_dirs()

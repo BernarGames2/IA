@@ -28,6 +28,7 @@ registrados).
 | Model Selection | `core/model_validation/model_selection.py` |
 | Independent Validation | `core/model_validation/independent_validator.py` |
 | AI Research Analyst | `core/ai_analyst/` (ferramentas validadas, segurança, analista) |
+| Purpose Alignment (carteira com propósito) | `core/purpose/` (CAGR necessário, catálogo de tickers, sleeves por moeda, governança, temas, alinhamento, motor e relatório) |
 | Orquestração / relatórios | `core/portfolio_engine.py`, `core/reporter.py`, `core/reporting/`, `main.py` |
 
 Detalhes em [`docs/architecture.md`](docs/architecture.md).
@@ -59,6 +60,8 @@ python main.py --offline --simulations 5000 --fast  # rápido: pula backtest, GA
 python main.py --profile moderado --period 5y --risk-free-rate 0.105    # online (yfinance)
 python main.py --simulations 20000
 python main.py --offline --ask "Qual o risco da carteira?" --ask "Compare as carteiras."
+python main.py --offline --proposito --objetivo 900000 --aporte 2000 --horizon-years 10 \
+    --rf BRL=0.105 --rf USD=0.043 --motivo "Quero apoiar saúde e energia limpa. O objetivo é pagar a faculdade dos meus filhos."
 ```
 
 No Windows use `python` ou `py -3` com os mesmos argumentos.
@@ -92,6 +95,10 @@ Códigos de saída: `0` concluído e validado (PASS/WARNING); `2` dados indispon
 | `--resamples N` | reamostragens da análise de robustez (0 desativa) |
 | `--fast`, `--no-charts`, `--output-dir`, `--log-level` | execução |
 | `--ask "pergunta"`, `--external-file doc.txt` | analista de IA; documentos externos tratados como dados não confiáveis |
+| `--proposito --objetivo V` | modo carteira com propósito (seção 10); `--objetivo` é o valor-alvo nominal |
+| `--aporte A --periodicidade {mensal,trimestral,semestral,anual,nenhum}` | aporte periódico do modo propósito |
+| `--motivo "texto"` / `--motivo-file arq.txt` | motivo do investidor (vazio = só a etapa quantitativa) |
+| `--peso-alinhamento 0.3`, `--incluir-sob-revisao`, `--rf MOEDA=TAXA` (repetível), `--classes ...` | slider, governança, uma rf por moeda, macroclasses |
 
 Variáveis de ambiente com prefixo `QPI_` (ver `.env.example`) também configuram `config.py`.
 
@@ -148,7 +155,7 @@ Christoffersen, Z2 de Acerbi-Szekely).
 ## 7. Testes
 
 ```bash
-python -m pytest                       # suíte completa (offline, determinística; ~1,5 min)
+python -m pytest                       # suíte completa (offline, determinística; ~5 min)
 python -m pytest --cov=core --cov=models --cov=utils --cov=config
 python -m pytest -m "not slow"         # sem o teste ponta a ponta completo
 python scripts/profile_run.py          # profiling, escalabilidade e reprodutibilidade
@@ -182,6 +189,7 @@ público, e o modo offline é o caminho validado).
 | `GET /` | página |
 | `POST /api/analisar` | roda a análise (modo `rapido` ou `completo`) e devolve um resumo JSON |
 | `POST /api/perguntar` | pergunta ao analista de IA (mesmas recusas e verificação de números da CLI) |
+| `POST /api/proposito` | carteira com propósito (seção 10) sobre o universo sintético multimoeda |
 | `GET /api/health`, `GET /api/docs` | saúde e documentação OpenAPI |
 
 Entradas são validadas e limitadas (≤ 20.000 simulações, horizonte ≤ 30 anos, pergunta ≤ 500 caracteres).
@@ -202,3 +210,48 @@ duração máxima é 300 s). O deploy na própria Vercel não pôde ser testado 
 pip install -r requirements.txt
 uvicorn webapp.server:app --reload      # http://127.0.0.1:8000
 ```
+
+## 10. Carteira com propósito (`--proposito`, `POST /api/proposito`)
+
+Motor em `core/purpose/` que combina a otimização quantitativa com o motivo declarado pelo investidor, seguindo
+as etapas 1–9 nesta ordem (o relatório registra cada etapa):
+
+1. **CAGR necessário** (`required_cagr.py`): taxa efetiva anual que leva capital + aportes (fim de cada período,
+   `n = ⌊m·T⌋`) ao valor-alvo; raiz única por Brent. Mostrado antes de qualquer resultado de otimização.
+2. **Universo elegível** (`catalog.py`): macroclasses expandidas em **tickers individuais** (B3, EUA, ouro,
+   cripto) com descrição factual do negócio. Cada série é baixada e validada; ativo com **< 252 observações é
+   excluído e listado**, nunca substituído por proxy.
+3. **Sleeves por moeda** (`sleeves.py`): retorno, volatilidade e Sharpe de cada ativo/sleeve na **moeda nativa
+   com a rf dessa moeda** (`--rf BRL=… --rf USD=…`); sem rf informada usa-se um fallback de demonstração
+   **sinalizado**; moeda sem rf e sem fallback é erro (nunca rf = 0).
+4. **Otimização quantitativa**: o motor de pesquisa existente (candidatas restritas pelo perfil, backtest
+   walk-forward, regra 1-EP sobre a validação fora da amostra).
+5. **Governança** (`governance.py`, `data/governance_flags.json`): ativos `sob_revisao` ficam fora por padrão e
+   só entram com `--incluir-sob-revisao`; `excluido` sempre fora; flag sem fonte citada é rejeitada. É aplicada
+   como exclusão dura **antes** do otimizador (equivale a peso zero) e verificada na carteira final. O arquivo
+   distribuído contém apenas um exemplo sintético — nenhuma alegação sobre empresas reais.
+6. **Temas do motivo** (`themes.py`): léxico determinístico (sem modelo de linguagem); cada tema traz a
+   **citação literal** que o originou; menções negadas ("não me importo com…") são descartadas; o "porquê" é a
+   oração literal após "objetivo/meta/sonho/para…"; texto vago → confiança baixa.
+7. **Score de alinhamento** (`alignment.py`): 0–1 por ativo = fração dos temas setoriais declarados que o
+   negócio do ativo atende, com o motivo em uma frase. Temas de valor sem setor (família, disciplina…) são
+   citados mas não pontuados (seria inferência). Separado de ESG genérico.
+8. **Combinação**: `w_final = (1 − a)·w_quant + a·w_alinhamento` (slider `a`, padrão 30%). `w_alinhamento`
+   maximiza o alinhamento sujeito a **todas** as restrições do perfil, ao teto de volatilidade e a um orçamento
+   de tracking error; por convexidade a carteira final respeita os limites e fica a no máximo `a × orçamento` de
+   tracking error da carteira quantitativa. O otimizador nunca é descartado.
+9. **Dupla justificativa**: para cada ativo com peso, tese financeira (negócio, métrica-chave [H], retorno
+   esperado [E] com estatística t, contribuição ao risco, moat **"não avaliado"**, risco) e tese de propósito
+   (tema e citação) em parágrafos separados.
+
+Saída (Markdown + JSON em `outputs/proposito/`): CAGR necessário × CAGR esperado (mediana simulada, mesma
+convenção de taxa), tabela `ticker | classe | peso | score_alinhamento | moeda`, teses, cenários P90/P50/P10,
+P(atingir o objetivo) por Monte Carlo com erro padrão e IC, sensibilidade (±1 erro-padrão do retorno
+esperado, bootstrap em blocos, deriva histórica) e alertas. Todo texto gerado passa por um verificador de
+linguagem de garantia ("vai gerar", "certamente", "garantido"…); um acerto vira alerta FAIL.
+
+**Limites honestos:** neste ambiente o Yahoo Finance está bloqueado, então o caminho com tickers reais foi
+testado só com provedor simulado; o modo offline usa um universo **sintético** multimoeda (BRL/USD) e o resultado
+é marcado "NÃO É UMA CARTEIRA FINAL". As tags temáticas dos ativos são curadoria editorial estática; a extração
+de temas é por léxico (não entende ironia nem sinônimos fora da lista).
+

@@ -40,6 +40,21 @@ config (pydantic) ─┘          │
 `main.py` só faz parsing de argumentos, monta configuração/perfil, chama o orquestrador, grava saídas e
 (opcionalmente) aciona o analista de IA.
 
+## Modo propósito (`core/purpose/engine.run_purpose`)
+
+```
+1 CAGR necessário (required_cagr) ─> 2 universo: catálogo de tickers -> download/validação (>=252 obs.)
+  ─> 3 sleeves por moeda (rf de cada moeda) ─> 5 governança (exclusão dura ANTES do otimizador)
+  ─> 4 run_analysis(dataset=universo filtrado; backtest walk-forward + 1-EP) = carteira quantitativa w_q
+  ─> 6 temas do motivo (léxico, citações literais) ─> 7 score de alinhamento por ativo
+  ─> 8 w_final = (1-a) w_q + a w_alinhamento  (w_alinhamento: máx. alinhamento s.a. restrições, teto de vol., TE)
+  ─> 9 teses financeira/propósito ─> Monte Carlo (cenários, P(objetivo) ± EP, sensibilidade) ─> alertas
+  ─> verificador de linguagem de garantia ─> relatório MD/JSON
+```
+
+A etapa 5 roda antes da 4 por construção (equivale a impor peso zero); o relatório mantém a numeração da
+especificação e explica a equivalência.
+
 ## Interfaces principais
 
 * `MarketDataProvider.fetch(symbols, period, interval) -> dict[str, RawSeries]` (Protocol). Implementações:

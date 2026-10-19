@@ -29,6 +29,9 @@ from core.ai_analyst.analyst import ResearchAnalyst
 from core.ai_analyst.tools import AnalysisContext
 from core.portfolio_engine import AnalysisResult, run_analysis
 from core.profiler import demo_profile
+from core.purpose.engine import PurposeRequest, PurposeResult, run_purpose
+from core.purpose.report import render_markdown
+from core.purpose.report import to_dict as purpose_to_dict
 from models.investor import InvestorProfileInput, RiskProfile
 from utils.serialization import to_jsonable
 from webapp.summary import build_summary
@@ -64,12 +67,36 @@ class AskRequest(BaseModel):
     question: str = Field(..., min_length=2, max_length=500)
 
 
+class PurposeWebRequest(BaseModel):
+    """Purpose-engine form (synthetic universe only on the web; bounded for the platform limits)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    capital_inicial: float = Field(100_000.0, gt=0, le=1e9)
+    aporte_periodico: float = Field(1_000.0, ge=0, le=1e7)
+    periodicidade: Literal["mensal", "trimestral", "semestral", "anual", "nenhum"] = "mensal"
+    valor_alvo: float = Field(500_000.0, gt=0, le=1e11)
+    horizonte_anos: float = Field(10.0, gt=0, le=30)
+    perfil_risco: Literal["conservador", "moderado", "arrojado"] = "moderado"
+    taxa_livre_risco: dict[Literal["BRL", "USD"], float] = Field(default_factory=dict)
+    restricoes_governanca: dict[str, dict[str, str]] = Field(default_factory=dict, max_length=50)
+    incluir_sob_revisao: bool = False
+    motivo_investidor: str = Field("", max_length=1000)
+    peso_alinhamento: float = Field(0.30, ge=0.0, le=1.0)
+    n_simulacoes: int = Field(3_000, ge=500, le=10_000)
+    seed: int = Field(42, ge=0, le=2**31 - 1)
+
+    def key(self) -> str:
+        return self.model_dump_json()
+
+
 app = FastAPI(title=f"{APP_NAME} — web", version=APP_VERSION, docs_url="/api/docs", redoc_url=None,
               openapi_url="/api/openapi.json")
 
 _slots = threading.BoundedSemaphore(_MAX_CONCURRENT)
 _cache_lock = threading.Lock()
 _cache: OrderedDict[tuple[object, ...], tuple[AnalysisResult, float]] = OrderedDict()
+_purpose_cache: OrderedDict[str, dict[str, object]] = OrderedDict()
 
 
 def _profile_input(p: AnalyzeRequest) -> InvestorProfileInput:
@@ -148,3 +175,39 @@ def perguntar(req: AskRequest) -> JSONResponse:
                         "digest": t.output_digest, "duration_s": t.duration_s} for t in ans.tool_calls],
         "engine": "regras determinísticas + ferramentas validadas (nenhum LLM externo)",
     }))
+
+
+def _purpose_payload(res: PurposeResult, elapsed: float) -> dict[str, object]:
+    out = purpose_to_dict(res)
+    out["markdown"] = render_markdown(res)
+    out["elapsed_s"] = round(elapsed, 2)
+    out["run_id"] = res.analysis.run_id
+    return out
+
+
+@app.post("/api/proposito")
+def proposito(p: PurposeWebRequest) -> JSONResponse:
+    k = p.key()
+    with _cache_lock:
+        if k in _purpose_cache:
+            _purpose_cache.move_to_end(k)
+            return JSONResponse(_purpose_cache[k])
+    try:
+        req = PurposeRequest(**p.model_dump(), offline=True)
+    except ValueError as e:
+        raise HTTPException(400, f"entrada inválida: {e}") from e
+    if not _slots.acquire(timeout=120):
+        raise HTTPException(503, "servidor ocupado; tente novamente em instantes")
+    try:
+        t0 = time.perf_counter()
+        res = run_purpose(req, output_dir=_OUTPUT_DIR / "proposito")
+        payload = _purpose_payload(res, time.perf_counter() - t0)
+    except (ValueError, ArithmeticError) as e:
+        raise HTTPException(400, f"análise não pôde ser executada: {e}") from e
+    finally:
+        _slots.release()
+    with _cache_lock:
+        _purpose_cache[k] = payload
+        while len(_purpose_cache) > _CACHE_SIZE:
+            _purpose_cache.popitem(last=False)
+    return JSONResponse(payload)

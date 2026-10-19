@@ -158,7 +158,7 @@ def load_data(cfg: AppConfig) -> tuple[PriceDataset, object | None]:
 
 def _benchmark_symbol(cfg: AppConfig, ds: PriceDataset) -> str | None:
     if cfg.offline:
-        return "SINT_ACOES_BR"
+        return "SINT_ACOES_BR" if "SINT_ACOES_BR" in ds.symbols else None
     return cfg.benchmark if cfg.benchmark in ds.symbols else None
 
 
@@ -208,7 +208,10 @@ def equal_weight_feasible(pc: PortfolioConstraints) -> np.ndarray:
     return res.weights.to_numpy()
 
 
-def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput) -> AnalysisResult:
+def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput,
+                 dataset: tuple[PriceDataset, object | None] | None = None) -> AnalysisResult:
+    """Run the full pipeline. ``dataset`` (prices + optional synthetic ground truth) lets a
+    caller supply an already-built, filtered universe (e.g. the purpose engine)."""
     cfg.ensure_dirs()
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:6]
     started = datetime.now(timezone.utc).isoformat()
@@ -224,7 +227,7 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput) -> Analysi
     with _Timer(timings, "profile"):
         prof = assess_profile(profile_input)
     with _Timer(timings, "data"):
-        ds, synth_truth = load_data(cfg)
+        ds, synth_truth = dataset if dataset is not None else load_data(cfg)
     if ds.is_synthetic:
         warnings.append("Execução em modo OFFLINE com DADOS SINTÉTICOS determinísticos: nenhum número "
                         "deste relatório descreve ativos reais.")
@@ -302,7 +305,8 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput) -> Analysi
     registry = StrategyRegistry(cfg.logs_dir / f"strategy_registry_{run_id}.jsonl")
     bt = None
     selection: dict[str, object] = {}
-    if feas.feasible and cfg.run_heavy_analyses:
+    run_bt = cfg.run_backtest if cfg.run_backtest is not None else cfg.run_heavy_analyses
+    if feas.feasible and run_bt:
         with _Timer(timings, "backtest"):
             bset = BacktestSettings(cfg.backtest_lookback, cfg.rebalance_every,
                                     cfg.transaction_cost_bps + cfg.spread_bps, cfg.slippage_bps,
@@ -393,7 +397,7 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput) -> Analysi
     with _Timer(timings, "black_swan"):
         # threshold must lie below the target level: u = q_{0.90} for a <= 0.95, q_{0.95} otherwise
         evt_res = {a: evt_analysis(-port_r.to_numpy(), a, 0.90 if a <= 0.95 else 0.95,
-                                   cfg.evt_min_exceedances, seed=cfg.seed,
+                                   cfg.evt_min_exceedances, n_boot=cfg.evt_bootstrap, seed=cfg.seed,
                                    sensitivity_quantiles=(0.85, 0.90, 0.925) if a <= 0.95 else (0.90, 0.925, 0.95, 0.975))
                    for a in cfg.confidence_levels}
         sections["evt"] = evt_res

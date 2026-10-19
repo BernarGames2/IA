@@ -106,6 +106,8 @@ class PriceDataset:
     origin: DataOrigin
     alignment: str
     volumes: pd.DataFrame | None = None
+    native_prices: dict[str, pd.Series] = field(default_factory=dict)   # before FX conversion
+    native_currency: dict[str, str] = field(default_factory=dict)
     created_at_utc: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     @property

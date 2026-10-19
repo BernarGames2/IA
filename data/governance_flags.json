@@ -1,0 +1,11 @@
+{
+  "_doc": "Restrições de governança por ticker. Cada entrada EXIGE 'source' (fonte verificável) e 'as_of'. Este arquivo NÃO contém alegações sobre empresas reais; adicione-as apenas com fonte citada. Status suportados: 'sob_revisao' (excluído por padrão; incluído só com a opção explícita 'incluir ativos sob revisão') e 'excluido' (sempre fora).",
+  "flags": {
+    "SINT_BANCO4": {
+      "status": "sob_revisao",
+      "reason": "exemplo hipotético de investigação regulatória (ativo sintético, apenas para demonstrar o filtro)",
+      "source": "exemplo sintético embutido no projeto",
+      "as_of": "2026-01-01"
+    }
+  }
+}

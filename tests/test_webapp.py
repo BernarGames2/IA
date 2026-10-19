@@ -92,3 +92,19 @@ def test_ask_grounded_answer_and_refusals(client):
 def test_page_never_injects_server_text_as_html():
     html = (ROOT / "webapp" / "static" / "index.html").read_text(encoding="utf-8")
     assert "innerHTML" not in html and "insertAdjacentHTML" not in html and "eval(" not in html
+
+
+def test_purpose_endpoint(client):
+    body = {"valor_alvo": 130_000, "capital_inicial": 100_000, "aporte_periodico": 500, "horizonte_anos": 2,
+            "n_simulacoes": 500, "motivo_investidor": "Quero apoiar a saúde", "taxa_livre_risco": {"BRL": 0.105}}
+    r = client.post("/api/proposito", json=body)
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["dados_sinteticos"] is True and d["carteira_final"] is False
+    assert d["cagr"]["necessario"] is not None and 0 <= d["objetivo"]["p_objetivo"] <= 1
+    assert d["fonte_rf"]["BRL"] == "informada pelo usuário" and d["fonte_rf"]["USD"].startswith("FALLBACK")
+    assert {"ticker", "classe", "peso", "score_alinhamento", "moeda"} <= set(d["carteira"][0])
+    assert d["markdown"].startswith("# Carteira alinhada ao propósito")
+    assert client.post("/api/proposito", json={**body, "peso_alinhamento": 2}).status_code == 422
+    assert client.post("/api/proposito", json={**body, "taxa_livre_risco": {"EUR": 0.02}}).status_code == 422
+    assert client.post("/api/proposito", json={**body, "aporte_periodico": 10, "periodicidade": "nenhum"}).status_code == 400

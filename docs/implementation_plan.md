@@ -10,5 +10,8 @@ Cada onda terminou com o sistema executável e testes passando; commits no branc
 | 4 — Validação institucional | walk-forward, benchmarks, PSR/DSR, Holm/BH, registro de estratégias, backtest de VaR, seleção de modelos 1-EP, validador independente, testes de viés/look-ahead | concluída | `c989737`, `ded1093` |
 | 5 — IA analítica | ferramentas com esquemas/limites/logs, analista determinístico, verificação de números, segurança contra injeção | concluída (sem LLM, sem busca web) | `b1a8df9` |
 | 6 — Escalabilidade | cache com expiração/hash, lotes no Monte Carlo, profiling, otimização medida, reprodutibilidade, logs estruturados | concluída | `7ccad34` |
+| Web | API FastAPI + página única para a Vercel (só dados sintéticos) | concluída (deploy não testado daqui) | `105407f` |
+| Revisão | correções de defeitos confirmados pela revisão adversarial | concluída | `e756020` |
+| 7 — Propósito | motor de seleção alinhado ao propósito do investidor (etapas 1–9), CLI `--proposito`, `POST /api/proposito` | concluída (tickers reais não validados: rede bloqueada) | este commit |
 
 Próximos passos priorizados: ver [`assumptions_and_limitations.md`](assumptions_and_limitations.md#itens-pendentes--próximos-passos).

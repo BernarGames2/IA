@@ -32,6 +32,8 @@ class SyntheticAsset:
     sigma: float       # annual volatility in the calm regime
     meta: AssetMeta
     adv: float = 1e7   # synthetic average daily traded value (base currency)
+    start_price: float | None = None          # default: SyntheticSpec.start_price
+    regime_sensitive: bool | None = None      # None: sigma > 5% (stress raises vol and correlation)
 
 
 def _m(sym: str, cls: str, sector: str, country: str = "BR") -> AssetMeta:
@@ -103,7 +105,7 @@ def generate_synthetic_market(spec: SyntheticSpec | None = None) -> SyntheticRes
     dt = 1.0 / spec.trading_days
 
     calm = nearest_psd(spec.calm_corr).matrix
-    risky = np.array([a.sigma > 0.05 for a in spec.assets])
+    risky = np.array([a.sigma > 0.05 if a.regime_sensitive is None else a.regime_sensitive for a in spec.assets])
     stress = calm.copy()
     b = spec.stress_corr_blend
     for i in range(n):
@@ -139,7 +141,8 @@ def generate_synthetic_market(spec: SyntheticSpec | None = None) -> SyntheticRes
         log_inc[t] = (mu - 0.5 * s_t ** 2) * dt + s_t * np.sqrt(dt) * z
 
     log_p = np.vstack([np.zeros(n), np.cumsum(log_inc, axis=0)])
-    prices = spec.start_price * np.exp(log_p)
+    p0 = np.array([a.start_price if a.start_price is not None else spec.start_price for a in spec.assets])
+    prices = p0 * np.exp(log_p)
     vol_noise = rng.lognormal(mean=0.0, sigma=0.35, size=(spec.n_days + 1, n))
 
     now = datetime.now(timezone.utc).isoformat()
@@ -151,7 +154,8 @@ def generate_synthetic_market(spec: SyntheticSpec | None = None) -> SyntheticRes
         series[a.symbol] = RawSeries(
             symbol=a.symbol, close=close, volume=volume, provider="synthetic_generator",
             price_field="synthetic_total_return_price", adjusted_for="synthetic (total return)",
-            currency="BRL", frequency="1d", ingested_at_utc=now,
+            currency=a.meta.currency if a.meta.currency != "unknown" else "BRL", frequency="1d",
+            ingested_at_utc=now,
             notes=["DADOS SINTÉTICOS: não representam nenhum ativo real", f"seed={spec.seed}"],
         )
         meta[a.symbol] = a.meta

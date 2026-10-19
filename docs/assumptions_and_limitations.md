@@ -44,9 +44,33 @@
 16. Dados sintéticos: os parâmetros do gerador são escolhas de projeto; a semente 42 produz uma amostra com
     retornos realizados bem abaixo dos verdadeiros — mantida de propósito para ilustrar erro de estimação.
 
+### Carteira com propósito (`core/purpose/`)
+
+17. **Tickers reais não validados neste ambiente**: o catálogo real (B3, EUA, ouro, cripto) é baixado e validado em
+    tempo de execução (≥ 252 observações, exclusão sem proxy), mas o Yahoo Finance está bloqueado aqui; a regra
+    foi testada com provedor simulado. A demonstração offline usa um universo **sintético** multimoeda e é
+    marcada "NÃO É UMA CARTEIRA FINAL" (alerta FAIL de categoria dados).
+18. **Extração de temas por léxico**: determinística e auditável (citação literal de cada evidência, negações
+    descartadas), mas não entende sinônimos fora da lista, ironia ou contexto longo. Nenhum modelo de linguagem
+    é usado; temas de valor (família, disciplina, superação…) são citados e não pontuados.
+19. **Tags temáticas dos ativos** são curadoria editorial estática (`TAG_SOURCE_REAL`), não dado de mercado;
+    devem ser revisadas periodicamente. O score de alinhamento mede apenas a aderência do negócio aos temas
+    declarados — não é ESG nem avaliação de qualidade.
+20. **Moat/vantagem competitiva** é sempre "não avaliado": não há dados fundamentalistas no projeto.
+21. **Governança**: o arquivo `data/governance_flags.json` contém apenas um exemplo sintético; alegações sobre
+    empresas reais só podem ser adicionadas com fonte citada (entradas sem fonte são rejeitadas).
+22. **Simulação do objetivo**: GBM multivariado centrado no retorno esperado [E] do otimizador; o erro padrão
+    reportado mede só o ruído do Monte Carlo. A sensibilidade a ±1 erro-padrão do retorno esperado (tabela do
+    relatório) costuma mover P(objetivo) dezenas de pontos — é a incerteza dominante.
+23. A otimização da carteira agregada é feita na moeda do objetivo (com câmbio) e com a rf dessa moeda; os
+    sleeves por moeda (cada um com a própria rf) são calculados antes, para diagnóstico, e não alteram o
+    otimizador.
+
 ## Itens pendentes / próximos passos
 
-* Validar o modo online com dados reais (SPY/AGG/GLD e ativos B3) em ambiente com acesso ao Yahoo Finance.
+* Validar o modo online com dados reais (SPY/AGG/GLD e ativos B3) em ambiente com acesso ao Yahoo Finance,
+  inclusive o modo propósito com o catálogo real.
+* Extração de temas com modelo de linguagem opcional, mantendo a exigência de citação literal e a verificação.
 * Calendários oficiais (B3/NYSE) e fonte de taxa livre de risco (ex.: CDI/SELIC via API do BCB) por moeda.
 * Metadados de ativos via provedor e restrições lineares por fator.
 * EGARCH, erros-padrão robustos para GARCH, cópulas com assimetria.

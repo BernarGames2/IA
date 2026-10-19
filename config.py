@@ -131,6 +131,7 @@ class AppConfig(BaseSettings):
     profile_horizon_simulation: bool = True
     n_resamples: int = Field(50, ge=0, le=2000)
     evt_min_exceedances: int = Field(50, ge=10)
+    evt_bootstrap: int = Field(200, ge=0, le=5000)   # bootstrap resamples for the EVT intervals (0 = skip)
 
     # --- backtest ---------------------------------------------------------------
     backtest_lookback: int = Field(252, ge=60)
@@ -143,6 +144,7 @@ class AppConfig(BaseSettings):
     make_charts: bool = True
     profile: str = "moderado"
     run_heavy_analyses: bool = True
+    run_backtest: bool | None = None   # None: follows run_heavy_analyses
 
     @field_validator("tickers")
     @classmethod
