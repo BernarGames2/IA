@@ -190,7 +190,12 @@ def run_purpose_cli(args: argparse.Namespace) -> int:
     try:
         cfg = config_from_args(args)
         req = purpose_request_from_args(args, cfg)
-    except (PydanticValidationError, ValueError, TypeError, OSError, UnicodeDecodeError) as e:
+    except PydanticValidationError as e:
+        msg = "; ".join(f"{'.'.join(map(str, x.get('loc', ()))) or 'entrada'}: "
+                        f"{str(x.get('msg', '')).removeprefix('Value error, ')}" for x in e.errors())
+        print(f"ERRO de configuração/entrada: {msg}", file=sys.stderr)
+        return 2
+    except (ValueError, TypeError, OSError, UnicodeDecodeError) as e:
         print(f"ERRO de configuração/entrada: {e}", file=sys.stderr)
         return 2
     import pandas as pd

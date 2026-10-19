@@ -232,7 +232,10 @@ Motor em `core/purpose/` que combina a otimização quantitativa com o motivo de
 as etapas 1–9 nesta ordem (o relatório registra cada etapa):
 
 1. **CAGR necessário** (`required_cagr.py`): taxa efetiva anual que leva capital + aportes (fim de cada período,
-   `n = ⌊m·T⌋`) ao valor-alvo; raiz única por Brent. Mostrado antes de qualquer resultado de otimização.
+   `n = ⌊m·T⌋`) ao valor-alvo; raiz única por Brent. Mostrado antes de qualquer resultado de otimização. O
+   **capital inicial é opcional**: com 0, o plano começa só com os aportes (ex.: R$ 2.000 por mês), desde que
+   haja ao menos um aporte dentro do prazo; o site esconde a coluna "valor inicial" e mostra como dividir cada
+   aporte entre os ativos.
 2. **Universo elegível** (`catalog.py`): macroclasses expandidas em **tickers individuais** (B3, EUA, ouro,
    cripto) com descrição factual do negócio. Cada série é baixada e validada; ativo com **< 252 observações é
    excluído e listado**, nunca substituído por proxy.

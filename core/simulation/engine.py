@@ -107,6 +107,8 @@ def simulate_portfolio(model: ReturnModel, weights: np.ndarray, settings: Simula
         peak = np.ones(b)
         dd = np.zeros(b)
         alive = np.ones(b, bool)
+        started = np.zeros(b, bool)        # first step with money invested (t = 1 unless capital is 0)
+        first[done:done + b] = 0.0
         rec_i = 0
         if rec_steps[0] == 0:
             paths[done:done + b, 0] = s.initial_capital
@@ -123,8 +125,10 @@ def simulate_portfolio(model: ReturnModel, weights: np.ndarray, settings: Simula
             v_end = hold.sum(axis=1)
             with np.errstate(divide="ignore", invalid="ignore"):
                 step_ret = np.where(v_start > 0, v_end / v_start - 1.0, 0.0)
-            if t == 1:
-                first[done:done + b] = step_ret
+            new = ~started & (v_start > 0)
+            if new.any():
+                first[done:done + b][new] = step_ret[new]
+                started |= new
             unit *= 1.0 + np.where(alive, step_ret, 0.0)
             peak = np.maximum(peak, unit)
             dd = np.minimum(dd, unit / peak - 1.0)
@@ -211,7 +215,7 @@ def summarize(term: np.ndarray, real: np.ndarray, unit: np.ndarray, mdd: np.ndar
         var_1[level_key(a)] = {"var": v1, "es": e1}
     out["var_es_horizon"] = {"variable": "retorno da carteira no horizonte, sem fluxos (U_T-1)",
                              "horizon_steps": s.n_steps, "levels": var_h}
-    out["var_es_1step"] = {"variable": "retorno da carteira no 1º passo simulado (condicional)",
+    out["var_es_1step"] = {"variable": "retorno da carteira no 1º passo simulado com dinheiro investido (condicional)",
                            "horizon_steps": 1, "levels": var_1}
     return out
 

@@ -89,6 +89,9 @@ ul.clean li { margin: 3px 0; }
   font-weight: 500; font-size: 0.82rem; }
 .answer { border-left: 3px solid var(--accent); padding: 6px 12px; margin: 10px 0; }
 .kind { color: var(--muted); font-size: 0.76rem; }
+.hint { color: var(--muted); font-size: 0.74rem; line-height: 1.35; }
+tr.asset td { border-bottom: 0; padding-bottom: 2px; }
+tr.asset-why td { padding-top: 0; font-size: 0.8rem; color: var(--ink2); }
 code { font-size: 0.8rem; }
 #tip { position: fixed; pointer-events: none; z-index: 10; background: var(--surface); color: var(--ink);
   border: 1px solid var(--ring); box-shadow: 0 4px 16px rgba(0,0,0,0.14); border-radius: 8px; padding: 6px 9px;
@@ -247,8 +250,10 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
         <textarea name="motivo_investidor" maxlength="1000" placeholder="Ex.: Quero apoiar saúde e energia limpa. O objetivo é pagar a faculdade dos meus filhos."></textarea>
       </label>
       <label>Valor-alvo (R$)<input name="valor_alvo" type="number" min="1" step="any" value="900000" required></label>
-      <label>Capital inicial (R$)<input name="capital_inicial" type="number" min="1" step="any" value="100000" required></label>
-      <label>Aporte (R$)<input name="aporte_periodico" type="number" min="0" step="any" value="2000"></label>
+      <label>Quanto você já tem para começar (R$, opcional)<input name="capital_inicial" type="number" min="0" step="any" value="0" placeholder="0">
+        <span class="hint">Dinheiro que você já tem guardado hoje e quer investir de uma vez. Vai começar do zero? Deixe 0: o cálculo usa só os aportes.</span></label>
+      <label>Aporte por período (R$)<input name="aporte_periodico" type="number" min="0" step="any" value="2000">
+        <span class="hint">Quanto vai investir a cada período; escolha mensal, trimestral… em Periodicidade.</span></label>
       <label>Periodicidade
         <select name="periodicidade">
           <option value="mensal" selected>Mensal</option><option value="trimestral">Trimestral</option>
@@ -287,8 +292,8 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     <div class="banner" id="p-banner"></div>
     <div class="kpis" id="p-kpis"></div>
     <section class="card"><h2>Onde investir e por quê</h2><p id="p-strategy"></p><div class="tbl" id="p-alloc"></div>
-      <p class="muted">Valores = capital inicial × peso; aporte por período = aporte × peso. Alocação de um modelo de
-        pesquisa, não uma recomendação: confira custos, impostos e a sua situação antes de qualquer decisão.</p>
+      <p class="muted" id="p-alloc-note">Valor inicial = capital inicial × peso; aporte por período = aporte × peso. Alocação de
+        um modelo de pesquisa, não uma recomendação: confira custos, impostos e a sua situação antes de qualquer decisão.</p>
       <details><summary>Tabela técnica e score de alinhamento de todos os ativos elegíveis</summary>
         <div class="tbl" id="p-table"></div><ul class="clean" id="p-reasons"></ul></details></section>
     <section class="card"><h2>Justificativa por ativo</h2><p class="muted" id="p-why"></p><div id="p-theses"></div></section>
@@ -874,7 +879,7 @@ function readPurpose() {
   if (String(f.get("rf_usd") || "").trim() !== "") rf.USD = Number(f.get("rf_usd")) / 100;
   return {
     motivo_investidor: String(f.get("motivo_investidor") || ""), valor_alvo: Number(f.get("valor_alvo")),
-    capital_inicial: Number(f.get("capital_inicial")), aporte_periodico: Number(f.get("aporte_periodico") || 0),
+    capital_inicial: Number(f.get("capital_inicial") || 0), aporte_periodico: Number(f.get("aporte_periodico") || 0),
     periodicidade: f.get("periodicidade"), horizonte_anos: Number(f.get("horizonte_anos")), perfil_risco: f.get("perfil_risco"),
     peso_alinhamento: Number(f.get("peso_alinhamento")) / 100, taxa_livre_risco: rf, fonte_dados: f.get("fonte_dados"),
     incluir_sob_revisao: f.get("incluir_sob_revisao") === "on", n_simulacoes: Number(f.get("n_simulacoes")),
@@ -892,13 +897,24 @@ function renderPurpose(d) {
     ? `Universo: ${fu.listed_b3.toLocaleString("pt-BR")} ativos listados na B3 e ${fu.listed_us.toLocaleString("pt-BR")} nos EUA → ${fu.eligible} elegíveis por liquidez/tamanho → ${fu.selected} levados à otimização → ${d.universo.validados.length} com dados válidos. `
     : `Universo: catálogo curado (listagens completas indisponíveis agora) → ${fu.selected} levados à otimização → ${d.universo.validados.length} com dados válidos. `);
   $("p-strategy").textContent = funnel + (d.estrategia_texto || "");
-  setChildren("p-alloc", table(["Ativo", "Peso", "Valor inicial", "Aporte/período", "Alinhamento", "Moeda", "Por quê"],
-    d.onde_investir.map((a) => {
-      const row = d.carteira.find((r) => r.ticker === a.ticker) || {};
-      return [a.ticker + " — " + a.nome, fmtPct(a.peso, 1), fmtMoney(a.valor_inicial), fmtMoney(a.aporte_por_periodo),
-        row.score_alinhamento === null || row.score_alinhamento === undefined ? "n/c" : fmtNum(row.score_alinhamento),
-        a.moeda, el("div", {}, a.por_que, el("div", { class: "muted" }, "Negócio: " + a.negocio))];
-    }), [1, 2, 3, 4]));
+  const noCapital = !(d.entrada && d.entrada.capital_inicial > 0);
+  // each asset: one row of numbers, then its reason on a full-width row (readable on a phone)
+  const cols = ["Ativo", "Peso", ...(noCapital ? [] : ["Valor inicial"]), "Aporte/período"];
+  const isNum = (i) => i > 0;
+  const tbody = el("tbody");
+  for (const a of d.onde_investir) {
+    const row = d.carteira.find((r) => r.ticker === a.ticker) || {};
+    const score = row.score_alinhamento === null || row.score_alinhamento === undefined ? "não calculado" : fmtNum(row.score_alinhamento);
+    const cells = [a.ticker + " — " + a.nome, fmtPct(a.peso, 1), ...(noCapital ? [] : [fmtMoney(a.valor_inicial)]), fmtMoney(a.aporte_por_periodo)];
+    tbody.append(el("tr", { class: "asset" }, ...cells.map((c, i) => el("td", isNum(i) ? { class: "num" } : {}, c))),
+      el("tr", { class: "asset-why" }, el("td", { colspan: String(cols.length) }, "Por quê: " + a.por_que,
+        el("div", { class: "muted" }, `Negócio: ${a.negocio} · moeda ${a.moeda} · alinhamento ${score}`))));
+  }
+  setChildren("p-alloc", el("table", {}, el("thead", {}, el("tr", {}, ...cols.map((h, i) => el("th", isNum(i) ? { class: "num" } : {}, h)))), tbody));
+  $("p-alloc-note").textContent = (noCapital
+    ? "Você começa sem capital inicial: a coluna Aporte/período mostra como dividir cada aporte entre os ativos (aporte × peso). "
+    : "Valor inicial = capital inicial × peso; aporte por período = aporte × peso. ")
+    + "Alocação de um modelo de pesquisa, não uma recomendação: confira custos, impostos e a sua situação antes de qualquer decisão.";
   const c = d.cagr, g = d.objetivo;
   setChildren("p-kpis",
     kpi("CAGR necessário", fmtPct(c.necessario), "para atingir o valor-alvo no prazo"),
@@ -932,8 +948,12 @@ function renderPurpose(d) {
 $("p-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const p = readPurpose();
-  const btn = $("p-run"); btn.disabled = true;
   const st = $("p-status");
+  if (!(p.capital_inicial > 0) && !(p.aporte_periodico > 0 && p.periodicidade !== "nenhum")) {
+    st.textContent = "Informe quanto já tem para começar ou um aporte por período (por exemplo, R$ 2.000 mensais).";
+    return;
+  }
+  const btn = $("p-run"); btn.disabled = true;
   const live = liveStatus(st, p.fonte_dados === "real" ? "Enviando o pedido (cotações reais; cerca de 1 min)…"
     : "Enviando o pedido (demonstração)…");
   try {

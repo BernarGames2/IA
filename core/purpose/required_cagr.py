@@ -40,14 +40,16 @@ def future_value(rate: float, capital: float, contribution: float, per_year: int
 
 def required_cagr(capital: float, contribution: float, periodicity: str, target: float,
                   years: float) -> RequiredCagr:
-    if capital <= 0 or target <= 0 or years <= 0:
-        raise ValueError("capital, target and horizon must be positive")
+    if capital < 0 or target <= 0 or years <= 0:
+        raise ValueError("capital must be >= 0; target and horizon must be positive")
     if contribution < 0:
         raise ValueError("contribution must be >= 0")
     if periodicity not in PERIODS_PER_YEAR:
         raise ValueError(f"periodicity must be one of {list(PERIODS_PER_YEAR)}")
     m = PERIODS_PER_YEAR[periodicity]
     n = int(np.floor(m * years + 1e-9)) if m else 0
+    if capital == 0 and (contribution <= 0 or n == 0):
+        raise ValueError("without initial capital at least one contribution must fall inside the horizon")
     total = capital + (contribution * n if m else 0.0)
     fv0 = future_value(0.0, capital, contribution, m, years)
 
@@ -64,6 +66,8 @@ def required_cagr(capital: float, contribution: float, periodicity: str, target:
     r = float(brentq(g, lo, hi, xtol=1e-12, rtol=1e-12, maxiter=500))
     status = "atingivel_sem_retorno" if r <= 0 else "ok"
     expl = (f"CAGR necessário de {r:.2%} a.a. para levar o capital inicial e os aportes ({total:,.0f} aportados no "
-            f"total) a {target:,.0f} em {years:g} anos" +
-            ("; o objetivo não exige retorno positivo" if r <= 0 else ""))
+            f"total) a {target:,.0f} em {years:g} anos" if capital > 0 else
+            f"CAGR necessário de {r:.2%} a.a. para levar só os aportes (sem capital inicial; {total:,.0f} aportados "
+            f"no total) a {target:,.0f} em {years:g} anos") + (
+            "; o objetivo não exige retorno positivo" if r <= 0 else "")
     return RequiredCagr(r, status, total, fv0, expl.replace(",", "."))

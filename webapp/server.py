@@ -30,7 +30,7 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from config import APP_NAME, APP_VERSION, AppConfig
 from core.ai_analyst.analyst import ResearchAnalyst
@@ -89,7 +89,7 @@ class PurposeWebRequest(BaseModel):
 
     fonte_dados: Literal["real", "sintetico"] = "real"
 
-    capital_inicial: float = Field(100_000.0, gt=0, le=1e9)
+    capital_inicial: float = Field(100_000.0, ge=0, le=1e9)   # 0 = começa só com os aportes
     aporte_periodico: float = Field(1_000.0, ge=0, le=1e7)
     periodicidade: Literal["mensal", "trimestral", "semestral", "anual", "nenhum"] = "mensal"
     valor_alvo: float = Field(500_000.0, gt=0, le=1e11)
@@ -246,6 +246,9 @@ def proposito(p: PurposeWebRequest, stream: bool = False) -> Response:
     offline = p.fonte_dados == "sintetico"
     try:
         req = PurposeRequest(**p.model_dump(exclude={"fonte_dados"}), offline=offline)
+    except ValidationError as e:
+        msg = "; ".join(str(x.get("msg", "")).removeprefix("Value error, ") for x in e.errors())
+        raise HTTPException(400, f"entrada inválida: {msg}") from e
     except ValueError as e:
         raise HTTPException(400, f"entrada inválida: {e}") from e
 

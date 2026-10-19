@@ -83,7 +83,8 @@ class PurposeRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    capital_inicial: float = Field(..., gt=0, le=1e10)
+    capital_inicial: float = Field(0.0, ge=0, le=1e10,
+                                   description="quanto já tem hoje para investir de uma vez; 0 = começa só com aportes")
     aporte_periodico: float = Field(0.0, ge=0, le=1e9)
     periodicidade: Literal["mensal", "trimestral", "semestral", "anual", "nenhum"] = "mensal"
     valor_alvo: float = Field(..., gt=0, le=1e12)
@@ -127,6 +128,11 @@ class PurposeRequest(BaseModel):
     def _consistency(self) -> PurposeRequest:
         if self.periodicidade == "nenhum" and self.aporte_periodico > 0:
             raise ValueError("aporte_periodico > 0 exige periodicidade diferente de 'nenhum'")
+        m = PERIODS_PER_YEAR[self.periodicidade]
+        if self.capital_inicial == 0 and (self.aporte_periodico <= 0 or not m
+                                          or int(np.floor(m * self.horizonte_anos + 1e-9)) < 1):
+            raise ValueError("sem capital inicial, informe um aporte periódico (por exemplo, mensal) com pelo menos "
+                             "um aporte dentro do horizonte")
         if self.offline and self.moeda_objetivo != "BRL":
             raise ValueError("o universo sintético offline é cotado em BRL: use moeda_objetivo BRL")
         if self.moeda is not None and self.moeda.upper() != self.moeda_objetivo:
@@ -245,7 +251,7 @@ STRATEGY_PT = {
 
 def _role(w: float, risk_share: float, ret_share: float | None) -> str:
     """Plain-language role of a position from its shares of capital, risk and expected return [E]."""
-    parts = f"{w:.0%} do capital, {risk_share:.0%} do risco" + (
+    parts = f"{w:.0%} da carteira, {risk_share:.0%} do risco" + (
         f" e {ret_share:.0%} do retorno esperado [E]" if ret_share is not None else "")
     if risk_share < 0.5 * w:
         label = "estabilizador"

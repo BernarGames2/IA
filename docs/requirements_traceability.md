@@ -101,6 +101,7 @@ Testes executados e resultados: [`test_results.md`](test_results.md).
 | P13 | Integração CLI e web | `main.py --proposito`, `POST /api/proposito` | `test_cli_purpose_mode`, `test_purpose_endpoint` | OK | códigos de saída 0/2; entradas inválidas → 400/422 |
 | P14 | Dados reais: tickers reais baixados (Yahoo chart v8, preço ajustado), rf por moeda de fontes públicas (Selic BCB, T-bill ^IRX), falha explícita | `core/market_data/yahoo_chart.py`, `core/market_data/risk_free.py`, `engine.run_purpose`, `webapp/server.py` | `tests/test_real_data.py` (12 testes) | NÃO VALIDADO | parsing, fuso da bolsa, nulos, retries/429/404, disjuntor de rede, cache, Selic/T-bill e fluxo completo testados com dublês; sem acesso ao provedor neste ambiente (proxy 403) |
 | P15 | "Onde investir e por quê": valor por ativo, aporte, papel na carteira, ligação com o motivo, estratégia explicada | `engine.run_purpose` (`allocation`, `strategy_text`), `report.py`, `index.html` | `test_engine_real_mode_reports_where_to_invest_and_why`, `test_web_real_mode_and_unavailable_data` | OK | soma dos valores = capital; ordenado por peso |
+| P16 | Capital inicial opcional: começar só com aportes (ex.: R$ 2.000/mês) | `required_cagr.py`, `engine.PurposeRequest`, `models/investor.py`, `core/simulation/engine.py`, `webapp/server.py`, `index.html` | `tests/test_zero_capital.py` (5 testes) | OK | exige ao menos um aporte no prazo; o risco do 1º passo é medido no 1º mês com dinheiro investido; mensagem de erro sem jargão |
 
 ## "Vale a pena?" — análise de uma ação (pedido do usuário)
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class RiskProfile(str, Enum):
@@ -23,7 +23,7 @@ class RiskProfile(str, Enum):
         return {"conservador": 0, "moderado": 1, "arrojado": 2}[self.value]
 
     @classmethod
-    def from_rank(cls, r: int) -> "RiskProfile":
+    def from_rank(cls, r: int) -> RiskProfile:
         return [cls.CONSERVADOR, cls.MODERADO, cls.ARROJADO][max(0, min(2, r))]
 
 
@@ -74,7 +74,7 @@ class InvestorProfileInput(BaseModel):
         None, gt=0, lt=1, description="Declared tolerable peak-to-trough loss as a fraction")
     liquidity_need_fraction_12m: float | None = Field(
         None, ge=0, le=1, description="Fraction of capital that may be withdrawn within 12 months")
-    capital: float = Field(..., gt=0)
+    capital: float = Field(..., ge=0, description="0 = starts from the monthly contributions only")
     monthly_contribution: float = Field(0.0, ge=0)
     monthly_withdrawal: float = Field(0.0, ge=0)
     base_currency: str = Field("BRL", min_length=3, max_length=3)
@@ -96,6 +96,12 @@ class InvestorProfileInput(BaseModel):
         if "@" in v or sum(ch.isdigit() for ch in v) >= 11:
             raise ValueError("investor_id must be a pseudonym (no e-mail or document numbers)")
         return v
+
+    @model_validator(mode="after")
+    def _something_to_invest(self) -> InvestorProfileInput:
+        if self.capital <= 0 and self.monthly_contribution <= 0:
+            raise ValueError("capital and monthly_contribution cannot both be zero")
+        return self
 
 
 class ResearchLimits(BaseModel):

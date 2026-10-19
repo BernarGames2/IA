@@ -8,7 +8,7 @@ matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-316 passed, 1 skipped (317 testes)
+321 passed, 1 skipped (322 testes)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
 
@@ -96,6 +96,12 @@ trajetórias por lote. Reprodutibilidade: duas execuções com a mesma semente p
 (`42d81e5236a98b1d`). Paralelização não foi adotada: nenhum ganho foi medido que a justificasse.
 
 ## 5. Carteira com propósito (`python main.py --offline --proposito …`)
+
+Começar do zero (`tests/test_zero_capital.py`, 5 testes): capital inicial 0 com R$ 2.000 mensais por 10 anos
+registra R$ 240.000 aportados; o CAGR necessário reproduz o valor-alvo pela fórmula de valor futuro; o motor
+completo roda sem NaN/infinito; os aportes por ativo somam R$ 2.000; o site recusa "nada a investir" com mensagem
+simples. Página conferida a 390 px: tabela "Onde investir e por quê" sem colunas cortadas (motivo de cada ativo em
+linha própria).
 
 Comando registrado (saída completa em [`docs/examples/purpose_demo/`](examples/purpose_demo/report.md)):
 

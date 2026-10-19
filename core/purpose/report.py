@@ -46,7 +46,9 @@ def render_markdown(r: PurposeResult) -> str:
         L.append(f"\n> **Dados reais** — {r.universe['origem']}; período {r.universe['periodo']}; última cotação "
                  f"{r.universe.get('ultima_cotacao', '?')}. Resultado de pesquisa quantitativa, não recomendação.")
     L.append(f"\n_{DISCLAIMER}_\n")
-    L.append(f"Entradas: capital {_money(q.capital_inicial, ccy)}; aporte {_money(q.aporte_periodico, ccy)} "
+    cap = (_money(q.capital_inicial, ccy) if q.capital_inicial > 0
+           else f"{_money(0.0, ccy)} (começa só com os aportes)")
+    L.append(f"Entradas: capital inicial {cap}; aporte {_money(q.aporte_periodico, ccy)} "
              f"({q.periodicidade}); objetivo {_money(q.valor_alvo, ccy)} em {q.horizonte_anos:g} anos; perfil "
              f"declarado {q.perfil_risco.value} (final após limites: {r.analysis.profile.final_profile.value}); "
              f"slider {1 - q.peso_alinhamento:.0%} quant / {q.peso_alinhamento:.0%} alinhamento; ativos sob revisão "
@@ -73,7 +75,9 @@ def render_markdown(r: PurposeResult) -> str:
     if r.strategy_text:
         L.append(r.strategy_text + "\n")
     if r.allocation:
-        L.append("**Onde investir e por quê** (alocação do modelo; valores = capital × peso):\n")
+        L.append("**Onde investir e por quê** (alocação do modelo; valor inicial = capital inicial × peso, aporte "
+                 "por período = aporte × peso" + ("; sem capital inicial, cada aporte é dividido pelos pesos" if
+                                                  q.capital_inicial == 0 else "") + "):\n")
         L.append("| ativo | peso | valor inicial | aporte por período | por quê |")
         L.append("|---|---|---|---|---|")
         for a in r.allocation:
