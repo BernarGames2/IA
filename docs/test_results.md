@@ -8,7 +8,7 @@ matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-326 passed, 1 skipped (327 testes)
+328 passed, 1 skipped (329 testes)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
 
@@ -202,7 +202,13 @@ Web (`POST /api/proposito`, 2.000 trajetórias): ~33–37 s localmente; página 
   câmbio passam por `last_per_date`, o que também cobre séries gravadas no cache antes da correção. Erros que
   surgem dentro de bibliotecas (pandas, numpy) passam a ser informados como **erro interno** (HTTP 500, "falha do
   sistema, não dos valores informados"), separados de entradas inválidas (HTTP 400).
-* `tests/test_production_like.py` (5 testes): listagens completas da B3 e dos EUA, respostas no formato do Yahoo com
+* Depois do primeiro ajuste, o erro ainda apareceu no site — provavelmente antes de a nova versão terminar de ser
+  publicada. Para não depender de suposição: o cache de cotações também passou a descartar datas repetidas ao
+  gravar e ao ler (defensivo: o código antigo do cache não falhava, pois preço e volume tinham a mesma data
+  repetida), a classificação "erro interno" passou a usar o nome do módulo onde o erro surgiu (independe de onde
+  as bibliotecas estão instaladas na Vercel) e a página mostra a **versão publicada** (commit) no rodapé e nas
+  mensagens de erro interno.
+* `tests/test_production_like.py` (7 testes): listagens completas da B3 e dos EUA, respostas no formato do Yahoo com
   barra ao vivo repetida, volume ausente, preço nulo, feriados diferentes no Brasil e nos EUA e tickers inexistentes
   (404), passando pelo endpoint em stream — carteira com ativos em reais e em dólares, começando com capital 1 e com
-  capital 0 —, e a análise de uma ação (PGMN3 e AAPL).
+  capital 0 —, a análise de uma ação (PGMN3 e AAPL), o cache com datas repetidas e a versão publicada.

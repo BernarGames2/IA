@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from core.market_data.base import RawSeries
+from core.market_data.base import RawSeries, last_per_date
 
 
 class SeriesCache:
@@ -40,6 +40,7 @@ class SeriesCache:
             df = pd.read_csv(csv_p, index_col=0, parse_dates=True)
             if "close" not in df.columns:
                 return None
+            df = df[~df.index.duplicated(keep="last")]
         except (OSError, ValueError, KeyError, TypeError, pd.errors.ParserError):
             return None      # unreadable / truncated entry: treat as a cache miss, re-download
         vol = df["volume"] if "volume" in df.columns else None
@@ -60,9 +61,10 @@ class SeriesCache:
         self.root.mkdir(parents=True, exist_ok=True)
         key = self._key(s.provider, s.symbol, period, interval)
         csv_p, meta_p = self._paths(key)
-        df = pd.DataFrame({"close": s.close})
+        close = last_per_date(s.close)
+        df = pd.DataFrame({"close": close})
         if s.volume is not None:
-            df["volume"] = s.volume
+            df["volume"] = last_per_date(s.volume).reindex(close.index)
         df.to_csv(csv_p)
         meta = {
             "provider": s.provider, "symbol": s.symbol, "period": period, "interval": interval,

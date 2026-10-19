@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import queue
 import tempfile
 import threading
@@ -182,7 +183,7 @@ def index() -> HTMLResponse:
 
 @app.get("/api/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "version": APP_VERSION,
+    return {"status": "ok", "version": APP_VERSION, "commit": _COMMIT,
             "data": "análise geral: sintética; carteira com propósito: real (Yahoo Finance) ou sintética"}
 
 
@@ -320,13 +321,21 @@ def acao(p: StockRequest, stream: bool = False) -> Response:
     return _respond(compute, stream)
 
 
+_OWN_PACKAGES = {"core", "webapp", "models", "utils", "config", "main", "tests", "__main__"}
+_COMMIT = (os.environ.get("VERCEL_GIT_COMMIT_SHA") or "")[:7] or "local"
+
+
 def _raised_in_library(e: BaseException) -> bool:
     """True when the error surfaced inside a third-party library (pandas, numpy, scipy…): a defect of
-    this service with valid inputs, not an invalid combination of inputs."""
+    this service with valid inputs, not an invalid combination of inputs. Decided by the module
+    name of the innermost frame, so it does not depend on where the packages are installed."""
     tb, last = e.__traceback__, None
     while tb is not None:
         last, tb = tb, tb.tb_next
-    return last is not None and any(d in last.tb_frame.f_code.co_filename for d in ("site-packages", "dist-packages"))
+    if last is None:
+        return False
+    module = str(last.tb_frame.f_globals.get("__name__", ""))
+    return module.split(".")[0] not in _OWN_PACKAGES
 
 
 def _analysis_error(e: Exception) -> HTTPException:
@@ -334,8 +343,8 @@ def _analysis_error(e: Exception) -> HTTPException:
         return HTTPException(400, f"análise não pôde ser executada: {e}")
     log.error("internal failure while computing", exc_info=e)
     return HTTPException(500, "erro interno ao processar os dados: é uma falha do sistema, não dos valores que você "
-                              f"informou (detalhe técnico: {_short(e, 160)}). Tente de novo em instantes; se o erro "
-                              "se repetir, ele precisa ser corrigido no código.")
+                              f"informou (detalhe técnico: {_short(e, 160)}; versão {_COMMIT}). Tente de novo em "
+                              "instantes; se o erro se repetir, ele precisa ser corrigido no código.")
 
 
 def _short(e: Exception, n: int = 240) -> str:

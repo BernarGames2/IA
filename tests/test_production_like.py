@@ -132,3 +132,22 @@ def test_library_failures_are_reported_as_internal_errors():
     except ValueError as e:
         err = srv._analysis_error(e)
     assert err.status_code == 400 and "horizonte" in err.detail
+
+
+def test_cache_never_stores_or_serves_repeated_dates(tmp_path):
+    from core.market_data.base import RawSeries
+
+    idx = pd.to_datetime(["2026-10-14", "2026-10-15", "2026-10-16", "2026-10-16"])
+    rs = RawSeries("X", pd.Series([1.0, 2.0, 3.0, 4.0], index=idx), pd.Series([10.0, 20.0, 30.0, np.nan], index=idx),
+                   "p", "adjclose", "a", "BRL", "1d")
+    cache = SeriesCache(tmp_path, 12.0)
+    cache.put(rs, "5y", "1d")                                       # repeated dates are dropped before writing
+    got = cache.get("p", "X", "5y", "1d")
+    assert got.close.tolist() == [1.0, 2.0, 4.0] and not got.close.index.has_duplicates
+    assert len(got.volume) == 3
+
+
+def test_health_reports_the_published_version(prod):
+    h = prod.get("/api/health").json()
+    assert h["commit"] == "local" and h["status"] == "ok"            # VERCEL_GIT_COMMIT_SHA on the site
+    assert 'id="build-info"' in prod.get("/").text

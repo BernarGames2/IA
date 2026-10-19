@@ -402,6 +402,7 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     </section>
 
     <footer id="footer"></footer>
+    <p class="kind" id="build-info"></p>
   </div>
 </div>
 <div id="tip" role="tooltip"></div>
@@ -1107,6 +1108,9 @@ function stockChips() {
 }
 $("s-form").elements["fonte_dados"].addEventListener("change", stockChips);
 stockChips();
+fetch("/api/health").then((r) => r.json()).then((h) => {
+  $("build-info").textContent = `Versão publicada: ${h.commit} (${h.version})`;
+}).catch(() => {});
 
 const SUGGESTIONS = ["Qual o risco da carteira e como ela se comporta em estresse?", "Simule o patrimônio em um ano.",
   "Compare as carteiras.", "Posso confiar nesta análise?", "O SINT_CRIPTO vai subir amanhã? Devo comprar?"];
