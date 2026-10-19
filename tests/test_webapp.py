@@ -45,7 +45,7 @@ def test_index_and_health(client):
     r = client.get("/")
     assert r.status_code == 200 and "Quant Portfolio Intelligence" in r.text and "DADOS SINTÉTICOS" in r.text
     h = client.get("/api/health").json()
-    assert h["status"] == "ok" and h["data"] == "synthetic-only"
+    assert h["status"] == "ok" and h["data"] == "análise geral: sintética; carteira com propósito: real (Yahoo Finance) ou sintética"
 
 
 def test_analyze_returns_validated_summary(client):
@@ -96,7 +96,8 @@ def test_page_never_injects_server_text_as_html():
 
 def test_purpose_endpoint(client):
     body = {"valor_alvo": 130_000, "capital_inicial": 100_000, "aporte_periodico": 500, "horizonte_anos": 2,
-            "n_simulacoes": 500, "motivo_investidor": "Quero apoiar a saúde", "taxa_livre_risco": {"BRL": 0.105}}
+            "n_simulacoes": 500, "motivo_investidor": "Quero apoiar a saúde", "taxa_livre_risco": {"BRL": 0.105},
+            "fonte_dados": "sintetico"}       # real data (the default) is covered by tests/test_real_data.py
     r = client.post("/api/proposito", json=body)
     assert r.status_code == 200, r.text
     d = r.json()

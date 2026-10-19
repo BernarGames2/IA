@@ -1,11 +1,15 @@
 """Web API (FastAPI) for the Quant Portfolio Intelligence Engine — Vercel entrypoint.
 
 Deployed as a Vercel Python Function (see ``pyproject.toml`` -> ``[tool.vercel]``).
-The web version runs ONLY on deterministic synthetic data: redistributing
-provider quotes on a public site is not allowed by Yahoo's terms, and the
-offline mode is the validated path. Inputs are validated (pydantic, extra
-fields forbidden) and bounded so a request fits the platform's time/memory
-limits. No order execution, no external content, no secrets.
+* ``/api/analisar`` and ``/api/perguntar`` run on the deterministic synthetic market.
+* ``/api/proposito`` (purpose-aligned portfolio) uses REAL prices by default: daily
+  adjusted closes of individual tickers downloaded at request time from Yahoo Finance's
+  chart endpoint (cached in /tmp), plus the Selic target (BCB) and the 13-week T-bill
+  (^IRX) as risk-free rates. Only derived analytics are shown (no quote feed is
+  redistributed). If real data is unavailable the request fails with a clear message;
+  synthetic data is never substituted. ``fonte_dados="sintetico"`` runs the labelled demo.
+Inputs are validated (pydantic, extra fields forbidden) and bounded so a request fits
+the platform's time/memory limits. No order execution, no secrets.
 
 Local run:  uvicorn webapp.server:app --reload   ->  http://127.0.0.1:8000
 """
@@ -17,6 +21,7 @@ import tempfile
 import threading
 import time
 from collections import OrderedDict
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
@@ -27,6 +32,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from config import APP_NAME, APP_VERSION, AppConfig
 from core.ai_analyst.analyst import ResearchAnalyst
 from core.ai_analyst.tools import AnalysisContext
+from core.market_data.base import DataUnavailableError
 from core.portfolio_engine import AnalysisResult, run_analysis
 from core.profiler import demo_profile
 from core.purpose.engine import PurposeRequest, PurposeResult, run_purpose
@@ -68,9 +74,13 @@ class AskRequest(BaseModel):
 
 
 class PurposeWebRequest(BaseModel):
-    """Purpose-engine form (synthetic universe only on the web; bounded for the platform limits)."""
+    """Purpose-engine form, bounded for the platform limits. ``fonte_dados="real"`` downloads real
+    prices (Yahoo Finance chart endpoint) for the catalogue of individual tickers; "sintetico" runs
+    the labelled offline demonstration. A real-data failure is reported, never replaced."""
 
     model_config = ConfigDict(extra="forbid")
+
+    fonte_dados: Literal["real", "sintetico"] = "real"
 
     capital_inicial: float = Field(100_000.0, gt=0, le=1e9)
     aporte_periodico: float = Field(1_000.0, ge=0, le=1e7)
@@ -87,7 +97,9 @@ class PurposeWebRequest(BaseModel):
     seed: int = Field(42, ge=0, le=2**31 - 1)
 
     def key(self) -> str:
-        return self.model_dump_json()
+        # real prices change every day: cached real results are reused only within the same UTC day
+        day = datetime.now(UTC).date().isoformat() if self.fonte_dados == "real" else ""
+        return self.model_dump_json() + day
 
 
 app = FastAPI(title=f"{APP_NAME} — web", version=APP_VERSION, docs_url="/api/docs", redoc_url=None,
@@ -142,7 +154,8 @@ def index() -> HTMLResponse:
 
 @app.get("/api/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "version": APP_VERSION, "data": "synthetic-only"}
+    return {"status": "ok", "version": APP_VERSION,
+            "data": "análise geral: sintética; carteira com propósito: real (Yahoo Finance) ou sintética"}
 
 
 @app.post("/api/analisar")
@@ -177,6 +190,17 @@ def perguntar(req: AskRequest) -> JSONResponse:
     }))
 
 
+def _market_provider() -> object | None:
+    """Real-price provider for the purpose engine (None = engine default: Yahoo chart + /tmp cache).
+    Kept as a function so tests can substitute a fake provider."""
+    return None
+
+
+def _rf_fetch() -> object | None:
+    """HTTP fetch used for the Selic (BCB) quote; None = standard library. Replaceable in tests."""
+    return None
+
+
 def _purpose_payload(res: PurposeResult, elapsed: float) -> dict[str, object]:
     out = purpose_to_dict(res)
     out["markdown"] = render_markdown(res)
@@ -192,16 +216,24 @@ def proposito(p: PurposeWebRequest) -> JSONResponse:
         if k in _purpose_cache:
             _purpose_cache.move_to_end(k)
             return JSONResponse(_purpose_cache[k])
+    offline = p.fonte_dados == "sintetico"
     try:
-        req = PurposeRequest(**p.model_dump(), offline=True)
+        req = PurposeRequest(**p.model_dump(exclude={"fonte_dados"}), offline=offline)
     except ValueError as e:
         raise HTTPException(400, f"entrada inválida: {e}") from e
     if not _slots.acquire(timeout=120):
         raise HTTPException(503, "servidor ocupado; tente novamente em instantes")
     try:
         t0 = time.perf_counter()
-        res = run_purpose(req, output_dir=_OUTPUT_DIR / "proposito")
+        res = run_purpose(req, output_dir=_OUTPUT_DIR / "proposito", cache_dir=_OUTPUT_DIR / "cache",
+                          provider=None if offline else _market_provider(), rf_fetch=_rf_fetch())
         payload = _purpose_payload(res, time.perf_counter() - t0)
+    except DataUnavailableError as e:
+        why = str(e)
+        why = why if len(why) <= 240 else why[:240] + "…"
+        raise HTTPException(503, f"dados reais indisponíveis agora ({why}). Nenhum dado sintético foi usado em "
+                                 "substituição: tente de novo em alguns minutos ou escolha 'Demonstração "
+                                 "sintética'.") from e
     except (ValueError, ArithmeticError) as e:
         raise HTTPException(400, f"análise não pôde ser executada: {e}") from e
     finally:

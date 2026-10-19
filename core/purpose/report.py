@@ -42,6 +42,9 @@ def render_markdown(r: PurposeResult) -> str:
     if r.is_synthetic:
         L.append("\n> **DEMONSTRAÇÃO COM DADOS SINTÉTICOS — NÃO É UMA CARTEIRA FINAL.** Os tickers `SINT_*` não "
                  "existem no mercado; os números ilustram o método.")
+    else:
+        L.append(f"\n> **Dados reais** — {r.universe['origem']}; período {r.universe['periodo']}; última cotação "
+                 f"{r.universe.get('ultima_cotacao', '?')}. Resultado de pesquisa quantitativa, não recomendação.")
     L.append(f"\n_{DISCLAIMER}_\n")
     L.append(f"Entradas: capital {_money(q.capital_inicial, ccy)}; aporte {_money(q.aporte_periodico, ccy)} "
              f"({q.periodicidade}); objetivo {_money(q.valor_alvo, ccy)} em {q.horizonte_anos:g} anos; perfil "
@@ -67,6 +70,17 @@ def render_markdown(r: PurposeResult) -> str:
 
     # 2
     L.append("\n## 2. Carteira\n")
+    if r.strategy_text:
+        L.append(r.strategy_text + "\n")
+    if r.allocation:
+        L.append("**Onde investir e por quê** (alocação do modelo; valores = capital × peso):\n")
+        L.append("| ativo | peso | valor inicial | aporte por período | por quê |")
+        L.append("|---|---|---|---|---|")
+        for a in r.allocation:
+            L.append(f"| {_cell(a['ticker'])} — {_cell(a['nome'])} | {a['peso']:.1%} | "
+                     f"{_money(float(a['valor_inicial']), ccy)} | {_money(float(a['aporte_por_periodo']), ccy)} | "
+                     f"{_cell(a['por_que'])} |")
+        L.append("")
     L.append("| ticker | classe | peso | score_alinhamento | moeda | peso só-quant |")
     L.append("|---|---|---|---|---|---|")
     for t, row in r.table.iterrows():
@@ -172,6 +186,7 @@ def to_dict(r: PurposeResult) -> dict[str, object]:
                  "explicacao": r.required.explanation, **r.expected},
         "carteira": r.table.reset_index().to_dict(orient="records"),
         "teses": r.theses, "cenarios": r.scenarios.reset_index().to_dict(orient="records"),
+        "onde_investir": r.allocation, "estrategia_texto": r.strategy_text,
         "objetivo": r.goal, "sensibilidade": r.sensitivity.reset_index().to_dict(orient="records"),
         "alertas": [a.__dict__ for a in r.alerts], "etapas": r.steps, "universo": r.universe,
         "rf_por_moeda": r.rf_by_currency, "fonte_rf": r.rf_source,

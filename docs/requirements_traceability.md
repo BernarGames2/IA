@@ -76,7 +76,7 @@ Testes executados e resultados: [`test_results.md`](test_results.md).
 | R16.3 | Manifesto: config, versões, commit, dados, hash, semente, tempos, avisos (§16) | `reporter.write_outputs` | `test_exit_code_and_files`, `test_reproducible_numbers` | OK | mesma semente → mesmos números |
 | R16.4 | Logs estruturados (§16) | `utils/logging_config.py` | e2e | PARCIAL | JSON-lines; sem teste dedicado |
 | R16.5 | PDF (opcional) | — | — | PENDENTE | — |
-| R17.1 | Testes sem internet; tolerâncias explícitas (§17) | `tests/` | suíte completa | OK | 205 testes coletados (204 passam, 1 pulado: rede); rede só no teste opcional |
+| R17.1 | Testes sem internet; tolerâncias explícitas (§17) | `tests/` | suíte completa | OK | ver contagem atual em test_results.md; rede só no teste opcional |
 | R17.2 | Tempo, memória, escalabilidade, reprodutibilidade; profiling antes de otimizar (§17) | `scripts/profile_run.py` | execução registrada em test_results | OK | 95 s → 68 s após otimização medida |
 | R19.1 | README com instalação Windows/Linux, CLI, fórmulas, limitações (§19) | `README.md` | — | OK | só opções funcionais documentadas |
 | R19.2 | `.env.example` sem segredos (§19) | `.env.example` | — | OK | — |
@@ -99,3 +99,5 @@ Testes executados e resultados: [`test_results.md`](test_results.md).
 | P11 | Linguagem probabilística; sem "vai gerar"/"certamente" | `core/purpose/language.py` | `test_guarantee_language_detected`, `test_engine_follows_the_nine_steps_and_output_format` | OK | verificador roda sobre todo texto gerado (citações do investidor excluídas) |
 | P12 | Motivo vazio → só quantitativo + aviso "não calculado por falta de input" | `engine.py`, `alignment.py` | `test_engine_empty_motive_runs_quant_only` | OK | pesos finais = quantitativos |
 | P13 | Integração CLI e web | `main.py --proposito`, `POST /api/proposito` | `test_cli_purpose_mode`, `test_purpose_endpoint` | OK | códigos de saída 0/2; entradas inválidas → 400/422 |
+| P14 | Dados reais: tickers reais baixados (Yahoo chart v8, preço ajustado), rf por moeda de fontes públicas (Selic BCB, T-bill ^IRX), falha explícita | `core/market_data/yahoo_chart.py`, `core/market_data/risk_free.py`, `engine.run_purpose`, `webapp/server.py` | `tests/test_real_data.py` (12 testes) | NÃO VALIDADO | parsing, fuso da bolsa, nulos, retries/429/404, disjuntor de rede, cache, Selic/T-bill e fluxo completo testados com dublês; sem acesso ao provedor neste ambiente (proxy 403) |
+| P15 | "Onde investir e por quê": valor por ativo, aporte, papel na carteira, ligação com o motivo, estratégia explicada | `engine.run_purpose` (`allocation`, `strategy_text`), `report.py`, `index.html` | `test_engine_real_mode_reports_where_to_invest_and_why`, `test_web_real_mode_and_unavailable_data` | OK | soma dos valores = capital; ordenado por peso |

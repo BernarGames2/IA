@@ -101,6 +101,7 @@ textarea { background: var(--page); border: 1px solid var(--ring); border-radius
 .thesis h3 { margin: 0 0 6px; font-size: 0.98rem; }
 .thesis p { margin: 6px 0; font-size: 0.9rem; }
 .thesis .tag { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.03em; color: var(--ink2); text-transform: uppercase; }
+details > summary { cursor: pointer; color: var(--ink2); font-size: 0.85rem; margin-top: 8px; }
 .sev-FAIL { --c: var(--crit); } .sev-WARNING { --c: var(--warn); } .sev-INFO { --c: var(--muted); }
 footer { color: var(--muted); font-size: 0.8rem; margin-top: 28px; }
 svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
@@ -114,15 +115,16 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
       <div class="sub">Otimização de carteiras, Monte Carlo, risco extremo e validação independente</div>
     </div>
     <div class="row">
-      <span class="badge syn">DADOS SINTÉTICOS · demonstração</span>
+      <span class="badge syn">PESQUISA · não é recomendação</span>
       <button class="ghost" id="theme" type="button" aria-label="Alternar tema claro/escuro">Tema</button>
     </div>
   </header>
 
   <div class="banner">
     Ferramenta de pesquisa e simulação. Não é recomendação de investimento, não é suitability regulatório,
-    não garante resultados e não executa ordens. Este site usa apenas um gerador de mercado sintético
-    determinístico (ativos <code>SINT_*</code>): nenhum número descreve ativos reais.
+    não garante resultados e não executa ordens. A <strong>Carteira com propósito</strong> usa por padrão cotações
+    reais (Yahoo Finance, preço ajustado, baixadas na hora); a análise geral logo abaixo usa um mercado sintético
+    determinístico (ativos <code>SINT_*</code>), que não descreve ativos reais.
   </div>
 
   <section class="card" aria-labelledby="f-title">
@@ -161,10 +163,17 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 
   <section class="card" aria-labelledby="p-title">
     <h2 id="p-title">Carteira com propósito</h2>
-    <p class="muted">Combina a otimização quantitativa com o motivo que você declarar. O texto é lido por regras
-      determinísticas (sem modelo de linguagem): só entram temas que você escreveu, com a citação literal.
-      Universo sintético multimoeda (BRL e USD) — demonstração do método, não uma carteira final.</p>
+    <p class="muted">Escolhe entre ações e fundos reais da B3 e dos EUA (cotações diárias do Yahoo Finance) a
+      carteira que respeita o seu perfil e mostra quanto colocar em cada ativo e por quê. O motivo que você escrever
+      é lido por regras determinísticas (sem modelo de linguagem): só entram temas que você escreveu, com a citação
+      literal. Pode levar 1–2 minutos (baixa ~30 séries de preço, faz backtest e simulação).</p>
     <form id="p-form">
+      <label>Dados
+        <select name="fonte_dados">
+          <option value="real" selected>Ações reais (Yahoo Finance)</option>
+          <option value="sintetico">Demonstração sintética</option>
+        </select>
+      </label>
       <label class="span-all">Por que você está investindo? (opcional)
         <textarea name="motivo_investidor" maxlength="1000" placeholder="Ex.: Quero apoiar saúde e energia limpa. O objetivo é pagar a faculdade dos meus filhos."></textarea>
       </label>
@@ -186,8 +195,8 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
       <label>Peso do alinhamento: <span id="p-slider-lab">70% quant / 30% alinhamento</span>
         <input name="peso_alinhamento" id="p-slider" type="range" min="0" max="100" step="5" value="30">
       </label>
-      <label>rf BRL (% a.a., opcional)<input name="rf_brl" type="number" min="-5" max="100" step="any" placeholder="10 (demonstração)"></label>
-      <label>rf USD (% a.a., opcional)<input name="rf_usd" type="number" min="-5" max="100" step="any" placeholder="4 (demonstração)"></label>
+      <label>rf BRL (% a.a., opcional)<input name="rf_brl" type="number" min="-5" max="100" step="any" placeholder="auto: Selic (BCB)"></label>
+      <label>rf USD (% a.a., opcional)<input name="rf_usd" type="number" min="-5" max="100" step="any" placeholder="auto: T-bill (^IRX)"></label>
       <label>Simulações
         <select name="n_simulacoes"><option value="2000">2.000</option><option value="3000" selected>3.000</option><option value="5000">5.000</option><option value="10000">10.000</option></select>
       </label>
@@ -200,7 +209,11 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
   <div id="p-results" class="hidden">
     <div class="banner" id="p-banner"></div>
     <div class="kpis" id="p-kpis"></div>
-    <section class="card"><h2>Carteira</h2><div class="tbl" id="p-table"></div><ul class="clean" id="p-reasons"></ul></section>
+    <section class="card"><h2>Onde investir e por quê</h2><p id="p-strategy"></p><div class="tbl" id="p-alloc"></div>
+      <p class="muted">Valores = capital inicial × peso; aporte por período = aporte × peso. Alocação de um modelo de
+        pesquisa, não uma recomendação: confira custos, impostos e a sua situação antes de qualquer decisão.</p>
+      <details><summary>Tabela técnica e score de alinhamento de todos os ativos elegíveis</summary>
+        <div class="tbl" id="p-table"></div><ul class="clean" id="p-reasons"></ul></details></section>
     <section class="card"><h2>Justificativa por ativo</h2><p class="muted" id="p-why"></p><div id="p-theses"></div></section>
     <div class="grid2">
       <section class="card"><h2>Cenários no horizonte</h2><div class="tbl" id="p-scen"></div></section>
@@ -723,7 +736,7 @@ function readPurpose() {
     motivo_investidor: String(f.get("motivo_investidor") || ""), valor_alvo: Number(f.get("valor_alvo")),
     capital_inicial: Number(f.get("capital_inicial")), aporte_periodico: Number(f.get("aporte_periodico") || 0),
     periodicidade: f.get("periodicidade"), horizonte_anos: Number(f.get("horizonte_anos")), perfil_risco: f.get("perfil_risco"),
-    peso_alinhamento: Number(f.get("peso_alinhamento")) / 100, taxa_livre_risco: rf,
+    peso_alinhamento: Number(f.get("peso_alinhamento")) / 100, taxa_livre_risco: rf, fonte_dados: f.get("fonte_dados"),
     incluir_sob_revisao: f.get("incluir_sob_revisao") === "on", n_simulacoes: Number(f.get("n_simulacoes")),
   };
 }
@@ -732,7 +745,15 @@ function renderPurpose(d) {
   $("p-results").classList.remove("hidden");
   $("p-banner").textContent = d.dados_sinteticos
     ? "DEMONSTRAÇÃO COM DADOS SINTÉTICOS — NÃO É UMA CARTEIRA FINAL. Os tickers SINT_* não existem no mercado. " + d.aviso
-    : d.aviso;
+    : `Dados reais: ${d.universo.origem}; período ${d.universo.periodo}; última cotação ${d.universo.ultima_cotacao}. ` + d.aviso;
+  $("p-strategy").textContent = d.estrategia_texto || "";
+  setChildren("p-alloc", table(["Ativo", "Peso", "Valor inicial", "Aporte/período", "Alinhamento", "Moeda", "Por quê"],
+    d.onde_investir.map((a) => {
+      const row = d.carteira.find((r) => r.ticker === a.ticker) || {};
+      return [a.ticker + " — " + a.nome, fmtPct(a.peso, 1), fmtMoney(a.valor_inicial), fmtMoney(a.aporte_por_periodo),
+        row.score_alinhamento === null || row.score_alinhamento === undefined ? "n/c" : fmtNum(row.score_alinhamento),
+        a.moeda, el("div", {}, a.por_que, el("div", { class: "muted" }, "Negócio: " + a.negocio))];
+    }), [1, 2, 3, 4]));
   const c = d.cagr, g = d.objetivo;
   setChildren("p-kpis",
     kpi("CAGR necessário", fmtPct(c.necessario), "para atingir o valor-alvo no prazo"),
@@ -768,7 +789,9 @@ $("p-form").addEventListener("submit", async (ev) => {
   const p = readPurpose();
   const btn = $("p-run"); btn.disabled = true;
   const st = $("p-status");
-  st.replaceChildren(el("span", { class: "spinner" }), " Montando a carteira (otimização, backtest e simulação; ~30–60 s)…");
+  st.replaceChildren(el("span", { class: "spinner" }), p.fonte_dados === "real"
+    ? " Baixando cotações reais e montando a carteira (1–2 min)…"
+    : " Montando a carteira de demonstração (~30–60 s)…");
   const t0 = performance.now();
   try {
     const d = await post("/api/proposito", p);

@@ -5,12 +5,15 @@ matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-
 
 ## 1. Suíte automatizada
 
-Comando: `python -m pytest -o addopts="" -q -rs --durations=8`
+Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-155 passed, 1 skipped in 82.48s (0:01:22)
+218 passed, 1 skipped (219 testes; ~4 min)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
+
+(Última execução completa: 216 passed + 2 falhas esperadas em `tests/test_webapp.py` — health e o teste do
+endpoint de propósito ainda assumiam o modo sintético como padrão; ajustados e reexecutados: 13/13.)
 
 * 0 falhas. O único teste pulado é o teste **online opcional**, que não pôde ser executado porque a política de
   rede do ambiente bloqueia o Yahoo Finance (o proxy responde HTTP 403 ao `CONNECT`).
@@ -123,4 +126,14 @@ interrompida por "mas/porém/contudo…" (`test_negated_themes_are_not_counted`)
 
 Web (`POST /api/proposito`, 2.000 trajetórias): ~33–37 s localmente; página verificada com Playwright em
 1280 px e 390 px — sem erros de console e sem rolagem horizontal.
+
+## 6. Dados reais na carteira com propósito
+
+* `core/market_data/yahoo_chart.py` (biblioteca padrão) + `core/market_data/risk_free.py` (Selic BCB, T-bill
+  `^IRX`): 12 testes em `tests/test_real_data.py` com dublês de HTTP/provedor — parsing (preço ajustado, fuso da
+  bolsa, nulos), 429 → nova tentativa no outro host, 404 definitivo, disjuntor de rede, cache, Selic/T-bill, fluxo
+  completo do motor e do site em modo real e falha explícita sem dados.
+* Neste ambiente o proxy bloqueia o Yahoo e o BCB (`CONNECT tunnel failed, response 403`): `python main.py
+  --proposito …` sem `--offline` termina em ~7 s com código 2 e a lista de tickers sem dados, sem substituir por
+  sintético. Portanto **nenhuma carteira com cotações reais foi gerada aqui**.
 

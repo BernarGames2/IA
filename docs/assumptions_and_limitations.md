@@ -46,9 +46,11 @@
 
 ### Carteira com propósito (`core/purpose/`)
 
-17. **Tickers reais não validados neste ambiente**: o catálogo real (B3, EUA, ouro, cripto) é baixado e validado em
-    tempo de execução (≥ 252 observações, exclusão sem proxy), mas o Yahoo Finance está bloqueado aqui; a regra
-    foi testada com provedor simulado. A demonstração offline usa um universo **sintético** multimoeda e é
+17. **Tickers reais não validados neste ambiente**: o catálogo real (31 tickers: B3, EUA, ouro, cripto) é baixado
+    e validado em tempo de execução (≥ 252 observações, exclusão sem proxy) pelo endpoint de gráficos do Yahoo
+    (não oficial; termos restringem redistribuição — o site exibe só métricas derivadas), mas o Yahoo e o BCB estão
+    bloqueados aqui; o caminho foi testado com dublês. A Selic é a META (o CDI efetivo fica ~0,1 p.p. abaixo) e o
+    `^IRX` é rendimento em base desconto (aproximação da taxa anual). A demonstração offline usa um universo **sintético** multimoeda e é
     marcada "NÃO É UMA CARTEIRA FINAL" (alerta FAIL de categoria dados).
 18. **Extração de temas por léxico**: determinística e auditável (citação literal de cada evidência, negações
     descartadas), mas não entende sinônimos fora da lista, ironia ou contexto longo. Nenhum modelo de linguagem

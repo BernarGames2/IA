@@ -181,15 +181,18 @@ Resumo (lista completa em [`docs/assumptions_and_limitations.md`](docs/assumptio
 
 A versão web fica em `webapp/`: API FastAPI (`webapp/server.py`) + página única (`webapp/static/index.html`)
 com formulário, gráficos interativos (tooltips, tema claro/escuro, layout para celular), tabelas e o analista
-de IA. **O site usa apenas os dados sintéticos** (os termos do Yahoo restringem redistribuir cotações num site
-público, e o modo offline é o caminho validado).
+de IA. A **Carteira com propósito** usa por padrão **cotações reais**: preços diários ajustados de ~30 ações e
+fundos da B3 e dos EUA baixados na hora do endpoint de gráficos do Yahoo Finance (biblioteca padrão, sem
+`yfinance`; cache em `/tmp`), Selic do Banco Central (SGS 432) e T-bill (`^IRX`) como taxas livres de risco. O
+site mostra só métricas derivadas (não republica cotações) e, se o provedor não responder, mostra o erro — nunca
+troca por dados sintéticos. A análise geral (`/api/analisar`) continua sobre o mercado sintético.
 
 | Endpoint | Função |
 |---|---|
 | `GET /` | página |
 | `POST /api/analisar` | roda a análise (modo `rapido` ou `completo`) e devolve um resumo JSON |
 | `POST /api/perguntar` | pergunta ao analista de IA (mesmas recusas e verificação de números da CLI) |
-| `POST /api/proposito` | carteira com propósito (seção 10) sobre o universo sintético multimoeda |
+| `POST /api/proposito` | carteira com propósito (seção 10): `fonte_dados="real"` (padrão, Yahoo Finance) ou `"sintetico"` |
 | `GET /api/health`, `GET /api/docs` | saúde e documentação OpenAPI |
 
 Entradas são validadas e limitadas (≤ 20.000 simulações, horizonte ≤ 30 anos, pergunta ≤ 500 caracteres).
@@ -250,8 +253,21 @@ P(atingir o objetivo) por Monte Carlo com erro padrão e IC, sensibilidade (±1 
 esperado, bootstrap em blocos, deriva histórica) e alertas. Todo texto gerado passa por um verificador de
 linguagem de garantia ("vai gerar", "certamente", "garantido"…); um acerto vira alerta FAIL.
 
-**Limites honestos:** neste ambiente o Yahoo Finance está bloqueado, então o caminho com tickers reais foi
-testado só com provedor simulado; o modo offline usa um universo **sintético** multimoeda (BRL/USD) e o resultado
-é marcado "NÃO É UMA CARTEIRA FINAL". As tags temáticas dos ativos são curadoria editorial estática; a extração
+**Onde investir e por quê:** para cada ativo com peso, a saída traz o valor a investir (capital × peso), o aporte
+por período, o papel na carteira (estabilizador, motor de retorno, crescimento, diversificador — com as parcelas de
+capital, risco e retorno esperado [E]), a ligação com o motivo declarado e o negócio da empresa; e explica qual
+estratégia quantitativa foi escolhida e por quê.
+
+**Dados reais** (`--proposito` sem `--offline`, ou o site): ~30 tickers individuais (ações B3 como PETR4, VALE3,
+ITUB4, WEGE3, EGIE3, RADL3, FLRY3, RDOR3, HAPV3, COGN3, YDUQ3, TOTS3…, FIIs, ETFs de renda fixa, ações/ETFs dos
+EUA, ouro e bitcoin) baixados do Yahoo Finance; ticker com menos de 252 observações é excluído e listado. Se o
+provedor estiver inacessível, um disjuntor encerra após 3 tickers seguidos sem resposta (falha em segundos, não
+minutos).
+
+**Limites honestos:** neste ambiente de desenvolvimento o Yahoo Finance e o Banco Central estão bloqueados pela
+política de rede, então o caminho com dados reais foi testado só com provedores simulados; para rodá-lo aqui é
+preciso liberar `query1.finance.yahoo.com`, `query2.finance.yahoo.com` e `api.bcb.gov.br` em *Network access*
+do ambiente. O modo offline usa um universo **sintético** multimoeda (BRL/USD) e o resultado é marcado "NÃO É UMA
+CARTEIRA FINAL". As tags temáticas dos ativos são curadoria editorial estática; a extração
 de temas é por léxico (não entende ironia nem sinônimos fora da lista).
 

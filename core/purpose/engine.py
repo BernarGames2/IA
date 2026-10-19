@@ -34,7 +34,10 @@ import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from config import DEMO_RISK_FREE_FALLBACK, AppConfig
+from core.market_data.cache import SeriesCache
 from core.market_data.quality import QualitySettings
+from core.market_data.risk_free import RiskFreeQuote, fetch_live_rates
+from core.market_data.yahoo_chart import FetchFn, YahooChartProvider
 from core.optimization.constraints import verify_weights
 from core.portfolio_engine import AnalysisResult, run_analysis
 from core.purpose.alignment import (
@@ -156,6 +159,8 @@ class PurposeResult:
     sleeves_final: list[Sleeve]
     alerts: list[Alert] = field(default_factory=list)
     is_synthetic: bool = True
+    allocation: list[dict[str, object]] = field(default_factory=list)   # "onde investir e por quê"
+    strategy_text: str = ""
 
     @property
     def is_final_portfolio(self) -> bool:
@@ -175,11 +180,16 @@ def subset_dataset(ds: PriceDataset, keep: list[str]) -> PriceDataset:
         native_currency={s: ds.native_currency[s] for s in cols if s in ds.native_currency})
 
 
-def _resolve_rf(req: PurposeRequest, currencies: set[str]) -> tuple[dict[str, float], dict[str, str]]:
+def _resolve_rf(req: PurposeRequest, currencies: set[str],
+                live: dict[str, RiskFreeQuote] | None = None) -> tuple[dict[str, float], dict[str, str]]:
+    """Priority: rate typed by the user > rate fetched from a public source > flagged demo fallback."""
     rf, src = {}, {}
+    live = live or {}
     for c in sorted(currencies | {req.moeda_objetivo}):
         if c in req.taxa_livre_risco:
             rf[c], src[c] = req.taxa_livre_risco[c], "informada pelo usuário"
+        elif c in live:
+            rf[c], src[c] = live[c].rate, f"{live[c].source}, em {live[c].as_of}"
         elif c in DEMO_RISK_FREE_FALLBACK:
             rf[c], src[c] = DEMO_RISK_FREE_FALLBACK[c], "FALLBACK DE DEMONSTRAÇÃO (não é cotação)"
         else:
@@ -207,6 +217,39 @@ def _profile_input(req: PurposeRequest) -> InvestorProfileInput:
     )
 
 
+def _default_provider(cache_dir: Path) -> YahooChartProvider:
+    """Real prices: Yahoo chart endpoint through the standard library, with a file cache."""
+    return YahooChartProvider(cache=SeriesCache(cache_dir, 12.0))
+
+
+STRATEGY_PT = {
+    "max_sharpe": "máximo Sharpe (melhor retorno esperado por unidade de risco)",
+    "min_variance": "mínima variância (menor oscilação possível dentro do perfil)",
+    "risk_parity": "paridade de risco (cada ativo contribui com o mesmo risco)",
+    "max_diversification": "máxima diversificação",
+    "hrp": "paridade de risco hierárquica (HRP)",
+    "min_cvar": "mínimo CVaR (menor perda média nos piores dias)",
+    "robust_mean_variance": "média-variância robusta a erros de estimativa",
+    "target_volatility": "volatilidade-alvo do perfil",
+    "equal_weight": "pesos iguais ajustados aos limites do perfil",
+}
+
+
+def _role(w: float, risk_share: float, ret_share: float | None) -> str:
+    """Plain-language role of a position from its shares of capital, risk and expected return [E]."""
+    parts = f"{w:.0%} do capital, {risk_share:.0%} do risco" + (
+        f" e {ret_share:.0%} do retorno esperado [E]" if ret_share is not None else "")
+    if risk_share < 0.5 * w:
+        label = "estabilizador"
+    elif ret_share is not None and ret_share > 1.2 * max(risk_share, w):
+        label = "motor de retorno"
+    elif risk_share > 1.5 * w:
+        label = "crescimento (assume mais risco do que o seu peso)"
+    else:
+        label = "diversificador"
+    return f"{label}: {parts}"
+
+
 def _load_universe(req: PurposeRequest, assets: list[CatalogAsset], cfg: AppConfig,
                    provider: object | None) -> tuple[PriceDataset, object | None]:
     from core.purpose.synthetic_universe import asset_meta, build_synthetic_universe
@@ -215,12 +258,8 @@ def _load_universe(req: PurposeRequest, assets: list[CatalogAsset], cfg: AppConf
         ds, truth = build_synthetic_universe(seed=req.seed)
         return subset_dataset(ds, [a.ticker for a in assets]), truth
     from core.data_loader import load_price_dataset
-    from core.market_data.cache import SeriesCache
-    from core.market_data.yfinance_provider import YFinanceProvider
 
-    prov = provider or YFinanceProvider(cache=SeriesCache(cfg.cache_dir, cfg.cache_ttl_hours),
-                                        timeout_s=cfg.request_timeout_s, max_retries=cfg.max_retries,
-                                        min_interval_s=cfg.min_seconds_between_requests)
+    prov = provider or _default_provider(cfg.cache_dir)
     ds = load_price_dataset([a.ticker for a in assets], prov, period=cfg.period, interval="1d",  # type: ignore[arg-type]
                             base_currency=req.moeda_objetivo, meta={a.ticker: asset_meta(a, False) for a in assets},
                             quality=QualitySettings(min_history=MIN_OBS))
@@ -353,7 +392,8 @@ def _purpose_thesis(a: CatalogAsset, s: str, al: AlignmentResult, themes: ThemeE
 
 # ----------------------------------------------------------------------------- main
 def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: object | None = None,
-                governance_path: Path | None = None) -> PurposeResult:
+                governance_path: Path | None = None, cache_dir: Path | None = None,
+                rf_fetch: FetchFn | None = None) -> PurposeResult:
     steps: list[dict[str, object]] = []
     alerts: list[Alert] = []
 
@@ -367,8 +407,15 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
     # 2 ---------------------------------------------------------------- eligible universe
     catalog = SYNTHETIC_CATALOG if req.offline else REAL_CATALOG
     assets = expand(catalog, req.classes)
-    rf0, rf0_src = _resolve_rf(req, set())          # objective-currency rf (never silently 0)
-    cfg = AppConfig(offline=req.offline, base_currency=req.moeda_objetivo,
+    cache_root = cache_dir or Path(".cache") / "market_data"
+    live: dict[str, RiskFreeQuote] = {}
+    live_errors: dict[str, str] = {}
+    if not req.offline:
+        provider = provider or _default_provider(cache_root)
+        need = ({a.currency for a in assets} | {req.moeda_objetivo}) - set(req.taxa_livre_risco)
+        live, live_errors = fetch_live_rates(need, provider, rf_fetch)  # type: ignore[arg-type]
+    rf0, rf0_src = _resolve_rf(req, set(), live)    # objective-currency rf (never silently 0)
+    cfg = AppConfig(offline=req.offline, base_currency=req.moeda_objetivo, cache_dir=cache_root,
                     risk_free_rate=rf0[req.moeda_objetivo],
                     risk_free_rate_source="demo_fallback" if rf0_src[req.moeda_objetivo].startswith("FALLBACK")
                     else "user",
@@ -379,7 +426,12 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
     ds_all, truth = _load_universe(req, assets, cfg, provider)
     excluded_data = dict(ds_all.quality.excluded_symbols)
     cat = by_ticker(catalog)
-    universe = {"origem": "SINTÉTICA (demonstração offline)" if ds_all.is_synthetic else "real (yfinance)",
+    providers = sorted({p.provider for p in ds_all.provenance.values()})
+    last_quote = str(ds_all.prices.index[-1].date())
+    fetched = max((p.ingested_at_utc for p in ds_all.provenance.values() if p.ingested_at_utc), default="")
+    universe = {"origem": "SINTÉTICA (demonstração offline)" if ds_all.is_synthetic
+                else "real — Yahoo Finance (" + ", ".join(providers) + ")",
+                "ultima_cotacao": last_quote, "obtido_em_utc": fetched,
                 "candidatos": [a.ticker for a in assets], "validados": ds_all.symbols,
                 "excluidos_por_dados": excluded_data, "min_observacoes": MIN_OBS,
                 "n_datas": len(ds_all.prices), "periodo": f"{ds_all.prices.index[0].date()} a "
@@ -392,12 +444,21 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
                             "DADOS SINTÉTICOS: os tickers SINT_* não existem no mercado. Este resultado é uma "
                             "DEMONSTRAÇÃO do método e NÃO é uma carteira final; para tickers reais rode no modo "
                             "online com acesso ao provedor."))
+    else:
+        alerts.append(Alert("dados", "INFO",
+                            f"DADOS REAIS: {len(ds_all.symbols)} tickers do Yahoo Finance (preço ajustado por "
+                            f"desdobramentos e dividendos), {universe['periodo']}; última cotação {last_quote}; "
+                            f"obtidos em {fetched[:16].replace('T', ' ')} UTC. Cotações podem ter atraso e o provedor "
+                            "pode revisar séries; as métricas são históricas [H] e estimativas [E], não previsões."))
     for s, why in excluded_data.items():
         alerts.append(Alert("dados", "WARNING", f"{s} excluído (sem proxy): {why}"))
 
     # 3 ---------------------------------------------------------------- currency sleeves
     ccys = {ds_all.native_currency.get(s, req.moeda_objetivo) for s in ds_all.symbols}
-    rf, rf_src = _resolve_rf(req, ccys)
+    rf, rf_src = _resolve_rf(req, ccys, live)
+    for c, err in sorted(live_errors.items()):
+        if c in ccys or c == req.moeda_objetivo:
+            alerts.append(Alert("rf", "WARNING", f"rf de {c}: fonte automática indisponível ({err})"))
     nstats = native_asset_stats(ds_all, rf, req.moeda_objetivo, cfg.trading_days)
     steps.append({"etapa": 3, "titulo": "Sleeves por moeda",
                   "resultado": "; ".join(f"{c}: {int((nstats['moeda'] == c).sum())} ativos, rf {rf[c]:.2%} "
@@ -504,6 +565,39 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
                            "tese_financeira": _financial_thesis(a, s, res, w_f, rc, ds.is_synthetic),
                            "tese_proposito": _purpose_thesis(a, s, al, themes)})
     table = pd.DataFrame(rows).set_index("ticker").sort_values("peso", ascending=False)
+    # where to invest and why: amount per position, role in the portfolio, link to the motive
+    m_per = PERIODS_PER_YEAR[req.periodicidade]
+    mu_f = res.mu.loc[w_f.index]
+    port_mu = float(w_f @ mu_f)
+    allocation = []
+    for s in table.index[table["peso"] > 0]:
+        w_s = float(w_f[s])
+        ret_share = float(w_s * mu_f[s] / port_mu) if port_mu > 0 else None
+        role = _role(w_s, float(rc[s]), ret_share)
+        if al.computed and al.scores[s].matched:
+            purpose = "atende ao(s) tema(s) do seu motivo: " + ", ".join(al.scores[s].matched)
+        elif al.computed:
+            purpose = "sem ligação com os temas do seu motivo (está pela função financeira)"
+        else:
+            purpose = "alinhamento não calculado (motivo vazio)" if themes.empty else "alinhamento não calculado"
+        allocation.append({"ticker": s, "nome": cat[s].name, "classe": cat[s].macro_class,
+                           "moeda": table.loc[s, "moeda"], "peso": w_s,
+                           "valor_inicial": req.capital_inicial * w_s,
+                           "aporte_por_periodo": req.aporte_periodico * w_s if m_per else 0.0,
+                           "papel": role, "proposito": purpose, "por_que": f"{role}; {purpose}",
+                           "negocio": cat[s].business.replace("[sintético] ", "")})
+    strat = STRATEGY_PT.get(res.selected_name, res.selected_name)
+    strategy_text = (f"Carteira-base quantitativa: {strat}, escolhida "
+                     + ("pela validação fora da amostra (walk-forward, regra de 1 erro-padrão a favor da mais "
+                        "simples) entre as estratégias que respeitam o perfil " if res.backtest is not None
+                        else "sem backtest (restrições inviáveis) para o perfil ")
+                     + f"{res.profile.final_profile.value}. Depois, {req.peso_alinhamento:.0%} da alocação foi "
+                     "inclinada para os ativos ligados ao seu motivo, sem sair dos limites de risco, governança e "
+                     "tracking error." if al.computed and req.peso_alinhamento > 0 else
+                     f"Carteira-base quantitativa: {strat}, escolhida "
+                     + ("pela validação fora da amostra (walk-forward, regra de 1 erro-padrão) "
+                        if res.backtest is not None else "sem backtest (restrições inviáveis) ")
+                     + f"para o perfil {res.profile.final_profile.value}; sem ajuste de propósito.")
     only_alignment = [s for s in w_f.index if w_f[s] > 0 and comb.quant[s] < WEIGHT_FLOOR]
     for s in only_alignment:
         sc_s = al.scores[s].score if al.computed else None
@@ -626,7 +720,8 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
 
     sleeves_final = currency_sleeves(ds, w_f[w_f > 0], rf, rf_src, req.moeda_objetivo, P)
     out = PurposeResult(req, steps, reqc, universe, rf, rf_src, nstats, gov, res, themes, al, comb, table,
-                        theses, expected, scenarios, goal, sensitivity, sleeves_final, alerts, ds.is_synthetic)
+                        theses, expected, scenarios, goal, sensitivity, sleeves_final, alerts, ds.is_synthetic,
+                        allocation, strategy_text)
     from core.purpose.report import render_markdown
 
     text = render_markdown(out)
