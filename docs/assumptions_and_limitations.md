@@ -68,6 +68,21 @@
     sleeves por moeda (cada um com a própria rf) são calculados antes, para diagnóstico, e não alteram o
     otimizador.
 
+### "Vale a pena?" — empresa e motivos (`core/stock_check/company.py`, `sectors.py`)
+
+24. **Fontes de empresa não validadas ao vivo**: o serviço de empresas listadas da B3
+    (`GetInitialCompanies`/`GetDetail`, parâmetros em base64) e o `quoteSummary` do Yahoo (exige cookie + crumb;
+    não oficial) foram implementados conforme o formato público conhecido e testados com dublês; aqui a rede é
+    bloqueada. Se o formato mudar, o item vira "indisponível" — nada é preenchido no lugar.
+25. **Base de conhecimento setorial** (`sectors.py`) é curadoria editorial: descreve o modelo de negócio típico e
+    fatores gerais do segmento (com regras brasileiras marcadas por país). Não é previsão para a empresa, não
+    acompanha notícias e precisa de revisão periódica. Uma empresa pode fugir do padrão do seu segmento.
+26. **Regras de fundamentos** usam limites fixos (ex.: dívida/patrimônio > 1,5×, P/L > 35, ROE abaixo da taxa
+    livre de risco) sem ajuste por setor, exceto bancos/seguradoras/fundos (margem, dívida e caixa não se aplicam).
+    O Yahoo publica crescimento trimestral contra o mesmo trimestre do ano anterior; bases pequenas exageram a
+    variação (o texto avisa quando |variação| > 100%). Preços-alvo são opinião de terceiros.
+27. Os motivos não entram no veredito, que continua usando só o histórico de preços e a simulação.
+
 ## Itens pendentes / próximos passos
 
 * Validar o modo online com dados reais (SPY/AGG/GLD e ativos B3) em ambiente com acesso ao Yahoo Finance,

@@ -278,7 +278,7 @@ Como otimizar milhares de ativos por pedido não é viável nem estatisticamente
 `max_ativos` candidatos (padrão 60 na CLI, 40 no site; 25/40/60 na tela) **sem usar desempenho passado**: pisos de
 liquidez/tamanho (B3: R$ 5 mi negociados no dia; EUA: US$ 2 bi de valor de mercado), núcleo de diversificação
 (renda fixa, índices, ouro), ativos ligados aos temas do seu motivo (setores da Nasdaq e do catálogo) e os maiores
-de cada setor, alternando B3 e EUA. Se as listagens não responderem, usa-se o **catálogo curado de 215 ativos**
+de cada setor, alternando B3 e EUA. Se as listagens não responderem, usa-se o **catálogo curado de 217 ativos**
 (84 ações da B3, 79 ações/REITs dos EUA, 11 FIIs, ETFs de renda fixa, índices, setores, ouro e cripto) e o relatório
 avisa. Os preços dos pré-selecionados vêm do Yahoo Finance; ticker com menos de 252 observações é excluído e listado.
 Se o provedor estiver inacessível, um disjuntor encerra após 3 tickers seguidos sem resposta (falha em segundos).
@@ -314,7 +314,22 @@ adivinhado). O módulo
   peso do histórico = τ²/(τ² + erro-padrão²) com τ = 10% a.a. Cinco anos de uma ação com 30% de volatilidade
   pesam ~35%: um passado excepcional não é projetado como se fosse se repetir.
 
-Não avalia fundamentos (lucro, dívida, valuation), dividendos futuros nem notícias, e não é recomendação de compra
-ou venda. Neste ambiente de desenvolvimento só o modo sintético (`SINT_*`) pôde ser executado; o caminho real foi
-testado com dublês (rede bloqueada).
+* **O que a empresa faz** (`core/stock_check/company.py`): descrição curada do catálogo (ex.: Pague Menos — "rede
+  de farmácias e drogarias (medicamentos, higiene pessoal e beleza)"), atividade registrada e classificação setorial
+  da **B3** (serviço público de empresas listadas), sede, funcionários e resumo do **Yahoo Finance** (em inglês,
+  rotulado), o **segmento** identificado e "como o segmento costuma ganhar dinheiro". Fonte e data em cada item;
+  o que a fonte não traz aparece como "indisponível".
+* **Por que pode crescer / por que pode não crescer tanto**: cada motivo vem com a sua base e a fonte —
+  *Fundamentos* (crescimento de receita e lucro, margem, ROE contra a renda fixa, dívida/patrimônio, P/L,
+  dividendos, fluxo de caixa livre, com limites fixos), *Analistas* (P/L projetado e preço-alvo médio, só com ≥ 3
+  analistas, sempre como opinião de terceiros), *Histórico* (tendência de 12 meses com a média de 200 pregões,
+  retorno contra o CDI com t, volatilidade, queda máxima, beta, liquidez), *Simulação*, *Juros*/*Câmbio* e *Setor*
+  (base de conhecimento editorial com 56 segmentos — farmácias, bancos, saneamento, energia… —, com regras
+  brasileiras como CMED, ANS, ANEEL, Marco do Saneamento e FIES marcadas por país). Os motivos são contexto: o
+  veredito continua usando só as regras acima.
+
+Não avalia notícias e não é recomendação de compra ou venda. Indicadores fundamentalistas dependem do Yahoo
+Finance (não oficial; exige o "crumb" de sessão) e a descrição oficial do serviço da B3: ambos podem falhar e,
+então, são marcados como indisponíveis. Neste ambiente de desenvolvimento só o modo sintético (`SINT_*`) pôde ser
+executado; o caminho real (preços, Selic, B3, Yahoo) foi testado com dublês (rede bloqueada).
 

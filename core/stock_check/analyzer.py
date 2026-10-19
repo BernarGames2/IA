@@ -2,8 +2,10 @@
 
 What it is: a transparent, rules-based reading of the asset's PRICE HISTORY against the risk-free
 rate of its own currency (Selic/CDI for BRL, T-bill for USD), plus a Monte Carlo projection of an
-amount invested over the chosen horizon. What it is NOT: a recommendation, a price target or an
-assessment of fundamentals (earnings, debt, valuation and news are not available here).
+amount invested over the chosen horizon. Context shown next to it (never part of the verdict): what
+the company does and the reasons it may or may not grow (``company.py``: catalogue, B3, Yahoo
+Finance fundamentals when available, the history, the simulation and general segment knowledge).
+What it is NOT: a recommendation, a price target or a news assessment.
 
 Expected return used by the projection (shrinkage, every number is reported):
 
@@ -27,6 +29,8 @@ Fit with the investor profile (volatility, drawdown) is reported separately, nev
 from __future__ import annotations
 
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -50,6 +54,13 @@ from core.simulation.engine import (
     simulate_portfolio,
 )
 from core.simulation.models import BlockBootstrapModel, GBMModel
+from core.stock_check.company import (
+    CompanyProfile,
+    basic_profile,
+    fundamentals_table,
+    growth_case,
+    load_company_profile,
+)
 from core.stock_check.resolver import Resolved, is_plain_code, resolve
 from core.universe.listings import load_market_listings
 from models.investor import RiskProfile
@@ -60,9 +71,12 @@ P = 252
 MIN_OBS = 252
 BENCHMARK = {"BRL": ("BOVA11.SA", "Ibovespa (BOVA11)"), "USD": ("SPY", "S&P 500 (SPY)")}
 RF_NAME = {"BRL": "CDI/Selic", "USD": "T-bill (juros de curto prazo dos EUA)"}
-DISCLAIMER = ("Análise quantitativa do histórico de preços, para pesquisa. Não é recomendação de compra ou venda, "
-              "não é preço-alvo e não avalia fundamentos (lucro, dívida, valuation) nem notícias. Projeções são "
-              "simulações [S] com incerteza grande; resultados passados não se repetem necessariamente.")
+DISCLAIMER = ("Análise quantitativa para pesquisa. Não é recomendação de compra ou venda e não é preço-alvo. O "
+              "veredito usa só o histórico de preços; a descrição da empresa e os motivos para crescer ou não "
+              "combinam dados públicos (B3 e Yahoo Finance, quando disponíveis), o histórico, a simulação e "
+              "características gerais do setor, sem avaliar notícias. Projeções são simulações [S] com incerteza "
+              "grande; resultados passados não se repetem necessariamente.")
+PROFILE_WAIT_S = 15.0   # extra wait for B3/Yahoo after the analysis; the lookup started in parallel
 
 
 @dataclass
@@ -85,6 +99,8 @@ class StockCheckResult:
     profile_fit: dict[str, object]
     alerts: list[str] = field(default_factory=list)
     quality_notes: list[str] = field(default_factory=list)
+    company: CompanyProfile | None = None
+    growth: dict[str, list[dict[str, str]]] = field(default_factory=dict)
 
 
 # ----------------------------------------------------------------------------- data
@@ -170,6 +186,8 @@ def _stats(px: pd.Series, bench: pd.Series | None, rf: float, volume: pd.Series 
         out["n_janelas_12m"] = len(win)
     out["retorno_12m"] = float(px.iloc[-1] / px.iloc[-P - 1] - 1) if len(px) > P else None
     out["retorno_6m"] = float(px.iloc[-1] / px.iloc[-127] - 1) if len(px) > 126 else None
+    out["media_200d"] = float(px.iloc[-200:].mean()) if len(px) >= 200 else None
+    out["acima_media_200d"] = bool(px.iloc[-1] > out["media_200d"]) if out["media_200d"] is not None else None
     out["beta"] = out["correlacao"] = None
     if bench is not None:
         br = bench.pct_change(fill_method=None)
@@ -248,6 +266,11 @@ def analyze_stock(query: str, horizon_years: float = 3.0, amount: float = 10_000
         raise ValueError("no modo sintético use um código SINT_* (ex.: SINT_ENERGIA3, SINT_TECH_US)")
     if not offline and res.ticker.startswith("SINT_"):
         raise ValueError("códigos SINT_* são sintéticos: escolha 'Demonstração sintética'")
+    # what the company does + fundamentals: looked up in parallel with the price download
+    root = cache_dir or Path(".cache") / "market_data"
+    pool = ThreadPoolExecutor(max_workers=1)
+    company_future = pool.submit(load_company_profile, res, offline, rf_fetch, root)
+    pool.shutdown(wait=False)
     if progress is not None:
         progress(f"baixando o histórico de {res.ticker} e do índice de referência…")
     if not offline and provider is None:
@@ -334,9 +357,14 @@ def analyze_stock(query: str, horizon_years: float = 3.0, amount: float = 10_000
     rfn = RF_NAME.get(ccy, "taxa livre de risco")
     t = st.get("t_excesso")
     evid = ("indisponível" if t is None else "forte" if abs(t) >= 2 else "moderada" if abs(t) >= 1 else "fraca")
+    if t is not None and t <= -1:
+        hist = f"Evidência estatística de que o ativo rendeu MENOS que o {rfn} no histórico: {evid}."
+    elif t is not None and t >= 1:
+        hist = f"Evidência estatística de que o ativo rendeu mais que o {rfn} no histórico: {evid}."
+    else:
+        hist = f"No histórico, o ativo não se separa do {rfn} (evidência {evid})."
     v["manchete"] = (f"Segundo a simulação, {res.name} tem {p_beat:.0%} de chance de render mais que o {rfn} em "
-                     f"{T:g} anos e {p_loss:.0%} de chance de terminar com prejuízo. Evidência estatística de que "
-                     f"o ativo supera o {rfn} no histórico: {evid}.")
+                     f"{T:g} anos e {p_loss:.0%} de chance de terminar com prejuízo. {hist}")
     v["regras"] = ("FAVORÁVEL: chance de superar a taxa livre de risco ≥ 60% e retorno histórico acima dela com "
                    "t ≥ 1. DESFAVORÁVEL: chance ≤ 40% ou retorno histórico abaixo dela com t ≤ −1. NEUTRO: "
                    "demais casos (o histórico não separa o ativo da renda fixa).")
@@ -359,7 +387,9 @@ def analyze_stock(query: str, horizon_years: float = 3.0, amount: float = 10_000
         {"criterio": f"Chance de superar o {rfn} em {T:g} anos (projeção principal)", "valor": p_beat,
          "formato": "pct", "leitura": "≥ 60% favorece · ≤ 40% desfavorece"},
         {"criterio": f"Retorno histórico acima do {rfn} (a.a.)", "valor": st["excesso_anual"], "formato": "pct",
-         "leitura": f"t = {t:.2f} — evidência {evid}" if t is not None else "indisponível"},
+         "leitura": (f"t = {t:.2f} — evidência {evid}" + (" de que rendeu menos" if t <= -1 else " de que rendeu "
+                                                            "mais" if t >= 1 else "")) if t is not None
+         else "indisponível"},
         {"criterio": "Sharpe histórico (excesso, a.a.)", "valor": st["sharpe_excesso"], "formato": "num",
          "leitura": "retorno extra por unidade de risco"},
         {"criterio": "Volatilidade anual", "valor": vol, "formato": "pct",
@@ -388,8 +418,19 @@ def analyze_stock(query: str, horizon_years: float = 3.0, amount: float = 10_000
                          "leitura": "informativo (não entra no veredito)"})
     v["criterios"] = criteria
 
-    if res.business is None:
-        alerts.append(f"{res.ticker} não está no catálogo: modelo de negócio não descrito (nada é inventado).")
+    if progress is not None and not company_future.done():
+        progress("buscando o que a empresa faz e os indicadores (B3 e Yahoo Finance)…")
+    try:
+        company = company_future.result(timeout=PROFILE_WAIT_S)
+    except FuturesTimeout:
+        company = basic_profile(res, "B3/Yahoo Finance não responderam a tempo: perfil só com o catálogo")
+    except Exception as e:  # noqa: BLE001 - the profile is context and never blocks the analysis
+        company = basic_profile(res, f"falha ao montar o perfil da empresa: {type(e).__name__}: {e}")
+    growth = growth_case(company, st, projection, rf_val, rfn, ccy,
+                         f"{source}, {px.index[0].date()} a {px.index[-1].date()}", rf_src)
+    if company.descricao is None:
+        alerts.append(f"{res.ticker}: descrição do negócio indisponível nas fontes (catálogo, B3, Yahoo Finance); "
+                      "nada é inventado.")
     if st.get("beta") is None:
         alerts.append("Beta indisponível (sem índice de referência com dados): prêmio esperado calculado com beta = 1.")
     elif bench_name:
@@ -405,7 +446,7 @@ def analyze_stock(query: str, horizon_years: float = 3.0, amount: float = 10_000
         alerts.insert(0, "DADOS SINTÉTICOS: o ativo não existe no mercado; demonstração do método.")
     out = StockCheckResult(query, res, "sintetico" if offline else "real", ccy, source,
                            str(px.index[0].date()), str(px.index[-1].date()), float(px.iloc[-1]), len(px),
-                           rf_val, rf_src, st, exp, projection, v, profile_fit, alerts, notes)
+                           rf_val, rf_src, st, exp, projection, v, profile_fit, alerts, notes, company, growth)
     hits = guarantee_phrases(render_markdown(out).replace(query, ""))
     if hits:
         out.alerts.append(f"ATENÇÃO: linguagem de garantia detectada no texto gerado: {hits}")
@@ -430,10 +471,25 @@ def render_markdown(r: StockCheckResult) -> str:
     if r.origin == "sintetico":
         L.append("> **DADOS SINTÉTICOS** — demonstração do método; o ativo não existe no mercado.\n")
     L.append(f"_{DISCLAIMER}_\n")
+    if r.company is not None:
+        L.extend(_company_md(r.company))
     L.append(f"## Veredito do modelo: **{v['rotulo']}**\n")
     L.append(str(v["manchete"]) + "\n")
     L.append(f"Regras: {v['regras']}\n")
     L.append(f"Perfil {r.profile_fit['perfil']}: {r.profile_fit['leitura']}.\n")
+    if r.growth:
+        L.extend(_growth_md(r.growth))
+    if r.company is not None:
+        rows = fundamentals_table(r.company, r.currency)
+        L.append("## Indicadores da empresa\n")
+        if rows:
+            L.append(f"Fonte: {r.company.fundamentos_fonte}. Valores como publicados; nada é estimado no lugar.\n")
+            L.append("| indicador | valor |\n|---|---|")
+            L.extend(f"| {x['indicador']} | {x['valor']} |" for x in rows)
+            L.append("")
+        else:
+            L.append("Indicadores fundamentalistas indisponíveis para este ativo (ver avisos do perfil acima).\n")
+    L.append("## Critérios do veredito\n")
     L.append("| critério | resultado | leitura |\n|---|---|---|")
     for k in v["criterios"]:  # type: ignore[union-attr]
         L.append(f"| {k['criterio']} | {_fmt(k['valor'], k['formato'], c)} | {k['leitura']} |")
@@ -468,11 +524,61 @@ def render_markdown(r: StockCheckResult) -> str:
     return "\n".join(L) + "\n"
 
 
+def _company_md(c: CompanyProfile) -> list[str]:
+    L = ["## O que a empresa faz\n"]
+    if c.descricao:
+        L.append(f"**{c.nome}** — {c.descricao}. _(fonte: {c.descricao_fonte})_\n")
+    else:
+        L.append(f"**{c.nome}** — descrição do negócio indisponível nas fontes consultadas.\n")
+    seg = c.segmento
+    if seg is not None:
+        L.append(f"- Segmento: {seg.rotulo} (identificado por: {c.segmento_fonte}).")
+        L.append(f"- Como o segmento costuma ganhar dinheiro: {seg.como_ganha}")
+    if c.atividade_b3 and c.atividade_b3 != c.descricao:
+        L.append(f"- Atividade registrada na B3: {c.atividade_b3}.")
+    if c.classificacao:
+        L.append(f"- Classificação setorial: {c.classificacao} ({c.classificacao_fonte}).")
+    extra = [x for x in (f"sede: {c.sede}" if c.sede else "",
+                         f"funcionários: {c.funcionarios:,}".replace(",", ".") if c.funcionarios else "",
+                         f"site: {c.site}" if c.site else "", f"razão social: {c.razao_social}" if c.razao_social
+                         else "") if x]
+    if extra:
+        line = "; ".join(extra)
+        L.append("- " + line[0].upper() + line[1:] + ".")
+    if c.resumo_en:
+        L.append(f"- Resumo publicado pela fonte (Yahoo Finance, em inglês): \"{c.resumo_en}\"")
+    for u in c.indisponivel:
+        L.append(f"- Indisponível: {u}.")
+    L.append("")
+    return L
+
+
+def _growth_md(g: dict[str, list[dict[str, str]]]) -> list[str]:
+    L: list[str] = []
+    for key, title in (("pode_crescer", "Por que pode crescer"),
+                       ("pode_nao_crescer_tanto", "Por que pode não crescer tanto")):
+        L.append(f"## {title}\n")
+        items = g.get(key) or []
+        L.extend(f"- {x['texto']} _[{x['rotulo_base']}]_" for x in items)
+        if not items:
+            L.append("- Nenhum motivo identificado pelas regras com os dados disponíveis.")
+        L.append("")
+    sources = dict.fromkeys(f"{x['rotulo_base']}: {x['fonte']}" for k in g for x in g[k])
+    L.append("Base de cada motivo: " + " · ".join(sources) + ". Os motivos são leituras de dados e de "
+             "características do setor, não previsões nem recomendação.\n")
+    return L
+
+
 def to_dict(r: StockCheckResult) -> dict[str, object]:
     from utils.serialization import to_jsonable
 
     return to_jsonable({  # type: ignore[return-value]
-        "consulta": r.query, "ticker": r.resolved.ticker, "nome": r.resolved.name, "negocio": r.resolved.business,
+        "consulta": r.query, "ticker": r.resolved.ticker, "nome": r.resolved.name,
+        "negocio": r.company.descricao if r.company is not None else r.resolved.business,
+        "empresa": None if r.company is None else {**r.company.to_dict(),
+                                                    "indicadores": fundamentals_table(r.company, r.currency)},
+        "por_que_pode_crescer": r.growth.get("pode_crescer", []),
+        "por_que_pode_nao_crescer_tanto": r.growth.get("pode_nao_crescer_tanto", []),
         "interpretacao": r.resolved.how, "origem": r.origin, "moeda": r.currency, "fonte": r.source,
         "periodo": [r.first_date, r.last_date], "ultimo_preco": r.last_price, "n_obs": r.n_obs,
         "taxa_livre_risco": r.rf, "fonte_taxa_livre_risco": r.rf_source, "nome_taxa_livre_risco":

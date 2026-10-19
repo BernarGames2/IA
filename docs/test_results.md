@@ -8,7 +8,7 @@ matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-260 passed, 1 skipped (261 testes; ~4 min)
+316 passed, 1 skipped (317 testes)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
 
@@ -30,6 +30,8 @@ Falhas encontradas pelos testes durante o desenvolvimento e corrigidas (não mas
 | comparação OOS de covariância (relatório) | Ledoit-Wolf com alvo identidade inflava a variância do ativo quase sem risco (GMV realizada 2,79% vs 0,62%) | adicionado LW correlação constante + seleção `auto` |
 | execução ponta a ponta | benchmark de ativo único (viola o perfil) era selecionável; EVT 95% usava limiar = nível | seleção só entre elegíveis; limiar abaixo do nível |
 | `test_retries_with_backoff_then_failure`, `test_convergence_failure_is_reported`, `test_robust_mv_more_conservative_than_nominal` | expectativas do teste estavam erradas (comportamento do código era o correto) | testes corrigidos com a propriedade matemática certa |
+| revisão manual do relatório "Vale a pena?" (PGMN3 com dublês) | a manchete dizia "evidência de que o ativo supera o CDI: forte" com t = −2,53, ou seja, quando ele rendeu MENOS | texto e critério conforme o sinal de t |
+| tabela de indicadores no celular (Playwright, 390 px) | a coluna de valores não quebrava linha e ficava fora da tela | coluna de valores com quebra de linha; rótulos mais curtos |
 
 ## 2. Execução ponta a ponta offline
 
@@ -146,6 +148,14 @@ Web (`POST /api/proposito`, 2.000 trajetórias): ~33–37 s localmente; página 
   30% no retorno esperado; a chance vai de 37% (sem prêmio) a 87% (se o passado se repetir).
 * Com cotações reais neste ambiente: `python main.py --acao PETR4` termina com código 2 ("erro de rede … 403"),
   sem estimar nada no lugar. Página verificada com Playwright (1280 px e 390 px, sem erros de console).
+
+* O que a empresa faz e por que pode (ou não) crescer — `tests/test_company.py` (56 testes): base de
+  conhecimento sem linguagem de garantia, segmento para todos os 231 ativos dos catálogos real e sintético, exemplos
+  (farmácias, bancos, saneamento, energia por atividade, semicondutores…), leitura da B3 (payload base64,
+  vírgulas exportadas como ". "), fluxo cookie + crumb do Yahoo com renovação após 401, perfil com fontes e
+  falhas reportadas (sem cache de falhas), regras de crescimento com base e fonte, escopo BR/US, bancos sem regra
+  de dívida/margem e a análise completa de "pague menos" com dublês. Página verificada com Playwright a 390 px
+  (blocos novos, tabela de indicadores sem rolagem lateral, sem erros de console).
 
 ## 8. "Load failed" no site (celular) — diagnóstico e correção
 

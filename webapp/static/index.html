@@ -107,6 +107,18 @@ details > summary { cursor: pointer; color: var(--ink2); font-size: 0.85rem; mar
 .verdict-box { border-left: 4px solid var(--c); padding: 8px 14px; margin: 6px 0 12px; }
 .verdict-box p { margin: 8px 0 0; }
 .sev-FAIL { --c: var(--crit); } .sev-WARNING { --c: var(--warn); } .sev-INFO { --c: var(--muted); }
+.company { border: 1px solid var(--ring); border-radius: 10px; padding: 10px 14px; margin: 6px 0 12px; }
+.company h3 { margin: 2px 0 6px; font-size: 1rem; color: var(--ink); }
+.company p { margin: 6px 0; }
+.seg { display: inline-block; font-size: 0.78rem; font-weight: 600; border-radius: 999px; padding: 2px 10px;
+  background: var(--neutral); color: var(--ink2); }
+.reasons { border-left: 4px solid var(--c); padding: 2px 4px 6px 12px; }
+.reasons.up { --c: var(--good); } .reasons.down { --c: var(--warn); }
+.reasons h3 { margin-top: 4px; color: var(--ink); font-size: 1rem; }
+.reasons li { margin: 7px 0; }
+.tagb { display: inline-block; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
+  color: var(--ink2); border: 1px solid var(--ring); border-radius: 999px; padding: 0 7px; margin-left: 5px;
+  white-space: nowrap; vertical-align: 1px; }
 footer { color: var(--muted); font-size: 0.8rem; margin-top: 28px; }
 svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 </style>
@@ -133,10 +145,12 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 
   <section class="card" aria-labelledby="s-title">
     <h2 id="s-title">Vale a pena? Analise uma ação</h2>
-    <p class="muted">Digite o código ou o nome de qualquer ação da B3 ou dos EUA (PETR4, VALE3, AAPL, "Petrobras",
-      "Raízen"…; nomes fora da lista conhecida são procurados nas listagens completas). O modelo compara o
-      histórico de preços com a renda fixa da mesma moeda (CDI/Selic ou T-bill) e projeta um investimento por Monte
-      Carlo. Regras fixas e explicadas no resultado; não avalia fundamentos nem notícias e não é recomendação.</p>
+    <p class="muted">Digite o código ou o nome de qualquer ação da B3 ou dos EUA (PETR4, VALE3, AAPL, "Pague Menos",
+      "Petrobras"…; nomes fora da lista conhecida são procurados nas listagens completas). Você vê o que a empresa
+      faz, por que ela pode crescer e por que pode não crescer tanto (cada motivo com a sua base: indicadores da
+      B3/Yahoo Finance, histórico, simulação ou características do setor). O veredito compara o histórico de preços
+      com a renda fixa da mesma moeda (CDI/Selic ou T-bill) e projeta um investimento por Monte Carlo. Regras fixas e
+      explicadas no resultado; não avalia notícias e não é recomendação.</p>
     <form id="s-form">
       <label class="span-all">Ação<input name="acao" maxlength="60" required placeholder="Ex.: PETR4, VALE3, AAPL ou Petrobras"></label>
       <label>Horizonte
@@ -159,6 +173,14 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     <div class="status" id="s-status" role="status" aria-live="polite"></div>
     <div id="s-results" class="hidden">
       <div class="verdict-box" id="s-verdict"></div>
+      <section class="company" id="s-company" aria-label="O que a empresa faz"></section>
+      <div class="grid2">
+        <section class="reasons up"><h3>Por que pode crescer</h3><ul class="clean" id="s-up"></ul></section>
+        <section class="reasons down"><h3>Por que pode não crescer tanto</h3><ul class="clean" id="s-down"></ul></section>
+      </div>
+      <p class="muted" id="s-reasons-note"></p>
+      <h3>Indicadores da empresa</h3><p class="muted" id="s-fund-src"></p><div class="tbl" id="s-fund"></div>
+      <h3>Números da análise</h3>
       <div class="kpis" id="s-kpis"></div>
       <div class="grid2">
         <section><h3>Critérios do veredito</h3><div class="tbl" id="s-criteria"></div></section>
@@ -249,7 +271,7 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
       </label>
       <label>Universo
         <select name="universo"><option value="completo" selected>Completo: todas as ações da B3 e dos EUA</option>
-          <option value="curado">Curado: 215 ativos conhecidos</option></select>
+          <option value="curado">Curado: 217 ativos conhecidos</option></select>
       </label>
       <label>Ativos levados à otimização
         <select name="max_ativos"><option value="25">25 (mais rápido)</option><option value="40" selected>40</option>
@@ -957,6 +979,36 @@ function drawFan(id, f, money, refLine, refLabel) {
   axisLabel(svg, 11, (T + H - B) / 2, "Valor do investimento", true);
   setChildren(id, svg);
 }
+function renderCompany(d) {
+  const c = d.empresa || {}, seg = c.segmento;
+  const kids = [el("h3", {}, "O que a empresa faz"),
+    el("p", {}, el("strong", {}, d.nome), " — " + (c.descricao || "descrição do negócio indisponível nas fontes consultadas") + ". ",
+      el("span", { class: "kind" }, c.descricao_fonte ? "fonte: " + c.descricao_fonte : ""))];
+  if (seg) {
+    kids.push(el("p", {}, el("span", { class: "seg" }, seg.rotulo), " ", el("span", { class: "kind" }, "segmento identificado por: " + c.segmento_fonte)));
+    kids.push(el("p", {}, el("strong", {}, "Como o segmento costuma ganhar dinheiro: "), seg.como_ganha_dinheiro));
+  }
+  const facts = [];
+  if (c.atividade_b3 && c.atividade_b3 !== c.descricao) facts.push("Atividade registrada na B3: " + c.atividade_b3 + ".");
+  if (c.classificacao) facts.push(`Classificação setorial: ${c.classificacao} (${c.classificacao_fonte}).`);
+  const extra = [c.sede ? "Sede: " + c.sede : "", c.funcionarios ? "funcionários: " + Number(c.funcionarios).toLocaleString("pt-BR") : "",
+    c.site ? "site: " + c.site : ""].filter(Boolean);
+  if (extra.length) facts.push(extra.join("; ") + ".");
+  if (facts.length) kids.push(el("ul", { class: "clean" }, ...facts.map((f) => el("li", {}, f))));
+  if (c.resumo_en) kids.push(el("details", {}, el("summary", {}, "Resumo publicado pela fonte (Yahoo Finance, em inglês)"), el("p", { class: "muted" }, c.resumo_en)));
+  for (const u of c.indisponivel || []) kids.push(el("p", { class: "muted" }, "Indisponível: " + u + "."));
+  setChildren("s-company", ...kids);
+  const item = (x) => el("li", {}, x.texto, el("span", { class: "tagb", title: x.fonte }, x.rotulo_base));
+  const up = d.por_que_pode_crescer || [], down = d.por_que_pode_nao_crescer_tanto || [];
+  setChildren("s-up", ...(up.length ? up.map(item) : [el("li", { class: "muted" }, "Nenhum motivo identificado pelas regras com os dados disponíveis.")]));
+  setChildren("s-down", ...(down.length ? down.map(item) : [el("li", { class: "muted" }, "Nenhum motivo identificado pelas regras com os dados disponíveis.")]));
+  const srcs = [...new Set(up.concat(down).map((x) => `${x.rotulo_base}: ${x.fonte}`))];
+  $("s-reasons-note").textContent = "Base de cada motivo — " + srcs.join(" · ") + ". São leituras de dados e de características do setor, não previsões nem recomendação.";
+  const rows = c.indicadores || [];
+  $("s-fund-src").textContent = rows.length ? `Fonte: ${c.fundamentos_fonte}. Valores como publicados; “indisponível” quando a fonte não traz o dado — nada é estimado no lugar.`
+    : "Indicadores fundamentalistas indisponíveis para este ativo" + ((c.indisponivel || []).length ? " (ver avisos acima)." : ".");
+  setChildren("s-fund", ...(rows.length ? [table(["Indicador", "Valor"], rows.map((r) => [r.indicador, r.valor]))] : []));
+}
 let stockData = null, stockUrl = null;
 function renderStock(d) {
   stockData = d;
@@ -970,8 +1022,8 @@ function renderStock(d) {
       el("span", { class: "muted" }, ` segundo as regras do modelo · ${d.origem === "real" ? "cotações reais" : "DADOS SINTÉTICOS"} até ${d.periodo[1]}`)),
     el("p", {}, v.manchete),
     el("p", { class: "muted" }, "Para o seu perfil: " + d.perfil.leitura + "."),
-    el("p", { class: "muted" }, d.negocio ? "Negócio: " + d.negocio : "Negócio: não descrito (ativo fora do catálogo)."),
     el("p", { class: "kind" }, "Regras do veredito: " + v.regras));
+  renderCompany(d);
   const p50 = pj.cenarios.find((c) => c.cenario.startsWith("base")), p10 = pj.cenarios.find((c) => c.cenario.startsWith("pess")),
     p90 = pj.cenarios.find((c) => c.cenario.startsWith("otim"));
   setChildren("s-kpis",
@@ -1026,7 +1078,7 @@ async function runStock() {
 $("s-form").addEventListener("submit", (ev) => { ev.preventDefault(); runStock(); });
 function stockChips() {
   const syn = $("s-form").elements["fonte_dados"].value === "sintetico";
-  const list = syn ? ["SINT_ENERGIA3", "SINT_PETRO4", "SINT_TECH_US", "SINT_SAUDE3"] : ["PETR4", "VALE3", "ITUB4", "WEGE3", "BBAS3", "AAPL", "BOVA11"];
+  const list = syn ? ["SINT_ENERGIA3", "SINT_PETRO4", "SINT_TECH_US", "SINT_SAUDE3"] : ["PETR4", "VALE3", "Pague Menos", "ITUB4", "WEGE3", "BBAS3", "AAPL", "BOVA11"];
   setChildren("s-chips", ...list.map((t) => {
     const b = el("button", { class: "chip", type: "button" }, t);
     b.addEventListener("click", () => { $("s-form").elements["acao"].value = t; runStock(); });

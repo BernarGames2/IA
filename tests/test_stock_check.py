@@ -148,6 +148,9 @@ def test_web_endpoint_stock(monkeypatch):
     d = c.post("/api/acao", json={"acao": "SINT_TECH_US", "fonte_dados": "sintetico", "n_simulacoes": 1000}).json()
     assert d["ticker"] == "SINT_TECH_US" and d["moeda"] == "USD" and d["veredito"]["rotulo"]
     assert d["projecao"]["fan"]["p50"] and d["markdown"].startswith("# Vale a pena?")
+    assert d["empresa"]["segmento"]["chave"] == "software" and d["por_que_pode_crescer"]
+    assert all(x["base"] and x["fonte"] for x in d["por_que_pode_nao_crescer_tanto"])
+    assert "## O que a empresa faz" in d["markdown"] and "## Por que pode não crescer tanto" in d["markdown"]
     assert c.post("/api/acao", json={"acao": "vale a pena?", "fonte_dados": "sintetico"}).status_code == 400
     assert c.post("/api/acao", json={"acao": "PETR4", "valor": 0}).status_code == 422
     monkeypatch.setattr(srv, "_market_provider", lambda: _Prov({}))

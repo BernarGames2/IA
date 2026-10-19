@@ -55,6 +55,22 @@ config (pydantic) ─┘          │
 A etapa 5 roda antes da 4 por construção (equivale a impor peso zero); o relatório mantém a numeração da
 especificação e explica a equivalência.
 
+## "Vale a pena?" (`core/stock_check/analyzer.analyze_stock`)
+
+```
+resolver (código/nome; listagens B3+EUA se preciso)
+  ├─ em paralelo: company.load_company_profile ── catálogo + B3 (atividade, classificação)
+  │                                              + Yahoo quoteSummary (perfil, fundamentos, analistas)
+  │                                              ─> sectors.classify_segment (segmento + como ganha dinheiro)
+  └─ preços (Yahoo chart) + índice de referência ─> estatísticas ─> retorno esperado encolhido
+     ─> Monte Carlo (leque, cenários, sensibilidade) ─> veredito por regras ─> adequação ao perfil
+  ─> company.growth_case (fundamentos, analistas, histórico, simulação, juros/câmbio, setor; cada motivo com fonte)
+  ─> verificador de linguagem de garantia ─> Markdown/JSON/página
+```
+
+O perfil é buscado em paralelo com o download de preços; se não chegar em 15 s após a análise, o relatório sai
+só com o catálogo e avisa. Perfis válidos ficam 24 h em cache (`cache/perfis/`); falhas não são gravadas.
+
 ## Interfaces principais
 
 * `MarketDataProvider.fetch(symbols, period, interval) -> dict[str, RawSeries]` (Protocol). Implementações:

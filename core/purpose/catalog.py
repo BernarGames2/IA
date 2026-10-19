@@ -57,7 +57,8 @@ BASE_CATALOG: tuple[CatalogAsset, ...] = (
                  "geração e comercialização de energia elétrica (hidrelétrica, eólica e solar)",
                  ("energia_limpa", "sustentabilidade", "infraestrutura"), _EQ_BR),
     CatalogAsset("RADL3.SA", "Raia Drogasil ON", "acoes_br", "equity", "saude", "BR", "BRL",
-                 "rede de farmácias e drogarias", ("saude", "consumo"), _EQ_BR),
+                 "rede de farmácias e drogarias (Droga Raia e Drogasil): medicamentos, higiene pessoal e beleza",
+                 ("saude", "consumo"), _EQ_BR),
     CatalogAsset("FLRY3.SA", "Fleury ON", "acoes_br", "equity", "saude", "BR", "BRL",
                  "medicina diagnóstica e serviços de saúde", ("saude",), _EQ_BR),
     CatalogAsset("COGN3.SA", "Cogna ON", "acoes_br", "equity", "educacao", "BR", "BRL",
@@ -213,6 +214,10 @@ EXTENDED_CATALOG: tuple[CatalogAsset, ...] = (
     _br("SLCE3.SA", "SLC Agrícola ON", "agronegocio", "produção de soja, algodão e milho", ("agronegocio",)),
     _br("BEEF3.SA", "Minerva ON", "agronegocio", "processamento e exportação de carne bovina", ("agronegocio",)),
     _br("HYPE3.SA", "Hypera ON", "saude", "medicamentos", ("saude",)),
+    _br("PGMN3.SA", "Pague Menos ON", "saude", "rede de farmácias e drogarias (medicamentos, higiene pessoal e "
+        "beleza), com forte presença no Norte e no Nordeste", ("saude", "consumo")),
+    _br("PNVL3.SA", "Panvel ON", "saude", "rede de farmácias Panvel (medicamentos, higiene e beleza, inclusive "
+        "produtos de marca própria), com lojas concentradas no Sul", ("saude", "consumo")),
     _br("ODPV3.SA", "Odontoprev ON", "saude", "planos odontológicos", ("saude",)),
     _br("QUAL3.SA", "Qualicorp ON", "saude", "administração de planos de saúde coletivos", ("saude",)),
     _br("CSED3.SA", "Cruzeiro do Sul Educacional ON", "educacao", "ensino superior presencial e a distância",

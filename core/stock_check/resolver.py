@@ -59,6 +59,7 @@ EXTRA: dict[str, tuple[str, str, str]] = {
 ALIASES: dict[str, str] = {
     "petrobras": "PETR4.SA", "vale": "VALE3.SA", "itau": "ITUB4.SA", "itau unibanco": "ITUB4.SA",
     "weg": "WEGE3.SA", "engie": "EGIE3.SA", "raia drogasil": "RADL3.SA", "drogasil": "RADL3.SA",
+    "droga raia": "RADL3.SA", "raia": "RADL3.SA", "pague menos": "PGMN3.SA", "panvel": "PNVL3.SA",
     "fleury": "FLRY3.SA", "cogna": "COGN3.SA", "suzano": "SUZB3.SA", "banco do brasil": "BBAS3.SA",
     "ambev": "ABEV3.SA", "totvs": "TOTS3.SA", "rede d'or": "RDOR3.SA", "rede dor": "RDOR3.SA",
     "hapvida": "HAPV3.SA", "yduqs": "YDUQ3.SA", "ibovespa": "BOVA11.SA", "apple": "AAPL",
@@ -75,6 +76,7 @@ class Resolved:
     business: str | None          # None = not in the catalogue: no description is invented
     asset: CatalogAsset | None
     how: str                      # how the input was interpreted (shown to the user)
+    listed: ListedAsset | None = None   # entry of the full-market listings, when resolved through them
 
 
 def _from_ticker(t: str, how: str) -> Resolved:
@@ -91,10 +93,10 @@ def _from_ticker(t: str, how: str) -> Resolved:
 def _from_listing(a: ListedAsset, how: str) -> Resolved:
     r = _from_ticker(a.ticker, how)
     if r.asset is not None or r.business is not None:
-        return r                                       # curated metadata wins
+        return Resolved(r.ticker, r.name, r.business, r.asset, how, a)   # curated metadata wins
     business = (f"{a.industry} ({a.sector}) — classificação setorial da Nasdaq" if a.industry or a.sector
                 else None)
-    return Resolved(a.ticker, a.name, business, None, how)
+    return Resolved(a.ticker, a.name, business, None, how, a)
 
 
 def is_plain_code(r: Resolved) -> bool:
