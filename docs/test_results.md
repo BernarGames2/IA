@@ -1,16 +1,18 @@
 # Resultados de testes e execuções registrados
 
 Ambiente: Linux x86_64, Python 3.13.16, numpy 2.5.3, pandas 3.0.5, scipy 1.18.1, scikit-learn 1.9.1,
-matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-09.
+matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-20.
 
 ## 1. Suíte automatizada
 
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-328 passed, 1 skipped (329 testes)
+361 passed, 1 skipped (362 testes)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
+
+(Registro anterior, antes do motor dinâmico: 328 passed, 1 skipped — 329 testes.)
 
 (Em uma execução anterior, 2 testes de `tests/test_webapp.py` falharam porque ainda assumiam o modo sintético
 como padrão do site; foram ajustados ao novo padrão — dados reais — e a suíte completa voltou a passar.)
@@ -212,3 +214,47 @@ Web (`POST /api/proposito`, 2.000 trajetórias): ~33–37 s localmente; página 
   barra ao vivo repetida, volume ausente, preço nulo, feriados diferentes no Brasil e nos EUA e tickers inexistentes
   (404), passando pelo endpoint em stream — carteira com ativos em reais e em dólares, começando com capital 1 e com
   capital 0 —, a análise de uma ação (PGMN3 e AAPL), o cache com datas repetidas e a versão publicada.
+
+
+## 11. Motor dinâmico (carteira a partir de dados, regras pessoais e plano executável)
+
+Auditoria da repetição e tabela antes/depois: [`docs/audit_repeticao.md`](audit_repeticao.md)
+(`python scripts/audit_repetition.py`). Testes da missão em `tests/test_dynamic_portfolio.py` (31 testes; caminho de
+dados reais com dublês: listagens da B3/Nasdaq, mercado estruturado por família de ativos, Selic e CDI do Banco
+Central; nenhuma rede):
+
+| # | Comportamento exigido | Teste(s) | Resultado |
+|---|---|---|---|
+| 1 | mudar o perfil muda as restrições e pode mudar a carteira | `test_1_profile_changes_the_constraints_and_can_change_the_portfolio` | passa: tetos 8/14/25%, λ 8/4/2, 3 carteiras diferentes, conservador ≥ 40% em renda fixa |
+| 2 | mudar o capital recalcula a viabilidade | `test_2_capital_change_recalculates_feasibility` | passa: com R$ 1.000 menos ativos cabem; o plano soma o valor e cada posição compra ≥ 1 lote |
+| 3 | mudar o horizonte muda a avaliação quando se justifica | `test_3_horizon_changes_the_evaluation_and_the_portfolio_only_when_justified` | passa: 10 → 15 anos muda o CAGR necessário e mantém a carteira; 2 anos: caixa ≥ 20%, ações ≤ 30%, sem renda fixa longa |
+| 4 | mudar o universo pode mudar os candidatos | `test_4_universe_change_changes_the_candidates`, `test_4b_…` | passa: só Brasil, listagens fora do ar, ativo excluído; nenhum "ativo por variedade" |
+| 5 | dados novos geram nova análise | `test_5_new_market_data_triggers_a_new_analysis` | passa: outra impressão digital dos dados e da carteira; ativo cujo histórico melhora entra |
+| 6 | ativos indisponíveis, duplicados ou com dados insuficientes | `test_6_…`, `test_6b_…` | passa: sem cotação, histórico curto e código desconhecido saem com motivo; duplicata de exposição descartada |
+| 7 | falha de API não gera recomendação falsa | `test_7_…`, `test_7b_…` | passa: erro explícito (nada baixado / mais da metade sem cotação), CDI fora do ar avisado; resultado real expira em 15 min; a página esconde a carteira antiga |
+| 8 | pesos, limites e somas validados | `test_8_weights_limits_and_sums_are_validated` (5 casos) | passa: soma 1, sem negativos, todas as restrições, teto por ativo, plano ≤ capital |
+| 9 | reprodutível com os mesmos dados, parâmetros e versão | `test_9_same_data_parameters_and_version_give_the_same_result` | passa: pesos, plano e impressões digitais idênticos |
+| 10 | "diferente" só quando posições/pesos mudam de verdade | `test_10_…`, `test_10b_…` | passa: 5 dias a mais de dados com as mesmas entradas → recomendação mantida (ganho < erro + custo); entradas mudadas → recalculada, cada mudança com motivo |
+
+Também: regras de horizonte/renda/liquidez/queda, hipóteses escritas para o que não foi informado, cripto só com
+permissão, capital zero (alvo = 12 meses de aportes), carteira atual (patrimônio, lacunas, "acima do alvo" sem
+mandar vender), utilidade × aversão ao risco/teto/giro, seleção pessoal (mantém a carteira do investidor salvo
+derrota clara), unidades de viabilidade e de concentração, relatório/JSON com as novas seções e verificador de
+linguagem, site e linha de comando com os campos novos. Comparação com a linha de base 1/N: registrada em toda
+execução (Sharpe no período de teste da escolhida × 1/N) e coberta por `test_equal_weight_is_a_baseline_never_the_choice`.
+
+Problemas reais encontrados pelos testes e pela verificação no navegador durante o desenvolvimento (corrigidos):
+
+| Onde | Problema | Correção |
+|---|---|---|
+| seleção (perfil moderado, 20 anos) | quando a carteira pessoal perdia por pouco, a regra "menos complexa" escolhia paridade de risco com 86% em caixa | ranking pela utilidade realizada do investidor e erro-padrão da diferença pareada |
+| seleção (queda tolerada 25%) | a carteira pessoal mira o teto de volatilidade; na validação passou 13,2% contra 12,5% e era descartada, caindo numa carteira com 67% em caixa | tolerância de 10% na volatilidade realizada (o teto continua valendo ex ante na carteira final) |
+| viabilidade com R$ 1.000 | sobravam posições de R$ 1 a R$ 12; ao tentar retirá-las, o ajuste espalhava peso para outros ativos até ficar inviável | regra semicontínua: mantém as posições que alcançam a compra mínima e devolve as próximas maiores no mínimo |
+| caixa CDI | a série não tem volume e quebrava o recorte do conjunto de dados | volume reindexado (caixa sem volume) |
+| relatório | o texto "o retorno passado não garante o futuro" era bloqueado pelo próprio verificador de linguagem | reescrito ("pode não se repetir") |
+| apostas independentes | a versão por componentes principais dava 1,6 para 3 ativos independentes (componentes não únicos) | (razão de diversificação)² |
+
+Verificação no navegador (Playwright, iPhone 13, dados sintéticos): formulário com os campos novos, resultado com
+plano de compra, "o que mudou", diversificação, triagem, regras/hipóteses e fontes; segunda execução com as mesmas
+entradas mostra "nenhuma mudança material — recomendação anterior mantida"; sem erros de JavaScript e sem rolagem
+horizontal.

@@ -20,7 +20,8 @@ from core.universe.listings import (
 )
 from core.universe.screen import (
     B3_MIN_VOLUME,
-    CORE,
+    MIN_PER_CLASS,
+    company_key,
     listing_to_catalog,
     preselect,
     us_tags,
@@ -156,24 +157,56 @@ def test_us_tags_and_conversion():
     assert c is None                                                        # unknown ETF class: excluded
     b = listing_to_catalog(ListedAsset("RAIZ4.SA", "RAIZEN PN", "B3", "BRL", "acao", size=4e7))
     assert b.tags == () and "setor não informado" in b.business
+    gold = listing_to_catalog(ListedAsset("GOLD11.SA", "TREND OURO CI", "B3", "BRL", "etf", size=9e6))
+    assert gold is not None and gold.macro_class == "ouro" and "inferida" in gold.business
 
 
-def test_preselect_funnel_respects_floors_core_themes_and_cap():
+def test_preselect_has_no_fixed_list_and_respects_floors_classes_themes_and_cap():
+    """Stage A: no ticker is forced in (no fixed core list); every class keeps a minimum presence;
+    themes get slots; floors, unknown classes and share-class duplicates are left out."""
     lst = load_market_listings(None, _http, today=date(2026, 10, 19))
     sel, fun = preselect(list(REAL_CATALOG), lst, {"saude"}, 30)
     tick = [a.ticker for a in sel]
     assert len(sel) == 30 and fun.used_listings and fun.listed_b3 == 7 and fun.listed_us == 5
-    assert tick[:len(fun.core)] == [t for t in CORE if t in tick]
+    assert not hasattr(fun, "core")
     assert "MEDX" in tick                                                   # listed health company -> theme slot
     assert "SMOL" not in tick and "TINY3.SA" not in tick and "XPTO11.SA" not in tick   # below floors / unknown ETF
-    assert all(a.ticker in tick for a in sel) and len(set(tick)) == len(tick)
-    assert fun.eligible > len(REAL_CATALOG)                                 # listings added eligible names
+    assert len(set(tick)) == len(tick)
+    assert "PETR3.SA" in fun.share_class_duplicates and fun.share_class_duplicates["PETR3.SA"] == "PETR4.SA"
+    classes = {a.macro_class for a in REAL_CATALOG}
+    for c in classes:                                                       # minimum presence of every class
+        avail = sum(1 for a in REAL_CATALOG if a.macro_class == c)
+        assert fun.per_class.get(c, 0) >= min(MIN_PER_CLASS, avail), c
+    assert fun.eligible > len(REAL_CATALOG) - len(fun.share_class_duplicates)   # listings added eligible names
     assert "NÃO é usado" in fun.criteria
     _, none = preselect(list(REAL_CATALOG), MarketListings(errors={"B3": "x"}), set(), 20)
     assert not none.used_listings and none.errors == {"B3": "x"} and none.selected == 20
     only_fii, _ = preselect(list(REAL_CATALOG), lst, set(), 10, classes=["fii"])
     assert {a.macro_class for a in only_fii} == {"fii"}
     assert B3_MIN_VOLUME > 1e5
+
+
+def test_preselect_applies_investor_filter_and_keeps_holdings():
+    lst = load_market_listings(None, _http, today=date(2026, 10, 19))
+    no_us = lambda a: "mercado EUA fora das suas preferências" if not a.ticker.endswith(".SA") else None
+    sel, fun = preselect(list(REAL_CATALOG), lst, set(), 25, allows=no_us)
+    assert all(a.ticker.endswith(".SA") for a in sel)
+    assert "AAPL" in fun.excluded_by_preference and fun.as_dict()["excluidos_por_preferencia"] > 0
+    held = next(a for a in REAL_CATALOG if a.ticker == "WEGE3.SA")
+    sel2, _ = preselect(list(REAL_CATALOG), lst, set(), 12, always=[held])
+    assert sel2[0].ticker == "WEGE3.SA"                                     # holdings are always analysed
+
+
+def test_company_key_merges_share_classes_only():
+    by = {a.ticker: a for a in REAL_CATALOG}
+    assert company_key(by["PETR4.SA"]) == "B3:PETR"
+    assert company_key(by["BOVA11.SA"]) is None                             # ETFs are never merged
+    ga, gc = "Alphabet Inc. Class A Common Stock", "Alphabet Inc. Class C Capital Stock"
+    g1 = listing_to_catalog(ListedAsset("GOOGL", ga, "US", "USD", "acao", size=2e12, sector="Technology",
+                                        industry="Computer Software"))
+    g2 = listing_to_catalog(ListedAsset("GOOG", gc, "US", "USD", "acao", size=2e12, sector="Technology",
+                                        industry="Computer Software"))
+    assert company_key(g1, ga) == company_key(g2, gc) == "US:alphabet"
 
 
 def test_resolver_uses_listings_for_unknown_names():
@@ -194,7 +227,7 @@ def test_resolver_uses_listings_for_unknown_names():
 
 # ----------------------------------------------------------------------------- engine
 def test_engine_complete_universe_reports_the_funnel(tmp_path):
-    from core.purpose.engine import PurposeRequest, run_purpose
+    from core.purpose.engine import POOL_FACTOR, PurposeRequest, run_purpose
     from tests.test_real_data import _fake_market, _Prov, _real_symbols
 
     req = PurposeRequest(capital_inicial=100_000, aporte_periodico=1_000, valor_alvo=250_000, horizonte_anos=5,
@@ -203,9 +236,10 @@ def test_engine_complete_universe_reports_the_funnel(tmp_path):
     r = run_purpose(req, output_dir=tmp_path, provider=_Prov(_fake_market(_real_symbols())), cache_dir=tmp_path,
                     rf_fetch=_http, fast=True)
     fun = r.universe["funil"]
-    assert fun["used_listings"] and fun["listed_b3"] == 7 and fun["selected"] == 20
+    assert fun["used_listings"] and fun["listed_b3"] == 7 and fun["selected"] == int(POOL_FACTOR * 20)
     assert any("todas as ações listadas" in a.message for a in r.alerts)
-    assert len(r.universe["candidatos"]) == 20
+    assert len(r.universe["candidatos"]) <= 20 < len(r.universe["baixados"])   # stage B picks from a wider pool
+    assert set(r.universe["candidatos"]) <= set(r.universe["baixados"])
     # listing-only names without price history are excluded and reported, never proxied
     for why in r.universe["excluidos_por_dados"].values():
         assert "download failure" in why or "history" in why

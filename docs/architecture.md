@@ -43,17 +43,32 @@ config (pydantic) ─┘          │
 ## Modo propósito (`core/purpose/engine.run_purpose`)
 
 ```
-1 CAGR necessário (required_cagr) ─> 2 universo: catálogo de tickers -> download/validação (>=252 obs.)
-  ─> 3 sleeves por moeda (rf de cada moeda) ─> 5 governança (exclusão dura ANTES do otimizador)
-  ─> 4 run_analysis(dataset=universo filtrado; backtest walk-forward + 1-EP) = carteira quantitativa w_q
-  ─> 6 temas do motivo (léxico, citações literais) ─> 7 score de alinhamento por ativo
-  ─> 8 w_final = (1-a) w_q + a w_alinhamento  (w_alinhamento: máx. alinhamento s.a. restrições, teto de vol., TE)
-  ─> 9 teses financeira/propósito ─> Monte Carlo (cenários, P(objetivo) ± EP, sensibilidade) ─> alertas
-  ─> verificador de linguagem de garantia ─> relatório MD/JSON
+ 1 CAGR necessário (capital + carteira atual + aportes)                         required_cagr.py
+ 2 regras pessoais: perfil limitado, λ, horizonte, objetivo, queda, liquidez,   personalization.py
+   mercados, exclusões, cripto -> InvestorPolicy (+ hipóteses escritas)
+ 3 etapa A: catálogo + listagens B3/EUA + carteira do investidor -> classe,     core/universe/screen.py
+   preferências, liquidez, 1 classe de ação por empresa, amostra estratificada
+   (sem desempenho passado)                            + caixa CDI (BCB SGS 12)  core/market_data/cash.py
+ 4 download da amostra -> etapa B: métricas no histórico de cada ativo,         core/universe/scoring.py
+   z-scores na classe por perfil, duplicatas (ρ≥0,95), grupos (ρ≥0,70),
+   cobertura do que os limites exigem -> candidatos (re-alinhados só entre si)
+ 5 sleeves por moeda (rf de cada moeda)                                          sleeves.py
+ 6 governança (exclusão dura antes do otimizador)                                governance.py
+ 7 tamanho mínimo de compra (alvo = hoje + 12 meses de aportes)                  feasibility.py
+ 8 run_analysis(dataset, policy=OptimizationPolicy): limites pessoais como       core/portfolio_engine.py
+   restrições; candidata "utility" (máx w'μ − λ/2 w'Σw, teto de vol.); seleção
+   pela utilidade realizada na validação (1/N e benchmark só como base)          model_selection.py
+ 9-10 temas + alinhamento                                                        themes.py, alignment.py
+11 combinação (1-a) w_q + a w_alinhamento -> carteira executável (mínimos        engine._make_executable
+   semicontínuos) -> regra de estabilidade vs. recomendação anterior             changes.py
+12 tabela, teses, plano de compra (lotes, sobra, próximos aportes)               feasibility.py
+13 mudanças com motivo + diversificação real (DR², grupos, exposições)          changes.py, concentration.py
+   -> Monte Carlo (cenários, P(objetivo) ± EP, sensibilidade) -> alertas -> verificador de linguagem -> MD/JSON
 ```
 
-A etapa 5 roda antes da 4 por construção (equivale a impor peso zero); o relatório mantém a numeração da
-especificação e explica a equivalência.
+A governança roda antes da otimização por construção (equivale a impor peso zero). Nenhuma lista fixa de tickers
+entra no universo: o que chega ao otimizador vem dos dados, das regras pessoais e da carteira do próprio investidor
+(que é sempre analisada para poder ser comparada com as alternativas).
 
 ## "Vale a pena?" (`core/stock_check/analyzer.analyze_stock`)
 

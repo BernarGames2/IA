@@ -44,7 +44,8 @@ _PARAMS = {
 def asset_meta(a: CatalogAsset, synthetic: bool) -> AssetMeta:
     return AssetMeta(a.ticker, a.asset_class, a.sector, a.country, a.currency,
                      "SYNTHETIC" if synthetic else a.macro_class, "business_days" if synthetic else
-                     ("24x7" if a.asset_class == "crypto" else ("B3" if a.ticker.endswith(".SA") else "NYSE")),
+                     ("24x7" if a.asset_class == "crypto" else
+                      ("B3" if a.ticker.endswith(".SA") or a.macro_class == "caixa" else "NYSE")),
                      "synthetic_generator" if synthetic else "catalog_static")
 
 

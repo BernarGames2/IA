@@ -83,14 +83,66 @@
     variação (o texto avisa quando |variação| > 100%). Preços-alvo são opinião de terceiros.
 27. Os motivos não entram no veredito, que continua usando só o histórico de preços e a simulação.
 
+### Motor dinâmico da carteira com propósito (`core/purpose/personalization.py`, `core/universe/`, `feasibility.py`, `changes.py`, `concentration.py`)
+
+28. **Regras pessoais são padrões documentados, não regulação** (CVM/suitability fora do escopo): aversão ao risco
+    λ = 8/4/2 (conservador/moderado/arrojado), ×1,5 para preservação e ×1,25 para renda; horizonte < 1 ano: ações
+    ≤ 10%, imóveis ≤ 5%, caixa ≥ 50%; 1–3 anos: ações ≤ 30%, imóveis ≤ 10%, caixa ≥ 20%; 3–5 anos: ações ≤ 50%,
+    renda fixa longa ≤ 20%; sem renda fixa longa abaixo de 3 anos; renda: ≥ 50% em ativos que pagam renda;
+    preservação: caixa ≥ 20%; teto por setor 25/35/45% e por moeda estrangeira 30/50/70%; cripto 0/5/10% e só com
+    permissão. O horizonte nunca aumenta o risco além do perfil.
+29. **Queda tolerada → volatilidade**: teto = D/2 (premissa: a queda máxima histórica de carteiras diversificadas
+    costuma ficar entre 2 e 3 vezes a volatilidade anual). É uma aproximação, não uma garantia de perda máxima.
+30. **O valor-alvo não aumenta o risco**: se o objetivo pede mais retorno do que o perfil comporta, o relatório mostra
+    a diferença (CAGR necessário × esperado, P(objetivo)) e as alternativas (prazo, aportes, alvo); a carteira
+    continua dentro do perfil. Por isso mudar só o valor-alvo (ou um horizonte acima de 5 anos) muda a avaliação,
+    não a alocação.
+31. **Etapa A sem desempenho passado**: a amostra baixada é estratificada por classe e setor, com presença mínima de
+    3 nomes por classe, até 30% para temas do motivo e o restante pelos maiores (volume/valor de mercado). Ativos
+    fora dessa amostra não são avaliados naquele pedido (o limite de 100 séries por pedido é de tempo/memória).
+32. **Etapa B**: Sharpe encolhido para a média da classe (τ = 0,30), duplicata = correlação diária ≥ 0,95 na mesma
+    classe, grupo = correlação ≥ 0,70 (ligação média), cota de max(2, candidatos/5) por grupo; pesos dos critérios
+    por perfil fixos e documentados em `scoring.py`. O universo é escolhido com dados até hoje: o backtest sobre ele
+    é otimista (viés de seleção/sobrevivência — alerta no relatório).
+33. **Caixa em reais = CDI diário do Banco Central (SGS 12)**: modelo de Tesouro Selic/CDB/fundo DI de liquidez
+    diária (risco de emissor e IR não modelados); não é um ticker de bolsa. Se a série falhar, a carteira sai sem ele
+    e o alerta diz isso.
+34. **Seleção pessoal**: a carteira de utilidade é a escolha padrão e só é trocada se outra estratégia a superar na
+    validação por mais de 1 erro-padrão da diferença diária pareada (anualizado), medindo pela utilidade realizada
+    do investidor; volatilidade realizada na validação até 10% acima do teto é tolerada (erro de estimação), e a
+    carteira final respeita o teto ex ante. Pesos iguais e benchmark são só linhas de base.
+35. **Tamanho mínimo de compra**: carteira-alvo dimensionada para o que se tem hoje + aportes dos próximos 12 meses;
+    compra mínima padrão R$ 100 (configurável); lotes: B3 ações 1 (fracionário), FIIs/ETFs 1 cota, EUA ação inteira
+    ou 0,0001 se a corretora permitir, CDI qualquer valor. Regra gulosa (não é otimização inteira): mantém as
+    posições que alcançam a compra mínima e, se os limites não fecharem, devolve as próximas maiores no mínimo.
+36. **Preços para o plano**: último ponto da série diária do Yahoo (pode ser o pregão em andamento), convertido pela
+    taxa de câmbio do dia; não é cotação em tempo real — confira na corretora. Custos e impostos de compra/venda
+    não entram nas quantidades; a sugestão de "acima do alvo" não manda vender (IR sobre ganho de capital não é
+    calculado).
+37. **Estabilidade**: só com a recomendação anterior guardada neste aparelho e as MESMAS entradas; o erro-padrão do
+    ganho de utilidade é aproximado por TE/√anos de dados (erro de uma média); custo = (corretagem + spread +
+    slippage) × giro. Com entradas diferentes, a carteira é recalculada para as novas entradas.
+38. **Diversificação real**: apostas independentes = (razão de diversificação)² (Choueifaty et al., 2013); a versão
+    por componentes principais (Meucci, 2009) não é usada porque, com volatilidades parecidas, os componentes não
+    são únicos. Sobreposição ETF × ação é **estimada pela correlação**: a composição dos ETFs não está nas fontes.
+39. **Cobertura declarada**: B3 (ações, FIIs, ETFs negociados no dia de referência), ações dos EUA no screener da
+    Nasdaq (NYSE/Nasdaq/AMEX), ETFs americanos do catálogo curado e caixa em CDI. Não cobre outros países, BDRs,
+    fundos não listados, CDBs/LCIs específicos nem títulos individuais do Tesouro.
+40. **Cache**: séries de preço reutilizadas por até 4 h; resultado do site por até 15 min para o mesmo pedido (o
+    resultado informa quando foi calculado). Mais de metade do universo sem cotação → erro, nunca uma carteira
+    montada com o que sobrou ou um resultado antigo.
+
 ## Itens pendentes / próximos passos
 
 * Validar o modo online com dados reais (SPY/AGG/GLD e ativos B3) em ambiente com acesso ao Yahoo Finance,
   inclusive o modo propósito com o catálogo real.
 * Extração de temas com modelo de linguagem opcional, mantendo a exigência de citação literal e a verificação.
-* Calendários oficiais (B3/NYSE) e fonte de taxa livre de risco (ex.: CDI/SELIC via API do BCB) por moeda.
+* Calendários oficiais (B3/NYSE).
 * Metadados de ativos via provedor e restrições lineares por fator.
 * EGARCH, erros-padrão robustos para GARCH, cópulas com assimetria.
 * Otimização de ES com cenários simulados; restrições de liquidez no otimizador.
+* Tamanho mínimo de compra por otimização inteira (hoje: regra gulosa documentada) e composição real dos ETFs
+  para medir sobreposição (hoje: correlação).
+* Impostos (IR sobre ganho de capital, come-cotas) no plano de compra e na decisão de vender.
 * Backend opcional de LLM (somente sobre saídas de ferramentas, com a mesma verificação de números).
 * Exportação PDF.

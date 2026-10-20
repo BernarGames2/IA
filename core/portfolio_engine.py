@@ -7,6 +7,7 @@ parameters used, so the run can be reproduced from the manifest.
 
 from __future__ import annotations
 
+import dataclasses
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -88,13 +89,39 @@ from core.simulation.models import (
     StudentTModel,
 )
 from core.volatility.models import compare_volatility_models
-from models.investor import InvestorProfileInput, ProfileAssessment
+from models.investor import InvestorProfileInput, ProfileAssessment, ResearchLimits
 from models.market_data import PriceDataset
-from models.portfolio import OptimizationResult, PortfolioConstraints
+from models.portfolio import GroupConstraint, OptimizationResult, PortfolioConstraints
 from utils.logging_config import get_logger
 from utils.validation import InsufficientDataError
 
 log = get_logger("engine")
+
+REFERENCE_ONLY = ("equal_weight", "benchmark")   # data-independent: compared with, never chosen, in personal runs
+# Personal runs: a strategy whose REALISED validation volatility exceeds the investor's cap by up to 10% stays
+# eligible — the personal portfolio aims at the cap ex ante, and a 2-3 year realised volatility is itself an
+# estimate; the final weights still meet the cap ex ante.
+VOL_BAND_TOLERANCE = 0.10
+
+
+@dataclass
+class OptimizationPolicy:
+    """The investor's personal inputs for the optimiser (built by ``core.purpose.personalization``).
+
+    With a policy: ``limits`` replace the profile defaults; ``groups`` add linear limits (minimum
+    cash, income, sector and currency caps...); ``upper_overrides`` set per-asset caps that differ
+    from the per-asset maximum (daily-liquidity cash may hold everything); the personal-utility
+    portfolio (risk aversion lambda, volatility cap of the limits) is a candidate and the default
+    choice of the out-of-sample selection; equal weight and the benchmark become baselines only.
+    ``previous_weights`` + ``turnover_cost``: what the investor already holds and the cost per unit
+    of turnover of moving away from it (penalised in the utility portfolio)."""
+
+    limits: ResearchLimits
+    groups: list[GroupConstraint] = field(default_factory=list)
+    upper_overrides: dict[str, float] = field(default_factory=dict)
+    risk_aversion: float = 4.0
+    previous_weights: dict[str, float] | None = None
+    turnover_cost: float = 0.0
 
 
 @dataclass
@@ -163,7 +190,9 @@ def _benchmark_symbol(cfg: AppConfig, ds: PriceDataset) -> str | None:
 
 
 def _strategies(pc: PortfolioConstraints, cfg: AppConfig, rf: float, mu_method: str, cov_method: str,
-                benchmark: str | None, symbols: list[str]) -> dict[str, object]:
+                benchmark: str | None, symbols: list[str],
+                utility: tuple[float, float] | None = None) -> dict[str, object]:
+    """``utility`` = (risk aversion, volatility cap) of the investor's personal-utility strategy."""
     P = cfg.trading_days
     s = opt.SolverSettings(n_starts=1 if cfg.backtest_light else 3, seed=cfg.seed)
 
@@ -191,6 +220,10 @@ def _strategies(pc: PortfolioConstraints, cfg: AppConfig, rf: float, mu_method: 
             estimate_mu(t, mu_method, P), cov(t), pc, len(t), rf, settings=s)),
         "hrp": wrap(lambda t: opt.hrp(cov(t), pc)),
     }
+    if utility is not None:
+        lam, cap = utility
+        strategies["utility"] = wrap(lambda t: opt.max_utility(estimate_mu(t, mu_method, P), cov(t), pc, lam, rf, s,
+                                                               cap))
     if cfg.backtest_light:   # large universes on the web: drop the two costliest near-duplicates
         strategies.pop("max_diversification")
         strategies.pop("robust_mean_variance")
@@ -212,9 +245,11 @@ def equal_weight_feasible(pc: PortfolioConstraints) -> np.ndarray:
 
 
 def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput,
-                 dataset: tuple[PriceDataset, object | None] | None = None) -> AnalysisResult:
+                 dataset: tuple[PriceDataset, object | None] | None = None,
+                 policy: OptimizationPolicy | None = None) -> AnalysisResult:
     """Run the full pipeline. ``dataset`` (prices + optional synthetic ground truth) lets a
-    caller supply an already-built, filtered universe (e.g. the purpose engine)."""
+    caller supply an already-built, filtered universe (e.g. the purpose engine); ``policy``
+    carries the investor's personal limits and risk aversion (see :class:`OptimizationPolicy`)."""
     cfg.ensure_dirs()
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:6]
     started = datetime.now(timezone.utc).isoformat()
@@ -229,6 +264,8 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput,
 
     with _Timer(timings, "profile"):
         prof = assess_profile(profile_input)
+        if policy is not None:      # the investor's personal limits replace the profile defaults
+            prof = prof.model_copy(update={"research_limits": policy.limits})
     with _Timer(timings, "data"):
         ds, synth_truth = dataset if dataset is not None else load_data(cfg)
     if ds.is_synthetic:
@@ -275,6 +312,15 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput,
     pc = build_constraints(ds.symbols, ds.meta, prof.research_limits, max_weight=cfg.max_weight,
                            min_weight=cfg.min_weight, excluded=profile_input.excluded_assets,
                            excluded_classes=profile_input.excluded_asset_classes)
+    pc_u = pc
+    if policy is not None:
+        pc.groups.extend(policy.groups)
+        for i, s_ in enumerate(pc.symbols):
+            if s_ in policy.upper_overrides and pc.upper[i] > 0:     # an excluded asset stays excluded
+                pc.upper[i] = policy.upper_overrides[s_]
+        if policy.previous_weights:
+            pc_u = dataclasses.replace(pc, previous_weights=np.array(
+                [float(policy.previous_weights.get(s_, 0.0)) for s_ in pc.symbols]))
     feas = check_feasibility(pc)
     feas_d = {"feasible": feas.feasible, "conflicts": feas.conflicts, "suggestions": feas.suggestions,
               "violations_of_nearest": feas.violations}
@@ -303,6 +349,9 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput,
         cands["robust_mean_variance"] = robust_mean_variance(mu, cov, pc, len(rets), rf, periods=P, settings=ss)
         band = prof.research_limits.target_volatility_band
         cands["target_volatility"] = opt.target_volatility(mu, cov, pc, band[1], rf, settings=ss)
+        if policy is not None:
+            cands["utility"] = opt.max_utility(mu, cov, pc_u, policy.risk_aversion, rf, ss, band[1],
+                                               policy.turnover_cost if pc_u is not pc else 0.0)
         frontier = (opt.efficient_frontier(mu, cov, pc, rf, n_points=10 if cfg.backtest_light else 25, settings=ss)
                     if feas.feasible else pd.DataFrame())
 
@@ -316,7 +365,9 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput,
             bset = BacktestSettings(cfg.backtest_lookback, cfg.rebalance_every,
                                     cfg.transaction_cost_bps + cfg.spread_bps, cfg.slippage_bps,
                                     cfg.validation_frac, rf, P)
-            strats = _strategies(pc, cfg, rf, mu_method, cov_method, bench, ds.symbols)
+            strats = _strategies(pc, cfg, rf, mu_method, cov_method, bench, ds.symbols,
+                                 (policy.risk_aversion, prof.research_limits.target_volatility_band[1])
+                                 if policy is not None else None)
             bt = walk_forward(rets, strats, bset, point_in_time=False, synthetic=ds.is_synthetic)
             for name in bt.strategies:
                 registry.record(name, {"mu": mu_method, "cov": cov_method, "lookback": bset.lookback,
@@ -327,13 +378,14 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput,
             # REALISED validation volatility must respect the profile cap. Full-sample estimates
             # (which include the final-test period) are never used to choose a strategy.
             vol_cap = prof.research_limits.target_volatility_band[1]
+            vol_tol = VOL_BAND_TOLERANCE if policy is not None else 0.0
             elig = []
             for k, sb in bt.strategies.items():
                 wv = sb.weights.loc[:bt.validation_end]
                 if len(wv) and all(not opt.verify_weights(row.to_numpy(), pc) for _, row in wv.iterrows()):
                     elig.append(k)
             vval = bt.metrics_validation["volatility_ann"].astype(float)
-            in_band = [k for k in elig if vval[k] <= vol_cap + 1e-9]
+            in_band = [k for k in elig if vval[k] <= vol_cap * (1 + vol_tol) + 1e-9]
             if in_band:
                 excluded_band = sorted(set(elig) - set(in_band))
                 elig = in_band
@@ -345,9 +397,12 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput,
                 elig = ["equal_weight"]
                 warnings.append("Nenhuma estratégia respeitou as restrições em toda a validação; usado pesos iguais.")
             baseline = "equal_weight" if "equal_weight" in elig else elig[0]
-            selection = select_strategy(bt, baseline, elig)
+            selection = select_strategy(bt, baseline, elig, "utility" if policy is not None else None,
+                                        REFERENCE_ONLY if policy is not None else (),
+                                        policy.risk_aversion if policy is not None else None)
             selection["excluded_by_volatility_band"] = excluded_band
             selection["volatility_cap"] = vol_cap
+            selection["volatility_tolerance"] = vol_tol
             look = lookahead_invariance_check(rets, strats["min_variance"], bset, cut=len(rets) // 2)
             # cost sensitivity of the selected strategy (skipped in light mode: not shown on the web)
             cost_rows = []
@@ -361,15 +416,17 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput,
                                      if k in ("cagr", "sharpe", "max_drawdown")}})
             sections["backtest_cost_sensitivity"] = pd.DataFrame(cost_rows)
             sections["lookahead_check"] = look
-    selected_name = str(selection.get("selected", "min_variance"))
+    fallback = "utility" if policy is not None and cands["utility"].success else "min_variance"
+    selected_name = str(selection.get("selected", fallback))
     if selected_name not in cands or not cands[selected_name].success:
-        warnings.append(f"Estratégia selecionada '{selected_name}' indisponível; usada 'min_variance'.")
-        selected_name = "min_variance"
+        warnings.append(f"Estratégia selecionada '{selected_name}' indisponível; usada '{fallback}'.")
+        selected_name = fallback
     if selected_name == "benchmark":
         selected_name = "equal_weight"
     selected = cands[selected_name]
     if not selection:
-        selection = {"selected": selected_name, "rule": "fallback: mínima variância (backtest não executado)"}
+        selection = {"selected": selected_name, "rule": ("fallback: utilidade do investidor" if fallback == "utility"
+                                                         else "fallback: mínima variância") + " (backtest não executado)"}
     sw = selected.weights
 
     # ------------------------------------------------------------- risk
@@ -711,4 +768,5 @@ def validate_result(res: AnalysisResult) -> iv.ValidationReport:
     return iv.ValidationReport(checks)
 
 
-__all__ = ["AnalysisResult", "run_analysis", "validate_result", "DataUnavailableError", "RiskEstimate"]
+__all__ = ["AnalysisResult", "OptimizationPolicy", "run_analysis", "validate_result", "DataUnavailableError",
+           "RiskEstimate"]

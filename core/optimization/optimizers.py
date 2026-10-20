@@ -266,6 +266,44 @@ def target_volatility(mu, cov, pc: PortfolioConstraints, target_vol: float, rf: 
                  pc, m, c, rf, settings, extra_constraints=ineq, start_hint=hint)
 
 
+def max_utility(mu, cov, pc: PortfolioConstraints, risk_aversion: float, rf: float = 0.0,
+                settings: SolverSettings | None = None, vol_cap: float | None = None,
+                turnover_penalty: float = 0.0) -> OptimizationResult:
+    """Markowitz utility: max w'mu - (lambda/2) w'Sigma w, lambda = the investor's risk aversion,
+    optionally with a volatility cap and a penalty per unit of turnover against
+    ``pc.previous_weights`` (the cost of moving away from what the investor holds). When the cap
+    is below the minimum attainable volatility the minimum-variance portfolio is returned, flagged."""
+    m, c = _prep(mu, cov, pc)
+    assert m is not None
+    if not risk_aversion > 0:
+        raise ValueError("risk_aversion must be > 0")
+    lam = float(risk_aversion)
+    n = pc.n
+    extra = None
+    hint: list[np.ndarray] = []
+    if vol_cap is not None:
+        gmv = min_variance(c, pc, m, rf, settings)
+        if gmv.success and vol_cap < gmv.volatility - 1e-9:
+            gmv.method = "utility"
+            gmv.warnings.append(f"teto de volatilidade {vol_cap:.2%} abaixo da mínima viável {gmv.volatility:.2%}: "
+                                "usada a carteira de mínima variância")
+            gmv.diagnostics["risk_aversion"] = lam
+            return gmv
+        extra = [{"type": "ineq", "fun": lambda w: vol_cap ** 2 - float(w[:n] @ c @ w[:n]),
+                  "jac": lambda w: np.concatenate([-2 * c @ w[:n], np.zeros(len(w) - n)])}]
+        if gmv.success:
+            hint.append(gmv.weights.to_numpy())
+    if pc.previous_weights is not None:
+        hint.append(np.clip(np.asarray(pc.previous_weights, float), pc.lower, pc.upper))
+    res = solve("utility", lambda w: -float(w @ m) + 0.5 * lam * float(w @ c @ w),
+                lambda w: -m + lam * (c @ w), pc, m, c, rf, settings, extra_constraints=extra,
+                turnover_penalty=turnover_penalty, start_hint=hint)
+    res.diagnostics["risk_aversion"] = lam
+    if vol_cap is not None:
+        res.diagnostics["vol_cap"] = vol_cap
+    return res
+
+
 def _lp_rows(pc: PortfolioConstraints, ncols: int, w_off: int = 0,
              tv_off: int | None = None) -> tuple[list[np.ndarray], list[float], np.ndarray]:
     """Group-bound rows (+ turnover rows ``|w - w0| <= v, sum v <= TO`` when ``tv_off`` is set)."""

@@ -156,7 +156,8 @@ Christoffersen, Z2 de Acerbi-Szekely).
 ## 7. Testes
 
 ```bash
-python -m pytest                       # suíte completa (offline, determinística; ~5 min)
+python -m pytest                       # suíte completa (offline, determinística; ~10 min)
+python scripts/audit_repetition.py     # a carteira reage ao perfil/dados/universo — e só a eles?
 python -m pytest --cov=core --cov=models --cov=utils --cov=config
 python -m pytest -m "not slow"         # sem o teste ponta a ponta completo
 python scripts/profile_run.py          # profiling, escalabilidade e reprodutibilidade
@@ -228,70 +229,76 @@ uvicorn webapp.server:app --reload      # http://127.0.0.1:8000
 
 ## 10. Carteira com propósito (`--proposito`, `POST /api/proposito`)
 
-Motor em `core/purpose/` que combina a otimização quantitativa com o motivo declarado pelo investidor, seguindo
-as etapas 1–9 nesta ordem (o relatório registra cada etapa):
+Motor em `core/purpose/` (com `core/universe/`) que monta uma carteira **a partir de dados, das regras pessoais do
+investidor e de um plano de compra executável** — nunca de uma lista fixa de ativos — e a combina com o motivo
+declarado. As 13 etapas, nesta ordem, ficam registradas no relatório:
 
-1. **CAGR necessário** (`required_cagr.py`): taxa efetiva anual que leva capital + aportes (fim de cada período,
-   `n = ⌊m·T⌋`) ao valor-alvo; raiz única por Brent. Mostrado antes de qualquer resultado de otimização. O
-   **capital inicial é opcional**: com 0, o plano começa só com os aportes (ex.: R$ 2.000 por mês), desde que
-   haja ao menos um aporte dentro do prazo; o site esconde a coluna "valor inicial" e mostra como dividir cada
-   aporte entre os ativos.
-2. **Universo elegível** (`catalog.py`): macroclasses expandidas em **tickers individuais** (B3, EUA, ouro,
-   cripto) com descrição factual do negócio. Cada série é baixada e validada; ativo com **< 252 observações é
-   excluído e listado**, nunca substituído por proxy.
-3. **Sleeves por moeda** (`sleeves.py`): retorno, volatilidade e Sharpe de cada ativo/sleeve na **moeda nativa
-   com a rf dessa moeda** (`--rf BRL=… --rf USD=…`); sem rf informada usa-se um fallback de demonstração
-   **sinalizado**; moeda sem rf e sem fallback é erro (nunca rf = 0).
-4. **Otimização quantitativa**: o motor de pesquisa existente (candidatas restritas pelo perfil, backtest
-   walk-forward, regra 1-EP sobre a validação fora da amostra).
-5. **Governança** (`governance.py`, `data/governance_flags.json`): ativos `sob_revisao` ficam fora por padrão e
-   só entram com `--incluir-sob-revisao`; `excluido` sempre fora; flag sem fonte citada é rejeitada. É aplicada
-   como exclusão dura **antes** do otimizador (equivale a peso zero) e verificada na carteira final. O arquivo
-   distribuído contém apenas um exemplo sintético — nenhuma alegação sobre empresas reais.
-6. **Temas do motivo** (`themes.py`): léxico determinístico (sem modelo de linguagem); cada tema traz a
-   **citação literal** que o originou; menções negadas ("não me importo com…") são descartadas; o "porquê" é a
-   oração literal após "objetivo/meta/sonho/para…"; texto vago → confiança baixa.
-7. **Score de alinhamento** (`alignment.py`): 0–1 por ativo = fração dos temas setoriais declarados que o
-   negócio do ativo atende, com o motivo em uma frase. Temas de valor sem setor (família, disciplina…) são
-   citados mas não pontuados (seria inferência). Separado de ESG genérico.
-8. **Combinação**: `w_final = (1 − a)·w_quant + a·w_alinhamento` (slider `a`, padrão 30%). `w_alinhamento`
-   maximiza o alinhamento sujeito a **todas** as restrições do perfil, ao teto de volatilidade e a um orçamento
-   de tracking error; por convexidade a carteira final respeita os limites e fica a no máximo `a × orçamento` de
-   tracking error da carteira quantitativa. O otimizador nunca é descartado.
-9. **Dupla justificativa**: para cada ativo com peso, tese financeira (negócio, métrica-chave [H], retorno
-   esperado [E] com estatística t, contribuição ao risco, moat **"não avaliado"**, risco) e tese de propósito
-   (tema e citação) em parágrafos separados.
+1. **CAGR necessário** (`required_cagr.py`): taxa efetiva anual que leva o que você já tem (capital inicial +
+   carteira atual) e os aportes (fim de cada período, `n = ⌊m·T⌋`) ao valor-alvo; raiz única por Brent. O capital
+   inicial é opcional (com 0, o plano começa só com os aportes).
+2. **Perfil e regras pessoais** (`personalization.py`): perfil declarado limitado pela capacidade de perda,
+   horizonte, liquidez, queda tolerada e objetivo (`core/profiler.py`); aversão ao risco λ (conservador 8, moderado
+   4, arrojado 2; ×1,5 preservação, ×1,25 renda); regras de horizonte (< 1 ano: ações ≤ 10%, caixa ≥ 50%; 1–3 anos:
+   ações ≤ 30%, caixa ≥ 20%; 3–5 anos: ações ≤ 50%; sem renda fixa longa abaixo de 3 anos); objetivo renda (≥ 50% em
+   ativos que pagam renda) ou preservação (caixa ≥ 20%); queda máxima D → volatilidade ≤ D/2; necessidade de liquidez
+   L → caixa ≥ L; teto por setor e por moeda estrangeira; cripto só com permissão. Toda informação não dada vira uma
+   **hipótese escrita** no resultado (nada é presumido em silêncio).
+3. **Descoberta e filtro** (`core/universe/screen.py`, etapa A, **sem usar desempenho passado**): catálogo curado +
+   listagens completas (B3: COTAHIST do dia — ações, FIIs e ETFs; EUA: screener da Nasdaq) + o que o investidor já
+   tem; classe identificada (ETFs da B3 fora do catálogo são classificados pelo código/nome, ou ficam de fora);
+   preferências (mercados, ativos/setores excluídos, cripto, renda fixa longa incompatível com o prazo); pisos de
+   liquidez/tamanho; uma classe de ação por empresa (PETR3/PETR4, GOOG/GOOGL); amostra estratificada por classe e
+   setor com presença mínima de cada classe e espaço para os temas do motivo. Baixa até 2× os candidatos (máx. 100).
+4. **Dados e triagem** (`core/universe/scoring.py`, etapa B): cada ativo é medido no **próprio histórico** (uma
+   listagem recente não encurta o dos outros): volatilidade, queda máxima, Sharpe encolhido para a média da classe,
+   momento 12-1 e liquidez, em z-scores dentro da classe com pesos do perfil; duplicatas de exposição (correlação
+   ≥ 0,95 na mesma classe) e grupos que andam juntos (≥ 0,70, cota por grupo); primeiro o que os limites exigem
+   (caixa, renda, mínimo de renda fixa), depois temas e as melhores pontuações. Cada ativo recebe decisão e motivo.
+   Caixa em reais = **CDI diário do Banco Central (SGS 12)**, rotulado como modelo de Tesouro Selic/CDB de liquidez
+   diária. Mais da metade do universo sem cotação → **nenhuma carteira** (erro claro, sem resultado antigo).
+5. **Sleeves por moeda** (`sleeves.py`): estatísticas na moeda nativa com a rf de cada moeda (nunca rf = 0).
+6. **Governança** (`governance.py`): exclusão dura antes do otimizador.
+7. **Tamanho mínimo de compra** (`feasibility.py`): a carteira-alvo é dimensionada para o que você tem hoje + os
+   aportes dos próximos 12 meses; ativo cuja menor compra possível (1 lote/cota/ação, ou a compra mínima, padrão
+   R$ 100) passa do peso máximo fica de fora, com o motivo.
+8. **Otimização** (`core/portfolio_engine.py` com `OptimizationPolicy`): os limites pessoais viram restrições; a
+   carteira de **utilidade pessoal** `max w'μ − λ/2·w'Σw` (com o teto de volatilidade) é a escolha padrão e só é
+   trocada se outra estratégia a superar, na validação fora da amostra, por mais de 1 erro-padrão da diferença,
+   medindo pela **utilidade realizada do próprio investidor**. Pesos iguais e o benchmark viram **linhas de base**
+   (comparadas no relatório, nunca escolhidas). Com carteira atual, trocar tem custo (penalidade de giro).
+9–10. **Temas e score de alinhamento** (`themes.py`, `alignment.py`): léxico determinístico com citação literal.
+11. **Combinação e carteira executável**: `w_final = (1 − a)·w_quant + a·w_alinhamento` dentro de todos os limites;
+   depois, posições menores que uma compra mínima saem (ou sobem até ela, se os limites exigirem) e os pesos são
+   recalculados como a carteira executável mais próxima. **Regra de estabilidade**: com a recomendação anterior e as
+   mesmas entradas, ela é mantida se a nova não a superar por mais que o erro de estimativa + o custo de trocar.
+12. **Plano de compra e dupla justificativa**: quantidades por lote (B3: fracionário de 1 ação, FIIs/ETFs 1 cota;
+   EUA: ação inteira ou frações se a corretora permitir; CDI: qualquer valor), sobra, o que fica para os próximos
+   aportes e o que está acima do alvo na carteira atual (sem mandar vender: custo e imposto). Por ativo: mercado,
+   classe, peso, valor, papel, riscos, por que virou candidato, fatos [H], estimativas [E], hipóteses,
+   contribuição para a diversificação e alternativas consideradas.
+13. **Mudanças e diversificação real** (`changes.py`, `concentration.py`): o que entrou/saiu/subiu/caiu desde a
+   carteira atual ou a recomendação anterior, com o motivo (variações < 1 p.p. contam como "mantido"); apostas
+   independentes = (razão de diversificação)², grupos que andam juntos, sobreposição ETF × ação estimada pela
+   correlação, exposição por moeda/classe/setor/mercado em dinheiro e em risco.
 
-Saída (Markdown + JSON em `outputs/proposito/`): CAGR necessário × CAGR esperado (mediana simulada, mesma
-convenção de taxa), tabela `ticker | classe | peso | score_alinhamento | moeda`, teses, cenários P90/P50/P10,
-P(atingir o objetivo) por Monte Carlo com erro padrão e IC, sensibilidade (±1 erro-padrão do retorno
-esperado, bootstrap em blocos, deriva histórica) e alertas. Todo texto gerado passa por um verificador de
-linguagem de garantia ("vai gerar", "certamente", "garantido"…); um acerto vira alerta FAIL.
+Saída (Markdown + JSON em `outputs/proposito/`): CAGR necessário × esperado, tabela de pesos, teses, cenários
+P90/P50/P10, P(objetivo) com erro padrão e IC, sensibilidade, alertas e as seções 7–12 (plano de compra, mudanças,
+diversificação real, triagem completa, regras/hipóteses, fontes e reprodutibilidade: impressão digital da carteira,
+dos parâmetros e dos dados + versão). Todo texto gerado passa pelo verificador de linguagem de garantia.
 
-**Onde investir e por quê:** para cada ativo com peso, a saída traz o valor a investir (capital × peso), o aporte
-por período, o papel na carteira (estabilizador, motor de retorno, crescimento, diversificador — com as parcelas de
-capital, risco e retorno esperado [E]), a ligação com o motivo declarado e o negócio da empresa; e explica qual
-estratégia quantitativa foi escolhida e por quê.
+**Por que a carteira se repetia e o que mudou:** ver [`docs/audit_repeticao.md`](docs/audit_repeticao.md) (causas
+com arquivo e linha, tabela antes/depois gerada por `python scripts/audit_repetition.py`).
 
-**Universo = o mercado inteiro, com funil transparente** (`core/universe/`): com `universo="completo"` (padrão) o
-motor lê as listagens completas — **B3**: arquivo oficial diário de cotações COTAHIST (todas as ações, units, FIIs
-e ETFs negociados, com o volume financeiro do dia); **EUA (NYSE, Nasdaq, NYSE American)**: screener da Nasdaq
-(setor, indústria e valor de mercado de todas as ações; reserva: diretório oficial de símbolos da Nasdaq Trader).
-Como otimizar milhares de ativos por pedido não é viável nem estatisticamente sensato, um funil pré-seleciona os
-`max_ativos` candidatos (padrão 60 na CLI, 40 no site; 25/40/60 na tela) **sem usar desempenho passado**: pisos de
-liquidez/tamanho (B3: R$ 5 mi negociados no dia; EUA: US$ 2 bi de valor de mercado), núcleo de diversificação
-(renda fixa, índices, ouro), ativos ligados aos temas do seu motivo (setores da Nasdaq e do catálogo) e os maiores
-de cada setor, alternando B3 e EUA. Se as listagens não responderem, usa-se o **catálogo curado de 217 ativos**
-(84 ações da B3, 79 ações/REITs dos EUA, 11 FIIs, ETFs de renda fixa, índices, setores, ouro e cripto) e o relatório
-avisa. Os preços dos pré-selecionados vêm do Yahoo Finance; ticker com menos de 252 observações é excluído e listado.
-Se o provedor estiver inacessível, um disjuntor encerra após 3 tickers seguidos sem resposta (falha em segundos).
+**Dados e cache:** preços diários do Yahoo Finance (podem trazer o pregão em andamento; nunca tratados como tempo
+real) guardados por até 4 h; resultado do site reaproveitado por até 15 min para o mesmo pedido (o resultado diz
+quando foi calculado). Um pedido novo esconde a carteira anterior na tela; se falhar, nada antigo é mostrado como
+atual. O site guarda neste aparelho a última carteira (pesos + impressão digital das entradas) para a comparação.
 
-**Limites honestos:** neste ambiente de desenvolvimento o Yahoo Finance e o Banco Central estão bloqueados pela
-política de rede, então o caminho com dados reais foi testado só com provedores simulados; para rodá-lo aqui é
-preciso liberar `query1.finance.yahoo.com`, `query2.finance.yahoo.com` e `api.bcb.gov.br` em *Network access*
-do ambiente. O modo offline usa um universo **sintético** multimoeda (BRL/USD) e o resultado é marcado "NÃO É UMA
-CARTEIRA FINAL". As tags temáticas dos ativos são curadoria editorial estática; a extração
-de temas é por léxico (não entende ironia nem sinônimos fora da lista).
+**Limites honestos:** a cobertura é a B3 (ações, FIIs, ETFs negociados no dia) e as ações dos EUA do screener da
+Nasdaq + os ETFs americanos do catálogo + caixa em CDI — não "todas as ações do mundo"; CDBs/LCIs específicos e
+títulos individuais do Tesouro não são consultados. Classificação/temas dos ativos do catálogo são curadoria
+editorial; o backtest escolhe o universo com dados de hoje (viés de sobrevivência/seleção, sinalizado). Impostos
+não são modelados. O modo offline usa um universo **sintético** e o resultado é marcado "NÃO É UMA CARTEIRA FINAL".
 
 ## 11. "Vale a pena?" — análise de uma ação (`--acao`, `POST /api/acao`)
 

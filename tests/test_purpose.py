@@ -182,11 +182,13 @@ def purpose_run(tmp_path_factory):
     return run_purpose(req, output_dir=tmp_path_factory.mktemp("purpose"))
 
 
-def test_engine_follows_the_nine_steps_and_output_format(purpose_run):
+def test_engine_follows_the_steps_in_order_and_output_format(purpose_run):
     from core.purpose.report import render_markdown
 
     r = purpose_run
-    assert [s["etapa"] for s in r.steps] == list(range(1, 10))
+    assert [s["etapa"] for s in r.steps] == list(range(1, 14))
+    assert [s["titulo"] for s in r.steps][:4] == ["CAGR necessário", "Perfil e regras pessoais",
+                                                 "Descoberta e filtro do universo", "Dados e triagem"]
     md = render_markdown(r)
     heads = ["## 1. CAGR necessário vs. CAGR esperado", "## 2. Carteira", "## 3. Justificativa por ativo",
              "## 4. Cenários", "## 5. Probabilidade de atingir o objetivo", "## 6. Alertas de validação"]
@@ -344,8 +346,8 @@ def test_engine_infeasible_profile_is_flagged_not_hidden(tmp_path):
                          classes=["acoes_br"], motivo_investidor="saúde", n_simulacoes=500)
     r = run_purpose(req, output_dir=tmp_path)
     assert any(a.severity == "FAIL" and a.category == "validacao" and "INVIÁVEIS" in a.message for a in r.alerts)
-    step4 = next(s for s in r.steps if s["etapa"] == 4)["resultado"]
-    assert "backtest NÃO executado" in step4
+    step = next(s for s in r.steps if s["titulo"] == "Otimização quantitativa")["resultado"]
+    assert "backtest NÃO executado" in step
     lo, hi = r.goal["ic95"]
     assert 0.0 <= lo <= r.goal["p_objetivo"] <= hi <= 1.0
 

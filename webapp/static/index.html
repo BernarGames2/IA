@@ -91,6 +91,7 @@ ul.clean li { margin: 3px 0; }
 .kind { color: var(--muted); font-size: 0.76rem; }
 .hint { color: var(--muted); font-size: 0.74rem; line-height: 1.35; }
 tr.asset td { border-bottom: 0; padding-bottom: 2px; }
+tr.asset td:first-child { overflow-wrap: anywhere; }
 tr.asset-why td { padding-top: 0; font-size: 0.8rem; color: var(--ink2); }
 code { font-size: 0.8rem; }
 #tip { position: fixed; pointer-events: none; z-index: 10; background: var(--surface); color: var(--ink);
@@ -99,6 +100,13 @@ code { font-size: 0.8rem; }
 .hidden { display: none !important; }
 textarea { background: var(--page); border: 1px solid var(--ring); border-radius: 8px; padding: 7px 9px; min-height: 76px; resize: vertical; }
 .span-all { grid-column: 1 / -1; }
+details.more { border: 1px dashed var(--ring); border-radius: 10px; padding: 6px 12px 10px; }
+.subform { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px 14px; align-items: end;
+  margin-top: 10px; }
+.pill { display: inline-block; font-size: 0.74rem; font-weight: 600; border-radius: 999px; padding: 1px 9px;
+  border: 1px solid var(--ring); color: var(--ink2); margin-right: 4px; white-space: nowrap; }
+.pill.in { border-color: var(--good); color: var(--good-text); } .pill.out { border-color: var(--crit); color: var(--crit); }
+.evidence { margin: 4px 0 2px; padding-left: 16px; } .evidence li { margin: 2px 0; }
 .check { flex-direction: row; align-items: center; gap: 8px; }
 .thesis { border: 1px solid var(--ring); border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
 .thesis h3 { margin: 0 0 6px; font-size: 0.98rem; }
@@ -232,13 +240,14 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
 
   <section class="card" aria-labelledby="p-title">
     <h2 id="p-title">Carteira com propósito</h2>
-    <p class="muted">Parte de <strong>todas as ações listadas na B3 e nos EUA</strong> (listagens oficiais: arquivo
-      diário de cotações da B3 e listagem da Nasdaq/NYSE), pré-seleciona os mais líquidos, os ligados ao seu motivo e
-      os maiores de cada setor, e otimiza com cotações diárias reais a carteira que respeita o seu perfil — mostrando
-      quanto colocar em cada ativo e por quê. O motivo que você escrever
-      é lido por regras determinísticas (sem modelo de linguagem): só entram temas que você escreveu, com a citação
-      literal. Leva cerca de 1 minuto com cotações reais (baixa ~30 séries de preço, faz backtest e simulação);
-      o andamento aparece abaixo do botão — mantenha a tela aberta.</p>
+    <p class="muted">Parte de <strong>todas as ações, FIIs e ETFs listados na B3 e das ações dos EUA</strong>
+      (arquivo diário de cotações da B3 e listagem da Nasdaq), mais caixa em CDI. Sem lista fixa de ativos: filtra pelas
+      suas preferências e pela liquidez, mede risco, qualidade e correlação de cada um, otimiza com cotações diárias
+      reais dentro das <strong>suas</strong> regras (perfil, prazo, objetivo, queda que aguenta) e diz quanto comprar
+      de cada ativo, em lotes reais, e por quê. Se você já montou uma carteira aqui, mostra o que mudou e por quê —
+      e só muda quando há motivo. O motivo que você escrever é lido por regras determinísticas (sem modelo de
+      linguagem), com a citação literal. Leva cerca de 1 minuto com cotações reais; o andamento aparece abaixo do
+      botão — mantenha a tela aberta.</p>
     <form id="p-form">
       <label>Dados
         <select name="fonte_dados">
@@ -283,6 +292,30 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
           <option value="60">60 (mais lento)</option></select>
       </label>
       <label class="check"><input name="incluir_sob_revisao" type="checkbox"> Incluir ativos sob revisão de governança</label>
+      <details class="span-all more"><summary>Mais sobre você e o que já tem (opcional — melhora a personalização)</summary>
+        <div class="subform">
+          <label>Objetivo principal
+            <select name="objetivo_tipo"><option value="">Não informado</option><option value="crescimento">Fazer o dinheiro crescer</option>
+              <option value="renda">Receber renda (dividendos, aluguéis, juros)</option><option value="preservacao">Proteger o que tenho</option></select>
+          </label>
+          <label>Maior queda que você aguenta (%)<input name="tolerancia_perda" type="number" min="1" max="90" step="1" placeholder="ex.: 15">
+            <span class="hint">Se a carteira cair isso, você ainda manteria o investimento? Vazio = referência do perfil.</span></label>
+          <label>Quanto pode precisar em 12 meses (%)<input name="necessidade_liquidez" type="number" min="0" max="100" step="1" placeholder="ex.: 10">
+            <span class="hint">Parte do dinheiro que talvez precise sacar no próximo ano; fica em caixa com liquidez diária.</span></label>
+          <label>Mercados
+            <select name="mercados"><option value="">Brasil e EUA (padrão)</option><option value="BR">Só Brasil</option><option value="US">Só EUA</option></select>
+          </label>
+          <label>Compra mínima por ativo (R$)<input name="valor_minimo_posicao" type="number" min="0" step="any" value="100">
+            <span class="hint">Abaixo disso a compra não vale a pena (custos); posições menores ficam de fora.</span></label>
+          <label class="span-all">Ativos que você não quer (códigos separados por vírgula)<input name="ativos_excluidos" type="text" maxlength="600" placeholder="ex.: PETR4, VALE3"></label>
+          <label class="span-all">O que você já tem investido (um por linha: código e valor em R$)
+            <textarea name="carteira_atual" maxlength="4000" placeholder="PETR4 1500&#10;BOVA11 3000&#10;CAIXA_CDI 2000"></textarea>
+            <span class="hint">Entra no cálculo do objetivo e no plano: o dinheiro novo vai primeiro para o que está abaixo do alvo. Dinheiro em CDB/Tesouro Selic/conta remunerada: use CAIXA_CDI.</span></label>
+          <label class="check"><input name="permitir_cripto" type="checkbox"> Permitir criptoativos (ETFs listados)</label>
+          <label class="check"><input name="fracionario_eua" type="checkbox"> Minha corretora compra frações de ações dos EUA</label>
+          <label class="check span-all"><input name="comparar_anterior" type="checkbox" checked> Comparar com a última carteira montada neste aparelho (mostra o que mudou e por quê)</label>
+        </div>
+      </details>
       <button id="p-run" type="submit">Montar carteira</button>
     </form>
     <div class="status" id="p-status" role="status" aria-live="polite"></div>
@@ -296,13 +329,21 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
         um modelo de pesquisa, não uma recomendação: confira custos, impostos e a sua situação antes de qualquer decisão.</p>
       <details><summary>Tabela técnica e score de alinhamento de todos os ativos elegíveis</summary>
         <div class="tbl" id="p-table"></div><ul class="clean" id="p-reasons"></ul></details></section>
+    <section class="card"><h2>Plano de compra</h2><p class="muted" id="p-plan-note"></p><div id="p-plan"></div></section>
+    <section class="card"><h2>O que mudou e por quê</h2><div id="p-changes"></div></section>
+    <section class="card"><h2>Diversificação de verdade</h2><p class="muted">Medida pelo risco, não pelo número de ativos:
+        ativos que sobem e caem juntos contam quase como um só.</p><div id="p-conc"></div></section>
     <section class="card"><h2>Justificativa por ativo</h2><p class="muted" id="p-why"></p><div id="p-theses"></div></section>
+    <section class="card"><h2>Como os ativos foram escolhidos</h2><p id="p-funnel"></p>
+      <details><summary>Todos os ativos medidos, com a decisão e o motivo</summary><div class="tbl" id="p-screen"></div></details></section>
+    <section class="card"><h2>Suas regras e as hipóteses usadas</h2><ul class="clean" id="p-rules"></ul></section>
     <div class="grid2">
       <section class="card"><h2>Cenários no horizonte</h2><div class="tbl" id="p-scen"></div></section>
       <section class="card"><h2>Probabilidade de atingir o objetivo</h2><p id="p-goal"></p><div class="tbl" id="p-sens"></div></section>
     </div>
     <section class="card"><h2>Alertas de validação</h2><ul class="clean" id="p-alerts"></ul>
       <p><a id="p-download" href="#" download="carteira_proposito.md">Baixar relatório completo (Markdown)</a></p></section>
+    <section class="card"><h2>Fontes dos dados</h2><ul class="clean" id="p-sources"></ul><p class="kind" id="p-repro"></p></section>
   </div>
 
   <div id="results" class="hidden">
@@ -873,19 +914,57 @@ $("p-slider").addEventListener("input", (ev) => {
   const a = Number(ev.target.value);
   $("p-slider-lab").textContent = `${100 - a}% quant / ${a}% alinhamento`;
 });
+// holdings typed one per line: "PETR4 1500", "PETR4: 1.500,00", "BOVA11;3000"
+function parseHoldings(text) {
+  const out = {}, bad = [];
+  for (const raw of String(text || "").split(/\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const m = line.match(/^([A-Za-z0-9_.\-^=]+)\s*[:;,\s]\s*R?\$?\s*([\d.,]+)$/);
+    if (!m) { bad.push(line); continue; }
+    let v = m[2];
+    if (v.includes(",")) v = v.replace(/\./g, "").replace(",", ".");      // 1.500,00 -> 1500.00
+    else if (/^\d{1,3}(\.\d{3})+$/.test(v)) v = v.replace(/\./g, "");    // 1.500 -> 1500
+    const x = Number(v);
+    if (!(x >= 0)) { bad.push(line); continue; }
+    const t = m[1].toUpperCase();
+    out[t] = (out[t] || 0) + x;
+  }
+  return { out, bad };
+}
+const PREV_KEY = (src) => "qpi-ultima-carteira-" + src;
+function readPrev(src) {
+  try { const v = JSON.parse(localStorage.getItem(PREV_KEY(src)) || "null"); return v && v.pesos ? v : null; }
+  catch (e) { return null; }
+}
+function savePrev(src, d) {
+  try { if (d.para_guardar) localStorage.setItem(PREV_KEY(src), JSON.stringify({ ...d.para_guardar, quando: d.calculado_em_utc || "" })); }
+  catch (e) { /* storage unavailable: comparison simply not offered next time */ }
+}
 function readPurpose() {
   const f = new FormData($("p-form"));
   const rf = {};
   if (String(f.get("rf_brl") || "").trim() !== "") rf.BRL = Number(f.get("rf_brl")) / 100;
   if (String(f.get("rf_usd") || "").trim() !== "") rf.USD = Number(f.get("rf_usd")) / 100;
-  return {
+  const opt = (name, scale = 1) => { const v = String(f.get(name) || "").trim(); return v === "" ? null : Number(v) / scale; };
+  const held = parseHoldings(f.get("carteira_atual"));
+  const p = {
     motivo_investidor: String(f.get("motivo_investidor") || ""), valor_alvo: Number(f.get("valor_alvo")),
     capital_inicial: Number(f.get("capital_inicial") || 0), aporte_periodico: Number(f.get("aporte_periodico") || 0),
     periodicidade: f.get("periodicidade"), horizonte_anos: Number(f.get("horizonte_anos")), perfil_risco: f.get("perfil_risco"),
     peso_alinhamento: Number(f.get("peso_alinhamento")) / 100, taxa_livre_risco: rf, fonte_dados: f.get("fonte_dados"),
     incluir_sob_revisao: f.get("incluir_sob_revisao") === "on", n_simulacoes: Number(f.get("n_simulacoes")),
     universo: f.get("universo"), max_ativos: Number(f.get("max_ativos")),
+    objetivo_tipo: f.get("objetivo_tipo") || null, tolerancia_perda: opt("tolerancia_perda", 100),
+    necessidade_liquidez: opt("necessidade_liquidez", 100), mercados: f.get("mercados") ? [f.get("mercados")] : null,
+    permitir_cripto: f.get("permitir_cripto") === "on", fracionario_eua: f.get("fracionario_eua") === "on",
+    valor_minimo_posicao: opt("valor_minimo_posicao") ?? 100,
+    ativos_excluidos: String(f.get("ativos_excluidos") || "").split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean),
+    carteira_atual: held.out,
   };
+  const prev = f.get("comparar_anterior") === "on" ? readPrev(p.fonte_dados) : null;
+  if (prev) { p.carteira_anterior = prev.pesos; p.carteira_anterior_parametros = prev.parametros || null; }
+  return { p, badHoldings: held.bad };
 }
 let purposeUrl = null;
 function renderPurpose(d) {
@@ -893,28 +972,41 @@ function renderPurpose(d) {
   $("p-banner").textContent = d.dados_sinteticos
     ? "DEMONSTRAÇÃO COM DADOS SINTÉTICOS — NÃO É UMA CARTEIRA FINAL. Os tickers SINT_* não existem no mercado. " + d.aviso
     : `Dados reais: ${d.universo.origem}; período ${d.universo.periodo}; última cotação ${d.universo.ultima_cotacao}. ` + d.aviso;
-  const fu = d.universo && d.universo.funil;
-  const funnel = !fu ? "" : (fu.used_listings
-    ? `Universo: ${fu.listed_b3.toLocaleString("pt-BR")} ativos listados na B3 e ${fu.listed_us.toLocaleString("pt-BR")} nos EUA → ${fu.eligible} elegíveis por liquidez/tamanho → ${fu.selected} levados à otimização → ${d.universo.validados.length} com dados válidos. `
-    : `Universo: catálogo curado (listagens completas indisponíveis agora) → ${fu.selected} levados à otimização → ${d.universo.validados.length} com dados válidos. `);
-  $("p-strategy").textContent = funnel + (d.estrategia_texto || "");
+  if (d.calculado_em_utc) $("p-banner").textContent += ` Calculado em ${d.calculado_em_utc.replace("T", " ").slice(0, 16)} UTC` + (d.do_cache ? " (reaproveitado: mesmo pedido há menos de 15 min)." : ".");
+  const u = d.universo, fu = u && u.funil;
+  const funnel = !fu ? `Universo de demonstração: ${u.baixados.length} ativos → ${u.candidatos.length} candidatos após a triagem. `
+    : (fu.used_listings
+      ? `Universo: ${fu.listed_b3.toLocaleString("pt-BR")} ativos listados na B3 e ${fu.listed_us.toLocaleString("pt-BR")} nos EUA (+ catálogo curado) → ${fu.eligible} elegíveis (suas preferências, liquidez mínima, uma classe de ação por empresa) → ${fu.selected} baixados → ${u.candidatos.length} candidatos após medir risco, qualidade, liquidez e correlação → ${u.validados.length} com dados válidos. `
+      : `Universo: catálogo curado (listagens completas indisponíveis agora) → ${fu.selected} baixados → ${u.candidatos.length} candidatos → ${u.validados.length} com dados válidos. `);
+  $("p-strategy").textContent = d.estrategia_texto || "";
+  $("p-funnel").textContent = funnel + (u.cobertura ? "Cobertura consultada: " + u.cobertura : "");
   const noCapital = !(d.entrada && d.entrada.capital_inicial > 0);
   // each asset: one row of numbers, then its reason on a full-width row (readable on a phone)
-  const cols = ["Ativo", "Peso", ...(noCapital ? [] : ["Valor inicial"]), "Aporte/período"];
+  const cols = ["Ativo", "Peso", ...(noCapital ? [] : ["Inicial"]), "Por aporte"];
   const isNum = (i) => i > 0;
   const tbody = el("tbody");
   for (const a of d.onde_investir) {
     const row = d.carteira.find((r) => r.ticker === a.ticker) || {};
     const score = row.score_alinhamento === null || row.score_alinhamento === undefined ? "não calculado" : fmtNum(row.score_alinhamento);
     const cells = [a.ticker + " — " + a.nome, fmtPct(a.peso, 1), ...(noCapital ? [] : [fmtMoney(a.valor_inicial)]), fmtMoney(a.aporte_por_periodo)];
+    const alts = (a.alternativas || []).map((x) => `${x.ticker} (${x.motivo})`).join("; ");
+    const evidence = el("details", {}, el("summary", {}, "Fatos, estimativas, hipóteses e alternativas"),
+      el("ul", { class: "evidence" },
+        el("li", {}, el("strong", {}, "Por que virou candidato: "), a.motivo_selecao || "—"),
+        el("li", {}, el("strong", {}, "Fatos [H]: "), a.fatos_H || "—", el("span", { class: "kind" }, " · dados: " + (a.dados || "—"))),
+        el("li", {}, el("strong", {}, "Estimativas [E]: "), a.estimativas_E || "—"),
+        el("li", {}, el("strong", {}, "Hipóteses: "), a.hipoteses || "—"),
+        el("li", {}, el("strong", {}, "Diversificação: "), a.diversificacao || "—"),
+        el("li", {}, el("strong", {}, "Riscos principais: "), a.riscos || "—"),
+        el("li", {}, el("strong", {}, "Alternativas consideradas e não escolhidas: "), alts || "nenhuma do mesmo grupo")));
     tbody.append(el("tr", { class: "asset" }, ...cells.map((c, i) => el("td", isNum(i) ? { class: "num" } : {}, c))),
       el("tr", { class: "asset-why" }, el("td", { colspan: String(cols.length) }, "Por quê: " + a.por_que,
-        el("div", { class: "muted" }, `Negócio: ${a.negocio} · moeda ${a.moeda} · alinhamento ${score}`))));
+        el("div", { class: "muted" }, `Negócio: ${a.negocio} · ${a.mercado || ""} · moeda ${a.moeda} · alinhamento ${score}`), evidence)));
   }
   setChildren("p-alloc", el("table", {}, el("thead", {}, el("tr", {}, ...cols.map((h, i) => el("th", isNum(i) ? { class: "num" } : {}, h)))), tbody));
   $("p-alloc-note").textContent = (noCapital
-    ? "Você começa sem capital inicial: a coluna Aporte/período mostra como dividir cada aporte entre os ativos (aporte × peso). "
-    : "Valor inicial = capital inicial × peso; aporte por período = aporte × peso. ")
+    ? "Você começa sem capital inicial: a coluna Por aporte mostra como dividir cada aporte entre os ativos (aporte × peso; o plano de compra abaixo arredonda para lotes reais). "
+    : "Inicial = capital inicial × peso; por aporte = aporte × peso (o plano de compra abaixo arredonda para lotes reais). ")
     + "Alocação de um modelo de pesquisa, não uma recomendação: confira custos, impostos e a sua situação antes de qualquer decisão.";
   const c = d.cagr, g = d.objetivo;
   setChildren("p-kpis",
@@ -945,15 +1037,117 @@ function renderPurpose(d) {
   if (purposeUrl) URL.revokeObjectURL(purposeUrl);
   purposeUrl = URL.createObjectURL(new Blob([d.markdown], { type: "text/markdown;charset=utf-8" }));
   $("p-download").href = purposeUrl;
+  renderPlan(d); renderChanges(d); renderConc(d); renderScreen(d); renderRules(d); renderSources(d);
+}
+const KIND_PT = { entrou: "entrou", saiu: "saiu", aumentou: "aumentou", reduziu: "reduziu", mantido: "mantido" };
+function planBlock(pl, title) {
+  const out = [el("h3", {}, title)];
+  if (!pl || !pl.posicoes || !pl.posicoes.length) { out.push(el("p", { class: "muted" }, "Nenhuma compra nesta etapa.")); return out; }
+  const qty = (r) => r.ticker === "CAIXA_CDI" || r.ticker === "SINT_SELIC" ? "aplicar " + fmtMoney(r.valor)
+    : (Number.isInteger(r.quantidade) ? String(r.quantidade) : fmtNum(r.quantidade, 4)) + (r.quantidade === 1 ? " unidade" : " unidades");
+  const tb = el("tbody");
+  for (const r of pl.posicoes) {
+    tb.append(el("tr", { class: "asset" }, el("td", {}, r.ticker), el("td", {}, qty(r)), el("td", { class: "num" }, fmtMoney(r.valor))),
+      el("tr", { class: "asset-why" }, el("td", { colspan: "3" },
+        `preço ${fmtMoney(r.preco)} · peso-alvo ${fmtPct(r.peso_alvo, 1)}` + (r.peso_executado !== undefined ? ` · peso comprado ${fmtPct(r.peso_executado, 1)}`
+          : r.peso_apos_compra !== undefined ? ` · peso depois da compra ${fmtPct(r.peso_apos_compra, 1)}` : "") + ` · ${r.regra_de_lote}`)));
+  }
+  out.push(el("div", { class: "tbl" }, el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Ativo"), el("th", {}, "Quanto comprar"), el("th", { class: "num" }, "Valor"))), tb)));
+  const notes = [`Sobra sem investir: ${fmtMoney(pl.caixa_nao_investido)}.`, ...(pl.notas || [])];
+  out.push(el("p", { class: "muted" }, notes.join(" ")));
+  const later = Object.entries(pl.fora_desta_compra || {});
+  if (later.length) out.push(el("ul", { class: "clean" }, ...later.map(([t, w]) => el("li", { class: "muted" }, `${t}: ${w}`))));
+  return out;
+}
+function renderPlan(d) {
+  const ex = d.execucao || {}, q = d.entrada || {};
+  $("p-plan-note").textContent = [ex.nota_referencia, "Preços: " + ex.precos, `Compra mínima por ativo: ${fmtMoney(ex.valor_minimo_posicao)}`].filter(Boolean).join(". ") + ".";
+  const kids = [];
+  const outBefore = Object.entries(ex.fora_por_tamanho_minimo || {}), outAfter = Object.entries(ex.retirados_apos_otimizar || {});
+  if (outBefore.length || outAfter.length) kids.push(el("details", {}, el("summary", {}, `${outBefore.length + outAfter.length} ativo(s) ficaram de fora porque a compra mínima não cabe no valor`),
+    el("ul", { class: "clean" }, ...outBefore.concat(outAfter).map(([t, w]) => el("li", { class: "muted" }, `${t}: ${w}`)))));
+  if (ex.compra_inicial) kids.push(...planBlock(ex.compra_inicial, `Compra inicial com ${fmtMoney(q.capital_inicial)}`));
+  if (ex.proximo_aporte) kids.push(...planBlock(ex.proximo_aporte, `Próximo aporte de ${fmtMoney(q.aporte_periodico)} (${q.periodicidade})`));
+  if ((ex.vendas_sugeridas || []).length) {
+    kids.push(el("h3", {}, "Acima do alvo na sua carteira atual"),
+      el("ul", { class: "clean" }, ...ex.vendas_sugeridas.map((v) => el("li", {}, `${v.ticker}: tem ${fmtMoney(v.valor_atual)}, alvo ${fmtMoney(v.valor_alvo)} — ${v.motivo}`))),
+      el("p", { class: "muted" }, ex.nota_vendas || ""));
+  }
+  if (!kids.length) kids.push(el("p", { class: "muted" }, "Sem valor para comprar agora."));
+  setChildren("p-plan", ...kids);
+}
+function renderChanges(d) {
+  const ch = d.mudancas, fp = (d.reprodutibilidade || {}).impressao_digital_carteira || "";
+  if (!ch) {
+    setChildren("p-changes", el("p", { class: "muted" }, "Primeira carteira montada neste aparelho (ou comparação desligada): nada a comparar. "
+      + "Da próxima vez, a página compara com esta e explica o que mudou. Impressão digital desta carteira: " + fp + "."));
+    return;
+  }
+  const kids = [el("p", {}, `Comparação com a ${ch.referencia}: ${(ch.notas || []).join("; ")}.`)];
+  if (ch.regra_de_estabilidade) kids.push(el("p", { class: "muted" }, "Regra de estabilidade: " + ch.regra_de_estabilidade.explicacao));
+  const tb = el("tbody");
+  for (const c of ch.mudancas) {
+    const cls = c.tipo === "entrou" || c.tipo === "aumentou" ? "pill in" : c.tipo === "saiu" || c.tipo === "reduziu" ? "pill out" : "pill";
+    tb.append(el("tr", { class: "asset" }, el("td", {}, c.ticker), el("td", { class: "num" }, fmtPct(c.antes, 1)), el("td", { class: "num" }, fmtPct(c.depois, 1)),
+      el("td", {}, el("span", { class: cls }, KIND_PT[c.tipo] || c.tipo))),
+      el("tr", { class: "asset-why" }, el("td", { colspan: "4" }, c.motivo || "")));
+  }
+  kids.push(el("div", { class: "tbl" }, el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Ativo"), el("th", { class: "num" }, "Antes"),
+    el("th", { class: "num" }, "Agora"), el("th", {}, "O que aconteceu"))), tb)));
+  kids.push(el("p", { class: "kind" }, `Impressão digital: ${ch.impressao_digital_antes} → ${ch.impressao_digital_depois}. Mudanças menores que 1 ponto percentual contam como "mantido".`));
+  setChildren("p-changes", ...kids);
+}
+const CLASS_LABEL = { renda_fixa_br: "Renda fixa (Brasil)", acoes_br: "Ações (Brasil)", acoes_eua: "Ações (EUA)",
+  etf_br: "ETFs na B3", etf_eua: "ETFs nos EUA", fii: "Fundos imobiliários", ouro: "Ouro", cripto: "Cripto",
+  caixa: "Caixa (CDI)" };
+const MARKET_LABEL = { B3: "Bolsa brasileira (B3)", US: "EUA", CAIXA: "Caixa em reais (CDI)" };
+function renderConc(d) {
+  const c = d.concentracao;
+  if (!c) { setChildren("p-conc"); return; }
+  const kids = [el("p", {}, `${c.n_posicoes} posições, que se comportam como cerca de ${fmtNum(c.apostas_independentes_enb, 1)} apostas independentes `
+    + `(N efetivo pelos pesos: ${fmtNum(c.n_efetivo_pesos, 1)}). Maior posição: ${c.maior_posicao.ticker} (${fmtPct(c.maior_posicao.peso, 1)}).`)];
+  for (const w of c.alertas || []) kids.push(el("p", {}, el("span", { class: "st", style: "--c:var(--warn)" }, "atenção"), " " + w));
+  for (const g of c.grupos_que_andam_juntos || []) kids.push(el("p", { class: "muted" }, `Andam juntos: ${g.ativos.join(", ")} — ${fmtPct(g.peso, 0)} do dinheiro, ${fmtPct(g.participacao_no_risco, 0)} do risco (correlação média ${fmtNum(g.correlacao_media)}).`));
+  for (const [dim, lab] of [["moeda", "Por moeda"], ["classe", "Por classe"], ["mercado", "Por mercado"]]) {
+    const ex = (c.exposicao || {})[dim] || {}, rk = (c.exposicao_ao_risco || {})[dim] || {};
+    const lab = dim === "classe" ? CLASS_LABEL : dim === "mercado" ? MARKET_LABEL : {};
+    const rows = Object.entries(ex).sort((a, b) => b[1] - a[1]).map(([k, v]) => [lab[k] || k, fmtPct(v, 0), fmtPct(rk[k] || 0, 0)]);
+    kids.push(el("h3", {}, lab), el("div", { class: "tbl" }, table(["", "do dinheiro", "do risco"], rows, [1, 2])));
+  }
+  setChildren("p-conc", ...kids);
+}
+function renderScreen(d) {
+  const rows = (d.triagem || []).slice(0, 120).map((r) => [r.ticker, r.classe, fmtNum(r.pontuacao), r.decisao, r.motivo]);
+  setChildren("p-screen", rows.length ? table(["ativo", "classe", "pontuação", "decisão", "motivo"], rows, [2]) : el("p", { class: "muted" }, "Triagem indisponível."));
+}
+function renderRules(d) {
+  const r = d.regras_pessoais || {};
+  const items = [el("li", {}, `Perfil final: ${r.perfil_final || "?"}; aversão ao risco ${fmtNum(r.aversao_ao_risco, 1)}; teto de volatilidade ${fmtPct(r.teto_volatilidade, 1)} ao ano; objetivo: ${r.objetivo || "?"}.`)];
+  for (const x of r.regras || []) items.push(el("li", {}, "Regra aplicada: " + x));
+  for (const x of r.hipoteses || []) items.push(el("li", { class: "muted" }, "Hipótese (você não informou): " + x));
+  for (const x of r.notas_perfil || []) items.push(el("li", { class: "muted" }, x));
+  setChildren("p-rules", ...items);
+}
+function renderSources(d) {
+  setChildren("p-sources", ...(d.fontes || []).map((f) => el("li", {}, `${f.dado}: ${f.fonte}` + (f.data ? ` (data ${f.data})` : "") + (f.limite ? ` — ${f.limite}` : ""))));
+  const r = d.reprodutibilidade || {};
+  $("p-repro").textContent = r.impressao_digital_carteira ? `Reprodutibilidade: carteira ${r.impressao_digital_carteira} · parâmetros ${r.parametros} · dados ${r.dados} · versão ${r.versao}. ${r.nota || ""}` : "";
 }
 $("p-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
-  const p = readPurpose();
+  const { p, badHoldings } = readPurpose();
   const st = $("p-status");
-  if (!(p.capital_inicial > 0) && !(p.aporte_periodico > 0 && p.periodicidade !== "nenhum")) {
+  if (badHoldings.length) {
+    st.textContent = "Não entendi estas linhas de \"O que você já tem\": " + badHoldings.join(" | ") + ". Use: código e valor, ex. PETR4 1500.";
+    return;
+  }
+  const hasHoldings = Object.values(p.carteira_atual).some((v) => v > 0);
+  if (!(p.capital_inicial > 0) && !hasHoldings && !(p.aporte_periodico > 0 && p.periodicidade !== "nenhum")) {
     st.textContent = "Informe quanto já tem para começar ou um aporte por período (por exemplo, R$ 2.000 mensais).";
     return;
   }
+  // a new request never leaves the previous portfolio on screen: if it fails, nothing old is shown as current
+  $("p-results").classList.add("hidden");
   const btn = $("p-run"); btn.disabled = true;
   const live = liveStatus(st, p.fonte_dados === "real" ? "Enviando o pedido (cotações reais; cerca de 1 min)…"
     : "Enviando o pedido (demonstração)…");
@@ -961,10 +1155,11 @@ $("p-form").addEventListener("submit", async (ev) => {
     const d = await postStream("/api/proposito", p, live.update);
     live.stop();
     renderPurpose(d);
-    st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s.`;
+    savePrev(p.fonte_dados, d);
+    st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s.` + (d.do_cache ? " (resultado calculado há poucos minutos, reaproveitado)" : "");
   } catch (e) {
     live.stop();
-    st.textContent = "Erro: " + e.message;
+    st.textContent = "Erro: " + e.message + " Nenhuma carteira foi mostrada: um resultado antigo não substitui uma consulta que falhou.";
   } finally { btn.disabled = false; }
 });
 

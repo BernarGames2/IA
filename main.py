@@ -91,6 +91,18 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--rf", action="append", default=[], metavar="MOEDA=TAXA",
                    help="taxa livre de risco por moeda, ex. --rf BRL=0.105 --rf USD=0.043 (repita por moeda)")
     g.add_argument("--classes", nargs="+", help="macroclasses do catálogo a considerar (padrão: todas)")
+    g.add_argument("--objetivo-tipo", choices=["crescimento", "renda", "preservacao"],
+                   help="objetivo principal (não informado = hipótese de crescimento, registrada no relatório)")
+    g.add_argument("--queda-maxima", type=float, help="maior queda aceitável, fração (ex. 0.15)")
+    g.add_argument("--liquidez-12m", type=float, help="fração do dinheiro que pode precisar em 12 meses (0-1)")
+    g.add_argument("--mercados", nargs="+", choices=["BR", "US"], help="mercados aceitos (padrão: Brasil e EUA)")
+    g.add_argument("--permitir-cripto", action="store_true", help="permite criptoativos (ETFs listados)")
+    g.add_argument("--excluir", nargs="+", default=[], metavar="TICKER", help="ativos que você não quer")
+    g.add_argument("--excluir-setores", nargs="+", default=[], metavar="SETOR", help="setores que você não quer")
+    g.add_argument("--carteira-atual", action="append", default=[], metavar="TICKER=VALOR",
+                   help="o que você já tem (repetível), valor na moeda do objetivo")
+    g.add_argument("--fracionario-eua", action="store_true", help="a corretora compra frações de ações dos EUA")
+    g.add_argument("--compra-minima", type=float, help="menor compra por ativo que vale a pena (padrão 100)")
     a = p.add_argument_group("vale a pena? (análise de uma ação)")
     a.add_argument("--acao", metavar="CODIGO_OU_NOME",
                    help="analisa uma ação (ex.: PETR4, VALE3, AAPL, 'Petrobras'): veredito por regras + projeção; "
@@ -183,6 +195,18 @@ def purpose_request_from_args(a: argparse.Namespace, cfg: AppConfig) -> PurposeR
         data["peso_alinhamento"] = a.peso_alinhamento
     if a.simulations is not None:
         data["n_simulacoes"] = a.simulations
+    held: dict[str, float] = {}
+    for item in a.carteira_atual:
+        tk, sep, val = item.partition("=")
+        if not sep:
+            raise ValueError(f"--carteira-atual espera TICKER=VALOR (ex. PETR4=1500), recebido {item!r}")
+        held[tk.strip()] = held.get(tk.strip(), 0.0) + float(val)
+    data.update({"objetivo_tipo": a.objetivo_tipo, "tolerancia_perda": a.queda_maxima,
+                 "necessidade_liquidez": a.liquidez_12m, "mercados": a.mercados, "permitir_cripto": a.permitir_cripto,
+                 "ativos_excluidos": a.excluir, "setores_excluidos": a.excluir_setores, "carteira_atual": held,
+                 "fracionario_eua": a.fracionario_eua})
+    if a.compra_minima is not None:
+        data["valor_minimo_posicao"] = a.compra_minima
     return PurposeRequest(**data)
 
 

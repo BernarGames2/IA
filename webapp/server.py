@@ -54,6 +54,7 @@ _INDEX_HTML = (Path(__file__).parent / "static" / "index.html").read_text(encodi
 _OUTPUT_DIR = Path(tempfile.gettempdir()) / "qpi-web"   # only /tmp is writable on serverless hosts
 _MAX_CONCURRENT = 2
 _CACHE_SIZE = 4
+_RESULT_TTL_S = 15 * 60       # a real-data result is reused for at most 15 minutes, then recomputed
 _DOWNLOAD_BUDGET_S = 45.0     # total time allowed for downloading real quotes in one request
 _PING_EVERY_S = 5.0           # keep-alive event interval of streamed responses
 
@@ -105,11 +106,21 @@ class PurposeWebRequest(BaseModel):
     seed: int = Field(42, ge=0, le=2**31 - 1)
     universo: Literal["completo", "curado"] = "completo"
     max_ativos: int = Field(40, ge=10, le=60)            # bounded so a request fits the platform time limit
+    objetivo_tipo: Literal["crescimento", "renda", "preservacao"] | None = None
+    tolerancia_perda: float | None = Field(None, gt=0, lt=1)
+    necessidade_liquidez: float | None = Field(None, ge=0, le=1)
+    mercados: list[Literal["BR", "US"]] | None = Field(None, min_length=1, max_length=2)
+    permitir_cripto: bool = False
+    ativos_excluidos: list[str] = Field(default_factory=list, max_length=100)
+    setores_excluidos: list[str] = Field(default_factory=list, max_length=40)
+    carteira_atual: dict[str, float] = Field(default_factory=dict, max_length=100)
+    carteira_anterior: dict[str, float] = Field(default_factory=dict, max_length=100)
+    carteira_anterior_parametros: str | None = Field(None, max_length=64)
+    fracionario_eua: bool = False
+    valor_minimo_posicao: float = Field(100.0, ge=0, le=1e6)
 
     def key(self) -> str:
-        # real prices change every day: cached real results are reused only within the same UTC day
-        day = datetime.now(UTC).date().isoformat() if self.fonte_dados == "real" else ""
-        return self.model_dump_json() + day
+        return self.model_dump_json()
 
 
 class StockRequest(BaseModel):
@@ -127,8 +138,7 @@ class StockRequest(BaseModel):
     seed: int = Field(42, ge=0, le=2**31 - 1)
 
     def key(self) -> str:
-        day = datetime.now(UTC).date().isoformat() if self.fonte_dados == "real" else ""
-        return "acao|" + self.model_dump_json() + day
+        return "acao|" + self.model_dump_json()
 
 
 app = FastAPI(title=f"{APP_NAME} — web", version=APP_VERSION, docs_url="/api/docs", redoc_url=None,
@@ -137,7 +147,30 @@ app = FastAPI(title=f"{APP_NAME} — web", version=APP_VERSION, docs_url="/api/d
 _slots = threading.BoundedSemaphore(_MAX_CONCURRENT)
 _cache_lock = threading.Lock()
 _cache: OrderedDict[tuple[object, ...], tuple[AnalysisResult, float]] = OrderedDict()
-_purpose_cache: OrderedDict[str, dict[str, object]] = OrderedDict()
+_purpose_cache: OrderedDict[str, tuple[float, dict[str, object]]] = OrderedDict()
+
+
+def _cached(k: str, real: bool) -> dict[str, object] | None:
+    """A stored result, if still valid: synthetic results never expire (same seed -> same numbers); a
+    real-data result expires after _RESULT_TTL_S so new quotes lead to a new analysis. The copy says it
+    came from the cache and when it was computed."""
+    with _cache_lock:
+        hit = _purpose_cache.get(k)
+        if hit is None:
+            return None
+        t, payload = hit
+        if real and time.time() - t > _RESULT_TTL_S:
+            del _purpose_cache[k]
+            return None
+        _purpose_cache.move_to_end(k)
+    return {**payload, "do_cache": True}
+
+
+def _store(k: str, payload: dict[str, object]) -> None:
+    with _cache_lock:
+        _purpose_cache[k] = (time.time(), payload)
+        while len(_purpose_cache) > _CACHE_SIZE:
+            _purpose_cache.popitem(last=False)
 
 
 def _profile_input(p: AnalyzeRequest) -> InvestorProfileInput:
@@ -239,6 +272,8 @@ def _purpose_payload(res: PurposeResult, elapsed: float) -> dict[str, object]:
     out["markdown"] = render_markdown(res)
     out["elapsed_s"] = round(elapsed, 2)
     out["run_id"] = res.analysis.run_id
+    out["calculado_em_utc"] = datetime.now(UTC).isoformat(timespec="seconds")
+    out["do_cache"] = False
     return out
 
 
@@ -255,10 +290,9 @@ def proposito(p: PurposeWebRequest, stream: bool = False) -> Response:
 
     def compute(progress: Callable[[str], None]) -> dict[str, object]:
         k = p.key()
-        with _cache_lock:
-            if k in _purpose_cache:
-                _purpose_cache.move_to_end(k)
-                return _purpose_cache[k]
+        hit = _cached(k, not offline)
+        if hit is not None:
+            return hit
         if not _slots.acquire(timeout=120):
             raise HTTPException(503, "servidor ocupado; tente novamente em instantes")
         try:
@@ -275,10 +309,7 @@ def proposito(p: PurposeWebRequest, stream: bool = False) -> Response:
             raise _analysis_error(e) from e
         finally:
             _slots.release()
-        with _cache_lock:
-            _purpose_cache[k] = payload
-            while len(_purpose_cache) > _CACHE_SIZE:
-                _purpose_cache.popitem(last=False)
+        _store(k, payload)
         return payload
 
     return _respond(compute, stream)
@@ -288,10 +319,9 @@ def proposito(p: PurposeWebRequest, stream: bool = False) -> Response:
 def acao(p: StockRequest, stream: bool = False) -> Response:
     def compute(progress: Callable[[str], None]) -> dict[str, object]:
         k = p.key()
-        with _cache_lock:
-            if k in _purpose_cache:
-                _purpose_cache.move_to_end(k)
-                return _purpose_cache[k]
+        hit = _cached(k, p.fonte_dados == "real")
+        if hit is not None:
+            return hit
         if not _slots.acquire(timeout=120):
             raise HTTPException(503, "servidor ocupado; tente novamente em instantes")
         try:
@@ -303,6 +333,8 @@ def acao(p: StockRequest, stream: bool = False) -> Response:
                                 download_budget_s=_DOWNLOAD_BUDGET_S)
             payload = stock_to_dict(res)
             payload["elapsed_s"] = round(time.perf_counter() - t0, 2)
+            payload["calculado_em_utc"] = datetime.now(UTC).isoformat(timespec="seconds")
+            payload["do_cache"] = False
         except DataUnavailableError as e:
             raise HTTPException(503, f"dados indisponíveis agora ({_short(e)}). Nada foi estimado no lugar: confira "
                                      "o código da ação ou tente de novo em alguns minutos.") from e
@@ -312,10 +344,7 @@ def acao(p: StockRequest, stream: bool = False) -> Response:
             raise HTTPException(400, str(e)) from e
         finally:
             _slots.release()
-        with _cache_lock:
-            _purpose_cache[k] = payload
-            while len(_purpose_cache) > _CACHE_SIZE:
-                _purpose_cache.popitem(last=False)
+        _store(k, payload)
         return payload
 
     return _respond(compute, stream)
