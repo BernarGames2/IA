@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from core.market_data.logos import logo_path
 from utils.serialization import to_jsonable
 
 if TYPE_CHECKING:
@@ -337,6 +338,17 @@ def render_markdown(r: PurposeResult) -> str:
     return "\n".join(L) + "\n"
 
 
+def _logos(r: PurposeResult) -> dict[str, str]:
+    """Logo address of every ticker the page shows (portfolio, plans, holdings, changes); none in the synthetic
+    demonstration, whose assets do not exist."""
+    if r.is_synthetic:
+        return {}
+    tickers = {str(a["ticker"]) for a in r.allocation} | set(r.request.carteira_atual)
+    if r.changes is not None:
+        tickers |= {c.ticker for c in r.changes.changes}
+    return {t: p for t in sorted(tickers) if (p := logo_path(t))}
+
+
 def to_dict(r: PurposeResult) -> dict[str, object]:
     return to_jsonable({
         "aviso": DISCLAIMER, "dados_sinteticos": r.is_synthetic, "carteira_final": r.is_final_portfolio,
@@ -367,6 +379,7 @@ def to_dict(r: PurposeResult) -> dict[str, object]:
         "concentracao": r.concentration.as_dict() if r.concentration is not None else None,
         "mudancas": r.changes.as_dict() if r.changes is not None else None,
         "fontes": r.sources, "reprodutibilidade": r.reproducibility,
+        "logos": _logos(r),
         # what the page stores to compare the next run with this one (same inputs + new prices -> stability rule)
         "para_guardar": {"pesos": {t: float(w) for t, w in r.combined.final.items() if float(w) >= 0.005},
                          "parametros": r.reproducibility.get("parametros")},

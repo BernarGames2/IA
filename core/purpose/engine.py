@@ -46,6 +46,7 @@ from core.market_data.cash import (
     WithExtraSeries,
     fetch_cdi_cash,
 )
+from core.market_data.logos import logo_path
 from core.market_data.quality import QualitySettings
 from core.market_data.risk_free import RiskFreeQuote, fetch_live_rates
 from core.market_data.yahoo_chart import FetchFn, YahooChartProvider
@@ -1167,7 +1168,8 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
                 for x in scr.alternatives(s)]
         mk = traits(a).market
         allocation.append({
-            "ticker": s, "nome": a.name, "classe": a.macro_class, "moeda": table.loc[s, "moeda"],
+            "ticker": s, "nome": a.name, "logo": None if ds.is_synthetic else logo_path(s),
+            "classe": a.macro_class, "moeda": table.loc[s, "moeda"],
             "mercado": {"B3": "B3 (Brasil)", "US": "EUA", "CAIXA": "caixa em reais (CDI)"}[mk], "peso": w_s,
             "valor_inicial": req.capital_inicial * w_s,
             "valor_alvo": start * w_s, "valor_atual": float(req.carteira_atual.get(s, 0.0)),

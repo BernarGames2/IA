@@ -176,6 +176,15 @@
 48. **Valores digitados** (site e linha de comando, mesma regra): "1.500,00", "1500,5" e "1,500.00" são aceitos; com
     um só tipo de separador, grupos de exatamente três dígitos ("1.500", "1,500") são milhar. Código de ativo vazio
     é erro. Códigos: PETR4F (fracionário) vira PETR4.SA; B3SA3 e B5P211 são reconhecidos; BRK.B vira BRK-B.
+49. **Logos**: ícone que a empresa publica no próprio site, lido por um serviço público de favicons (Google,
+    `s2/favicons`) pelo servidor do app — o navegador não fala com terceiros. O domínio vem da lista curada de sites
+    oficiais (`B3_SITES` pela raiz do código, `US_SITES` por ticker; fundos e ETFs: a gestora) ou, numa ação
+    pesquisada fora dela, do site informado pela B3/Yahoo (plataformas de RI e redes sociais são recusadas, porque o
+    ícone seria de outra empresa). Só imagens rasterizadas (PNG, JPEG, GIF, WEBP, ICO; SVG recusado), até 200 kB e
+    com lado ≥ 24 px; guardadas em memória por 7 dias (falta: 1 hora) e no cache da CDN. Sem logo: as iniciais do
+    código. Os ícones reais não puderam ser vistos neste ambiente (o serviço de favicons é bloqueado pela rede); o
+    mecanismo foi verificado com um serviço simulado. Um site oficial pode trocar de domínio: a lista curada precisa
+    de revisão periódica. Logos são marcas dos donos, usados só para identificar o ativo.
 
 ## Itens pendentes / próximos passos
 

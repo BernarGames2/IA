@@ -296,6 +296,14 @@ P90/P50/P10, P(objetivo) com erro padrão e IC, sensibilidade, alertas e as seç
 diversificação real, triagem completa, regras/hipóteses, fontes e reprodutibilidade: impressão digital da carteira,
 dos parâmetros e dos dados + versão). Todo texto gerado passa pelo verificador de linguagem de garantia.
 
+**Logos das empresas** (`core/market_data/logos.py`): na carteira (alocação, teses, plano de compra, mudanças) e
+em "Vale a pena?" (atalhos e cabeçalho do resultado), cada ativo aparece com o ícone que a empresa publica no próprio
+site. O site vem da B3 ou do Yahoo Finance (ação pesquisada) ou de uma lista curada de sites oficiais do catálogo
+(fundos e ETFs mostram a gestora: iShares, Vanguard, Kinea…). O servidor do app busca o ícone num serviço público de
+favicons (Google), aceita só imagens rasterizadas e guarda por uma semana; o navegador só fala com o próprio app.
+Sem logo verificado — ativos fora do catálogo, demonstração sintética, caixa CDI — aparecem as iniciais do código,
+nunca o logo de outra empresa. Logos são marcas dos donos, mostradas só para identificar o ativo.
+
 **Por que a carteira se repetia e o que mudou:** ver [`docs/audit_repeticao.md`](docs/audit_repeticao.md) (causas
 com arquivo e linha, tabela antes/depois gerada por `python scripts/audit_repetition.py`).
 

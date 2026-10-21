@@ -37,6 +37,7 @@ from config import APP_NAME, APP_VERSION, AppConfig
 from core.ai_analyst.analyst import ResearchAnalyst
 from core.ai_analyst.tools import AnalysisContext
 from core.market_data.base import DataUnavailableError
+from core.market_data.logos import clean_domain, domain_for, fetch_logo
 from core.portfolio_engine import AnalysisResult, run_analysis
 from core.profiler import demo_profile
 from core.purpose.engine import PurposeRequest, PurposeResult, run_purpose
@@ -265,6 +266,36 @@ def _market_provider() -> object | None:
 def _rf_fetch() -> object | None:
     """HTTP fetch used for the Selic (BCB) quote; None = standard library. Replaceable in tests."""
     return None
+
+
+def _logo_fetch() -> object | None:
+    """HTTP fetch used for company logos; None = standard library. Replaceable in tests."""
+    return None
+
+
+def _logo_response(domain: str | None) -> Response:
+    """The company's icon from this app's own address (the browser never calls the favicon service); 404 when
+    there is none, so the page shows the ticker's initials."""
+    img = fetch_logo(domain, _logo_fetch()) if domain else None  # type: ignore[arg-type]
+    if img is None:
+        return Response(status_code=404, headers={"Cache-Control": "public, max-age=3600, s-maxage=3600"})
+    body, mime = img
+    return Response(content=body, media_type=mime, headers={
+        "Cache-Control": "public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400",
+        "X-Content-Type-Options": "nosniff", "Content-Security-Policy": "default-src 'none'"})
+
+
+@app.get("/api/logo/site/{domain}")
+def logo_site(domain: str) -> Response:
+    """Logo by company domain (as the results give it)."""
+    d = clean_domain(domain)
+    return _logo_response(d if d == domain else None)
+
+
+@app.get("/api/logo/ativo/{ticker}")
+def logo_ticker(ticker: str) -> Response:
+    """Logo by ticker, for the catalogue's companies (used before any result exists, e.g. the quick picks)."""
+    return _logo_response(domain_for(ticker))
 
 
 def _purpose_payload(res: PurposeResult, elapsed: float) -> dict[str, object]:

@@ -87,10 +87,21 @@ ul.clean li { margin: 3px 0; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
 .chip { background: transparent; color: var(--ink2); border: 1px solid var(--ring); border-radius: 999px; padding: 5px 12px;
   font-weight: 500; font-size: 0.82rem; }
+.chip.has-logo { display: inline-flex; align-items: center; gap: 6px; padding-left: 6px; }
+.logo { display: inline-flex; align-items: center; justify-content: center; flex: none; width: var(--sz, 24px);
+  height: var(--sz, 24px); border-radius: 6px; overflow: hidden; background: #fff; box-shadow: 0 0 0 1px var(--ring);
+  vertical-align: middle; }
+.logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.logo.mono { background: var(--seq1); color: var(--seq7); box-shadow: none; font-weight: 700; line-height: 1;
+  font-size: calc(var(--sz, 24px) * 0.4); letter-spacing: 0.02em; }
+.with-logo { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.with-logo > span:last-child, .with-logo > div:last-child { min-width: 0; overflow-wrap: anywhere; }
 .answer { border-left: 3px solid var(--accent); padding: 6px 12px; margin: 10px 0; }
 .kind { color: var(--muted); font-size: 0.76rem; }
 .hint { color: var(--muted); font-size: 0.74rem; line-height: 1.35; }
 tr.asset td { border-bottom: 0; padding-bottom: 2px; }
+tr.asset-head td { border-bottom: 0; padding-bottom: 2px; padding-top: 10px; font-weight: 600; }
+.with-logo > span.code { white-space: nowrap; overflow-wrap: normal; }
 tr.asset td:first-child { overflow-wrap: anywhere; }
 tr.asset-why td { padding-top: 0; font-size: 0.8rem; color: var(--ink2); }
 code { font-size: 0.8rem; }
@@ -496,6 +507,28 @@ function statusBadge(s) {
   return el("span", { class: "st", style: "--c:" + c }, lab);
 }
 function setChildren(id, ...nodes) { const e = $(id); e.replaceChildren(...nodes); return e; }
+// company logos: the icon served from this app's own address (/api/logo/...); the ticker's initials when
+// there is no logo or it does not load (synthetic assets, cash, assets outside the catalogue)
+function initials(t) {
+  if (t === "CAIXA_CDI") return "R$";
+  const b = String(t).replace(/\.SA$/, "").replace(/^SINT_/, "").replace(/-USD$/, "").replace(/[^A-Za-z0-9]/g, "");
+  return b.slice(0, 2).toUpperCase() || "?";
+}
+function logoEl(ticker, url, size = 24) {
+  const box = el("span", { class: "logo", style: `--sz:${size}px`, "aria-hidden": "true" });
+  const mono = () => { box.className = "logo mono"; box.replaceChildren(initials(ticker)); };
+  if (!url) { mono(); return box; }
+  const img = el("img", { src: url, alt: "", width: String(size), height: String(size), loading: "lazy",
+    decoding: "async", referrerpolicy: "no-referrer" });
+  img.addEventListener("error", mono, { once: true });
+  box.append(img);
+  return box;
+}
+function withLogo(ticker, url, text, size = 24, code = false) {
+  return el("span", { class: "with-logo" }, logoEl(ticker, url, size), el("span", code ? { class: "code" } : {}, text));
+}
+let purposeLogos = {};
+const logoOf = (t) => purposeLogos[t] || null;
 
 // ---------- SVG helpers
 function s(tag, attrs = {}, text) {
@@ -997,17 +1030,17 @@ function renderPurpose(d) {
   $("p-funnel").textContent = funnel + (u.cobertura ? "Cobertura consultada: " + u.cobertura : "");
   const ent = d.entrada || {};
   const hasHoldings = Object.keys(ent.carteira_atual || {}).length > 0;
+  purposeLogos = d.logos || {};
   const noCapital = !(ent.capital_inicial > 0) && !hasHoldings;
   const hasContrib = ent.aporte_periodico > 0 && ent.periodicidade !== "nenhum";
-  // each asset: one row of numbers, then its reason on a full-width row (readable on a phone)
-  const cols = ["Ativo", "Peso", ...(noCapital ? [] : [hasHoldings ? "Alvo hoje" : "Inicial"]),
+  // each asset: its logo and name on a full-width row, then one row of numbers, then its reason (readable on a phone)
+  const cols = ["Peso", ...(noCapital ? [] : [hasHoldings ? "Alvo hoje" : "Inicial"]),
     ...(hasHoldings ? ["Você tem"] : []), ...(hasContrib ? ["Por aporte"] : [])];
-  const isNum = (i) => i > 0;
   const tbody = el("tbody");
   for (const a of d.onde_investir) {
     const row = d.carteira.find((r) => r.ticker === a.ticker) || {};
     const score = row.score_alinhamento === null || row.score_alinhamento === undefined ? "não calculado" : fmtNum(row.score_alinhamento);
-    const cells = [a.ticker + " — " + a.nome, fmtPct(a.peso, 1), ...(noCapital ? [] : [fmtMoney(a.valor_alvo)]),
+    const cells = [fmtPct(a.peso, 1), ...(noCapital ? [] : [fmtMoney(a.valor_alvo)]),
       ...(hasHoldings ? [fmtMoney(a.valor_atual)] : []), ...(hasContrib ? [fmtMoney(a.aporte_por_periodo)] : [])];
     const alts = (a.alternativas || []).map((x) => `${x.ticker} (${x.motivo})`).join("; ");
     const evidence = el("details", {}, el("summary", {}, "Fatos, estimativas, hipóteses e alternativas"),
@@ -1019,11 +1052,13 @@ function renderPurpose(d) {
         el("li", {}, el("strong", {}, "Diversificação: "), a.diversificacao || "—"),
         el("li", {}, el("strong", {}, "Riscos principais: "), a.riscos || "—"),
         el("li", {}, el("strong", {}, "Alternativas consideradas e não escolhidas: "), alts || "nenhuma do mesmo grupo")));
-    tbody.append(el("tr", { class: "asset" }, ...cells.map((c, i) => el("td", isNum(i) ? { class: "num" } : {}, c))),
+    tbody.append(el("tr", { class: "asset-head" }, el("td", { colspan: String(cols.length) },
+        withLogo(a.ticker, a.logo || logoOf(a.ticker), a.ticker + " — " + a.nome, 28))),
+      el("tr", { class: "asset" }, ...cells.map((c) => el("td", { class: "num" }, c))),
       el("tr", { class: "asset-why" }, el("td", { colspan: String(cols.length) }, "Por quê: " + a.por_que,
         el("div", { class: "muted" }, `Negócio: ${a.negocio} · ${a.mercado || ""} · moeda ${a.moeda} · alinhamento ${score}`), evidence)));
   }
-  setChildren("p-alloc", el("table", {}, el("thead", {}, el("tr", {}, ...cols.map((h, i) => el("th", isNum(i) ? { class: "num" } : {}, h)))), tbody));
+  setChildren("p-alloc", el("table", {}, el("thead", {}, el("tr", {}, ...cols.map((h) => el("th", { class: "num" }, h)))), tbody));
   $("p-alloc-note").textContent = (noCapital
     ? "Você começa sem capital inicial: a coluna Por aporte mostra como dividir cada aporte entre os ativos (aporte × peso; o plano de compra abaixo arredonda para lotes reais). "
     : (hasHoldings ? "Alvo hoje = (o que você já tem + capital novo) × peso; Você tem = valor atual da posição. "
@@ -1045,7 +1080,7 @@ function renderPurpose(d) {
   $("p-why").textContent = d.temas.porque ? `Porquê declarado (citação literal): "${d.temas.porque}" · confiança da extração: ${d.temas.confianca}`
     : `Confiança da extração de temas: ${d.temas.confianca}.`;
   setChildren("p-theses", ...d.teses.map((t) => el("div", { class: "thesis" },
-    el("h3", {}, t.ticker + " — " + t.nome),
+    el("h3", { class: "with-logo" }, logoEl(t.ticker, logoOf(t.ticker), 26), el("span", {}, t.ticker + " — " + t.nome)),
     el("p", {}, el("span", { class: "tag" }, "(a) Tese financeira · "), t.tese_financeira),
     el("p", {}, el("span", { class: "tag" }, "(b) Tese de propósito · "), t.tese_proposito))));
   setChildren("p-scen", table(["cenário", "patrimônio nominal", "real", "CAGR equivalente", "atinge?"],
@@ -1070,7 +1105,7 @@ function planBlock(pl, title) {
   if (pl.posicoes && pl.posicoes.length) {
     const tb = el("tbody");
     for (const r of pl.posicoes) {
-      tb.append(el("tr", { class: "asset" }, el("td", {}, r.ticker), el("td", {}, qty(r)), el("td", { class: "num" }, fmtMoney2(r.valor))),
+      tb.append(el("tr", { class: "asset" }, el("td", {}, withLogo(r.ticker, logoOf(r.ticker), r.ticker, 20, true)), el("td", {}, qty(r)), el("td", { class: "num" }, fmtMoney2(r.valor))),
         el("tr", { class: "asset-why" }, el("td", { colspan: "3" },
           `preço ${fmtMoney2(r.preco)} · peso-alvo ${fmtPct(r.peso_alvo, 1)}` + (r.peso_executado !== undefined ? ` · peso comprado ${fmtPct(r.peso_executado, 1)}`
             : r.peso_apos_compra !== undefined ? ` · peso depois da compra ${fmtPct(r.peso_apos_compra, 1)}` : "") + ` · ${r.regra_de_lote}`)));
@@ -1096,7 +1131,7 @@ function renderPlan(d) {
   if (ex.proximo_aporte) kids.push(...planBlock(ex.proximo_aporte, `Próximo aporte de ${fmtMoney(q.aporte_periodico)} (${q.periodicidade})`));
   if ((ex.vendas_sugeridas || []).length) {
     kids.push(el("h3", {}, "Acima do alvo na sua carteira atual"),
-      el("ul", { class: "clean" }, ...ex.vendas_sugeridas.map((v) => el("li", {}, `${v.ticker}: tem ${fmtMoney(v.valor_atual)}, alvo ${fmtMoney(v.valor_alvo)} — ${v.motivo}`))),
+      el("ul", { class: "clean" }, ...ex.vendas_sugeridas.map((v) => el("li", {}, withLogo(v.ticker, logoOf(v.ticker), `${v.ticker}: tem ${fmtMoney(v.valor_atual)}, alvo ${fmtMoney(v.valor_alvo)} — ${v.motivo}`, 20)))),
       el("p", { class: "muted" }, ex.nota_vendas || ""));
   }
   if (ex.reequilibrio) kids.push(...planBlock(ex.reequilibrio, `Se vender o excesso (${fmtMoney(ex.reequilibrio.valor)}): onde colocar o dinheiro`));
@@ -1115,7 +1150,7 @@ function renderChanges(d) {
   const tb = el("tbody");
   for (const c of ch.mudancas) {
     const cls = c.tipo === "entrou" || c.tipo === "aumentou" ? "pill in" : c.tipo === "saiu" || c.tipo === "reduziu" ? "pill out" : "pill";
-    tb.append(el("tr", { class: "asset" }, el("td", {}, c.ticker), el("td", { class: "num" }, fmtPct(c.antes, 1)), el("td", { class: "num" }, fmtPct(c.depois, 1)),
+    tb.append(el("tr", { class: "asset" }, el("td", {}, withLogo(c.ticker, logoOf(c.ticker), c.ticker, 20, true)), el("td", { class: "num" }, fmtPct(c.antes, 1)), el("td", { class: "num" }, fmtPct(c.depois, 1)),
       el("td", {}, el("span", { class: cls }, KIND_PT[c.tipo] || c.tipo))),
       el("tr", { class: "asset-why" }, el("td", { colspan: "4" }, c.motivo || "")));
   }
@@ -1262,8 +1297,9 @@ function renderStock(d) {
   const box = $("s-verdict");
   box.style.setProperty("--c", tone);
   box.replaceChildren(
-    el("div", {}, el("strong", {}, `${d.nome} (${d.ticker}) · `), el("span", { class: "verdict", style: "--c:" + tone + (v.tom === "warn" ? ";color:#1d1d1b" : "") }, v.rotulo),
-      el("span", { class: "muted" }, ` segundo as regras do modelo · ${d.origem === "real" ? "cotações reais" : "DADOS SINTÉTICOS"} até ${d.periodo[1]}`)),
+    el("div", { class: "with-logo" }, logoEl(d.ticker, d.logo, 40),
+      el("div", {}, el("strong", {}, `${d.nome} (${d.ticker}) · `), el("span", { class: "verdict", style: "--c:" + tone + (v.tom === "warn" ? ";color:#1d1d1b" : "") }, v.rotulo),
+        el("span", { class: "muted" }, ` segundo as regras do modelo · ${d.origem === "real" ? "cotações reais" : "DADOS SINTÉTICOS"} até ${d.periodo[1]}`))),
     el("p", {}, v.manchete),
     el("p", { class: "muted" }, "Para o seu perfil: " + d.perfil.leitura + "."),
     el("p", { class: "kind" }, "Regras do veredito: " + v.regras));
@@ -1324,7 +1360,9 @@ function stockChips() {
   const syn = $("s-form").elements["fonte_dados"].value === "sintetico";
   const list = syn ? ["SINT_ENERGIA3", "SINT_PETRO4", "SINT_TECH_US", "SINT_SAUDE3"] : ["PETR4", "VALE3", "Pague Menos", "ITUB4", "WEGE3", "BBAS3", "AAPL", "BOVA11"];
   setChildren("s-chips", ...list.map((t) => {
-    const b = el("button", { class: "chip", type: "button" }, t);
+    const code = !syn && /^[A-Z0-9]{4,6}$/.test(t);       // a ticker (not a name): the catalogue may know its logo
+    const b = code ? el("button", { class: "chip has-logo", type: "button" }, logoEl(t, `/api/logo/ativo/${t}`, 18), t)
+      : el("button", { class: "chip", type: "button" }, t);
     b.addEventListener("click", () => { $("s-form").elements["acao"].value = t; runStock(); });
     return b;
   }));

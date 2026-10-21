@@ -8,12 +8,12 @@ matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-414 passed, 1 skipped (415 testes)
+452 passed, 1 skipped (453 testes)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
 
-(Registros anteriores: 361 passed, 1 skipped antes das correções da revisão adversarial — seção 12; 328 passed,
-1 skipped antes do motor dinâmico.)
+(Registros anteriores: 414 passed, 1 skipped antes dos logos — seção 13; 361 passed, 1 skipped antes das correções
+da revisão adversarial — seção 12; 328 passed, 1 skipped antes do motor dinâmico.)
 
 (Em uma execução anterior, 2 testes de `tests/test_webapp.py` falharam porque ainda assumiam o modo sintético
 como padrão do site; foram ajustados ao novo padrão — dados reais — e a suíte completa voltou a passar.)
@@ -307,3 +307,24 @@ Verificações feitas depois das correções:
   --excluir-setores "Petróleo e Gás" xyz` roda; o setor é excluído, "xyz" gera aviso, sem "nan"/"None" e sem
   linguagem de garantia no relatório.
 * Auditoria de repetição refeita (`docs/audit_repeticao.md`).
+
+## 13. Logos das empresas
+
+`tests/test_logos.py` (38 testes, sem rede; o serviço de favicons é um dublê):
+
+| O que se verifica | Resultado |
+|---|---|
+| ativos do catálogo apontam para o site oficial (PETR3/PETR4 → petrobras.com.br; BOVA11 → iShares; BTC-USD → bitcoin.org) e toda ação do catálogo (B3 e EUA) tem site | passa |
+| sem site verificado (SINT_*, CAIXA_CDI, código desconhecido, BDR) → sem logo (iniciais na página) | passa |
+| site da fonte reduzido ao domínio da empresa; IP, localhost, `javascript:`, plataformas de RI e redes sociais recusados | passa |
+| ícone buscado uma vez e guardado; falta (404), ícone de 16 px, SVG e arquivo grande recusados; falta tentada de novo após 1 h; falha de rede não fica guardada | passa |
+| `/api/logo/site/<domínio>` e `/api/logo/ativo/<código>`: imagem com cache de CDN, `nosniff` e CSP; 404 sem chamar ninguém para código desconhecido ou domínio inválido | passa |
+| resultado da carteira (`logos` e `onde_investir[].logo`) e da ação (`logo` pelo site da B3) com o endereço do logo; demonstração sintética sem logos | passa |
+
+Navegador (Playwright, 390 px, servidor local com dublês: serviço de ícones simulado e mercado de teste): atalhos de
+"Vale a pena?" com logo (BOVA11 nas iniciais quando a gestora não tem ícone), cabeçalho da ação com logo de 40 px,
+carteira com 11 posições (7 logos + 4 iniciais: CAIXA_CDI, GOLD11 sem site, iShares e Kinea simulados sem ícone),
+teses, plano de compra e mudanças com o mesmo logo; sem erros de JavaScript e sem rolagem horizontal. A tabela da
+carteira passou a mostrar cada ativo numa linha própria (logo + nome) com os números embaixo: com as colunas "Você
+tem" e "Por aporte", o nome ficava espremido no celular. Os ícones reais não puderam ser vistos neste ambiente: o
+serviço de favicons é bloqueado pela rede (aparecem no site publicado).

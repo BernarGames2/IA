@@ -42,6 +42,7 @@ from core.backtesting.overfitting import psr
 from core.extreme_risk.var_es import empirical_var_es
 from core.market_data.base import DataUnavailableError, RawSeries, last_per_date
 from core.market_data.cache import SeriesCache
+from core.market_data.logos import logo_path
 from core.market_data.quality import QualitySettings, clean_series
 from core.market_data.risk_free import fetch_live_rates
 from core.market_data.yahoo_chart import FetchFn, YahooChartProvider
@@ -574,6 +575,8 @@ def to_dict(r: StockCheckResult) -> dict[str, object]:
 
     return to_jsonable({  # type: ignore[return-value]
         "consulta": r.query, "ticker": r.resolved.ticker, "nome": r.resolved.name,
+        "logo": None if r.origin != "real" else logo_path(r.resolved.ticker,
+                                                          r.company.site if r.company is not None else None),
         "negocio": r.company.descricao if r.company is not None else r.resolved.business,
         "empresa": None if r.company is None else {**r.company.to_dict(),
                                                     "indicadores": fundamentals_table(r.company, r.currency)},
