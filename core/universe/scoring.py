@@ -124,25 +124,17 @@ def measure(series: dict[str, pd.Series], volumes: pd.DataFrame | None, assets: 
     return m
 
 
-def screen(series: dict[str, pd.Series], volumes: pd.DataFrame | None, assets: dict[str, CatalogAsset],
-           profile: RiskProfile, objective: str, rf: float, cap: int,
-           required: list[tuple[str, list[str], int]] | None = None, themed: set[str] | None = None,
-           keep: dict[str, str] | None = None, periods: int = 252, min_obs: int = MIN_CANDIDATE_OBS) -> ScreenResult:
-    """``series``: each asset's price series in the investor's currency; ``required``: (label, members,
-    minimum count) groups the investor's limits need; ``keep``: assets that must reach the optimiser
-    regardless of score, with the reason (the investor's holdings and previous recommendation) — unless
-    their history is too short to be analysed (``short_history``)."""
-    m = measure(series, volumes, assets, rf, periods)
+def score_components(m: pd.DataFrame, profile: RiskProfile, objective: str = "crescimento",
+                     unscored: set[str] | None = None) -> tuple[pd.Series, pd.DataFrame]:
+    """(score, z-scores) of the assets measured in ``m``: within-class z-scores of each metric weighted by the
+    profile (PROFILE_WEIGHTS; "renda" adds the income flag). ``unscored`` (the cash) gets z = 0 and stays out
+    of the class populations."""
     w = dict(PROFILE_WEIGHTS[profile])
-    money = {s for s in m.index if traits(assets[s]).market == "CAIXA"}
-    short = {s: (f"histórico curto: {int(m.at[s, 'observacoes'])} preços diários, menos que os {min_obs} (cerca de 3 "
-                 "anos) necessários para estimar risco e retorno e validar fora da amostra")
-             for s in m.index if m.at[s, "observacoes"] < min_obs}
     liq = m["liquidez_diaria"].astype(float)
     finite = liq[np.isfinite(liq)]
     top = float(finite.max()) if len(finite) else 0.0
     liq_log = np.log1p(liq.where(~np.isinf(liq), top).fillna(0.0))      # cash = most liquid; unknown = 0
-    rest = m.index.difference(sorted(money))       # cash is not scored against its class (see the module notes)
+    rest = m.index.difference(sorted(unscored or ()))     # cash is not scored against its class (module notes)
 
     def zc(x: pd.Series) -> pd.Series:
         return _zscore(x.loc[rest], m.loc[rest, "classe"]).reindex(m.index).fillna(0.0)
@@ -153,6 +145,23 @@ def screen(series: dict[str, pd.Series], volumes: pd.DataFrame | None, assets: d
     score = sum(w[k] * z[k] for k in w)
     if objective == "renda":
         score = score + INCOME_WEIGHT * m["renda"].astype(float) * 2.0
+    return score, z
+
+
+def screen(series: dict[str, pd.Series], volumes: pd.DataFrame | None, assets: dict[str, CatalogAsset],
+           profile: RiskProfile, objective: str, rf: float, cap: int,
+           required: list[tuple[str, list[str], int]] | None = None, themed: set[str] | None = None,
+           keep: dict[str, str] | None = None, periods: int = 252, min_obs: int = MIN_CANDIDATE_OBS) -> ScreenResult:
+    """``series``: each asset's price series in the investor's currency; ``required``: (label, members,
+    minimum count) groups the investor's limits need; ``keep``: assets that must reach the optimiser
+    regardless of score, with the reason (the investor's holdings and previous recommendation) — unless
+    their history is too short to be analysed (``short_history``)."""
+    m = measure(series, volumes, assets, rf, periods)
+    money = {s for s in m.index if traits(assets[s]).market == "CAIXA"}
+    short = {s: (f"histórico curto: {int(m.at[s, 'observacoes'])} preços diários, menos que os {min_obs} (cerca de 3 "
+                 "anos) necessários para estimar risco e retorno e validar fora da amostra")
+             for s in m.index if m.at[s, "observacoes"] < min_obs}
+    score, _ = score_components(m, profile, objective, money)
     m["pontuacao"] = score.round(4)
     corr = daily_returns(series).corr(min_periods=126).reindex(index=m.index, columns=m.index).fillna(0.0)
     decision: dict[str, tuple[str, str]] = {s: ("descartado", why) for s, why in short.items()}

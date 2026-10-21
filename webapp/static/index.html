@@ -52,6 +52,10 @@ p { margin: 4px 0 8px; }
 .banner { background: var(--banner); color: var(--banner-ink); border-radius: 10px; padding: 10px 14px; margin: 12px 0;
   font-size: 0.88rem; }
 .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 16px; margin: 14px 0; }
+.jump { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; font-size: 0.85rem; color: var(--ink2); margin: 4px 0 0; }
+.jump a { color: var(--accent); text-decoration: none; border: 1px solid var(--ring); border-radius: 999px; padding: 3px 10px; }
+.buy { font-size: 1.05rem; font-weight: 700; margin: 10px 0 4px; }
+ul.plain { list-style: none; padding-left: 0; }
 form { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px 14px; align-items: end; }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 0.82rem; color: var(--ink2); }
 input, select, button, textarea { font: inherit; color: var(--ink); }
@@ -164,6 +168,10 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     reais (Yahoo Finance, preço ajustado, baixadas na hora); a análise geral logo abaixo usa um mercado sintético
     determinístico (ativos <code>SINT_*</code>), que não descreve ativos reais.
   </div>
+  <nav class="jump" aria-label="Seções da página">Ir para:
+    <a href="#s-title">Vale a pena?</a><a href="#d-title">Ação do dia</a><a href="#f-title">Análise geral</a>
+    <a href="#p-title">Carteira com propósito</a>
+  </nav>
 
   <section class="card" aria-labelledby="s-title">
     <h2 id="s-title">Vale a pena? Analise uma ação</h2>
@@ -212,6 +220,45 @@ svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
       <h3>Sensibilidade às premissas</h3><div class="tbl" id="s-sens"></div>
       <h3>Como foi calculado e avisos</h3><ul class="clean" id="s-notes"></ul>
       <p><a id="s-download" href="#" download="analise_acao.md">Baixar análise (Markdown)</a></p>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="d-title">
+    <h2 id="d-title">Ação do dia: quanto você tem hoje?</h2>
+    <p class="muted">Diga quanto tem para investir hoje e o app aponta <strong>uma ação</strong> por regras fixas e
+      explicadas: a melhor pontuação de risco e retorno no histórico para o seu perfil, entre as ações do catálogo
+      (grandes empresas da B3 e dos EUA) que o seu valor compra e que ficam no limite de risco do perfil — e, se você
+      informar o que já tem, a que mais diversifica. Mostra quantas comprar, alternativas, riscos e as regras. Usa só o
+      histórico de preços: não prevê o preço de amanhã e não é recomendação.</p>
+    <form id="d-form">
+      <label>Quanto você tem hoje (R$)<input name="valor" type="number" min="1" step="any" required placeholder="ex.: 500"></label>
+      <label>Perfil
+        <select name="perfil"><option value="conservador">Conservador</option><option value="moderado" selected>Moderado</option>
+          <option value="arrojado">Arrojado</option></select>
+      </label>
+      <label>Mercados
+        <select name="mercados"><option value="">Brasil e EUA</option><option value="BR">Só Brasil</option><option value="US">Só EUA</option></select>
+      </label>
+      <label>Dados
+        <select name="fonte_dados"><option value="real" selected>Cotações reais (Yahoo Finance)</option>
+          <option value="sintetico">Demonstração sintética (SINT_*)</option></select>
+      </label>
+      <details class="span-all more"><summary>O que você já tem (opcional — a escolha evita repetir e prefere o que diversifica)</summary>
+        <div class="subform">
+          <label class="span-all">Um por linha: código e valor em R$
+            <textarea name="carteira_atual" maxlength="4000" placeholder="PETR4 1500&#10;VALE3 800"></textarea></label>
+          <label class="check"><input name="fracionario_eua" type="checkbox"> Minha corretora compra frações de ações dos EUA</label>
+        </div>
+      </details>
+      <button id="d-run" type="submit">Qual ação comprar hoje?</button>
+    </form>
+    <div class="status" id="d-status" role="status" aria-live="polite"></div>
+    <div id="d-results" class="hidden">
+      <div class="verdict-box" id="d-pick" style="--c:var(--accent)"></div>
+      <h3>Outras opções que também cabem nas regras</h3><ul class="clean plain" id="d-alts"></ul>
+      <h3>Como foi escolhida</h3><ol id="d-rules"></ol><p class="muted" id="d-out"></p>
+      <h3>Avisos</h3><ul class="clean" id="d-warn"></ul>
+      <p class="kind" id="d-src"></p>
     </div>
   </section>
 
@@ -1131,7 +1178,7 @@ function renderPlan(d) {
   if (ex.proximo_aporte) kids.push(...planBlock(ex.proximo_aporte, `Próximo aporte de ${fmtMoney(q.aporte_periodico)} (${q.periodicidade})`));
   if ((ex.vendas_sugeridas || []).length) {
     kids.push(el("h3", {}, "Acima do alvo na sua carteira atual"),
-      el("ul", { class: "clean" }, ...ex.vendas_sugeridas.map((v) => el("li", {}, withLogo(v.ticker, logoOf(v.ticker), `${v.ticker}: tem ${fmtMoney(v.valor_atual)}, alvo ${fmtMoney(v.valor_alvo)} — ${v.motivo}`, 20)))),
+      el("ul", { class: "clean plain" }, ...ex.vendas_sugeridas.map((v) => el("li", {}, withLogo(v.ticker, logoOf(v.ticker), `${v.ticker}: tem ${fmtMoney(v.valor_atual)}, alvo ${fmtMoney(v.valor_alvo)} — ${v.motivo}`, 20)))),
       el("p", { class: "muted" }, ex.nota_vendas || ""));
   }
   if (ex.reequilibrio) kids.push(...planBlock(ex.reequilibrio, `Se vender o excesso (${fmtMoney(ex.reequilibrio.valor)}): onde colocar o dinheiro`));
@@ -1369,6 +1416,65 @@ function stockChips() {
 }
 $("s-form").elements["fonte_dados"].addEventListener("change", stockChips);
 stockChips();
+
+// ---------- ação do dia
+function renderDaily(d) {
+  $("d-results").classList.remove("hidden");
+  const p = d.escolha;
+  if (p) {
+    const f = p.fatos_H || {};
+    const corr = p.correlacao_com_sua_carteira;
+    setChildren("d-pick",
+      el("div", { class: "with-logo" }, logoEl(p.ticker, p.logo, 48),
+        el("div", {}, el("strong", {}, `${p.ticker} — ${p.nome}`),
+          el("div", { class: "muted" }, `${p.mercado} · ${p.setor} · ${p.posicao}ª maior pontuação entre ${p.de} ações medidas no perfil ${d.perfil}`))),
+      el("p", { class: "buy" }, `Comprar ${fmtQty(p.quantidade)} ${p.quantidade === 1 ? "ação" : "ações"} a ${fmtMoney2(p.preco)} = ${fmtMoney2(p.custo)}`
+        + (p.sobra > 0.005 ? ` (sobra ${fmtMoney2(p.sobra)})` : "")),
+      el("p", { class: "muted" }, `Preço do fechamento de ${p.preco_data} (com atraso: confira na corretora) · ${p.regra_de_lote}`),
+      el("h3", {}, "Por que esta ação"),
+      el("ul", { class: "clean" }, ...p.por_que.map((x) => el("li", {}, x)),
+        ...(corr !== null && corr !== undefined ? [el("li", {}, `correlação de ${fmtNum(corr)} com o que você já tem`)] : [])),
+      el("p", {}, el("strong", {}, "Fatos do histórico [H]: "), `retorno médio de ${fmtPct(f.retorno_medio_anual, 1)} ao ano, oscilação de `
+        + `${fmtPct(f.volatilidade, 0)} ao ano, maior queda de ${fmtPct(f.queda_maxima, 0)}, ${fmtNum(f.anos_de_dados, 1)} anos de dados.`),
+      el("p", {}, el("strong", {}, "O que a empresa faz: "), p.negocio),
+      el("p", {}, el("strong", {}, "Riscos: "), p.riscos));
+  } else {
+    setChildren("d-pick", el("p", {}, el("strong", {}, "Nenhuma ação dentro das regras para este valor. "), d.avisos[0] || ""));
+  }
+  setChildren("d-alts", ...(d.alternativas.length ? d.alternativas.map((a) => el("li", {}, withLogo(a.ticker, a.logo,
+    `${a.ticker} — ${a.nome}: ${fmtQty(a.quantidade)} ${a.quantidade === 1 ? "ação" : "ações"} por ${fmtMoney2(a.custo)} · ${a.motivo}`, 24)))
+    : [el("li", { class: "muted" }, "nenhuma outra opção cabe nas regras com este valor")]));
+  setChildren("d-rules", ...d.regras.map((r) => el("li", {}, r)));
+  const out = Object.entries(d.fora || {}).filter(([, n]) => n > 0).map(([k, n]) => `${n}: ${k}`);
+  $("d-out").textContent = `${d.acoes_medidas} ações comparadas` + (out.length ? "; fora: " + out.join("; ") + "." : ".");
+  setChildren("d-warn", ...(p ? d.avisos : d.avisos.slice(1)).map((w) => el("li", {}, w)), el("li", { class: "muted" }, d.aviso));
+  $("d-src").textContent = "Fontes: " + d.fontes.map((s) => `${s.dado}: ${s.fonte}` + (s.data ? ` (${s.data})` : "")).join(" · ")
+    + (d.calculado_em_utc ? ` · calculado em ${d.calculado_em_utc.replace("T", " ").slice(0, 16)} UTC`
+      + (d.do_cache ? (d.origem === "sintetico" ? " (reaproveitado)" : " (reaproveitado: mesmo pedido há menos de 15 min)") : "") : "");
+}
+async function runDaily() {
+  const f = new FormData($("d-form"));
+  const held = parseHoldings(f.get("carteira_atual"));
+  const st = $("d-status"), btn = $("d-run");
+  if (held.bad.length) { st.textContent = "Linhas não entendidas em 'O que você já tem': " + held.bad.join("; "); return; }
+  const body = { valor: parseAmount(String(f.get("valor") || "")), perfil: f.get("perfil"), fonte_dados: f.get("fonte_dados"),
+    fracionario_eua: f.get("fracionario_eua") === "on", carteira_atual: held.out };
+  if (f.get("mercados")) body.mercados = [f.get("mercados")];
+  if (!(body.valor > 0)) { st.textContent = "Informe quanto você tem hoje."; return; }
+  btn.disabled = true;
+  $("d-results").classList.add("hidden");
+  const live = liveStatus(st, "Comparando as ações…");
+  try {
+    const d = await postStream("/api/acao-do-dia", body, live.update);
+    live.stop();
+    renderDaily(d);
+    st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s.`;
+  } catch (e) {
+    live.stop();
+    st.textContent = "Erro: " + e.message;
+  } finally { btn.disabled = false; }
+}
+$("d-form").addEventListener("submit", (ev) => { ev.preventDefault(); runDaily(); });
 fetch("/api/health").then((r) => r.json()).then((h) => {
   $("build-info").textContent = `Versão publicada: ${h.commit} (${h.version})`;
 }).catch(() => {});

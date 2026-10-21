@@ -185,6 +185,13 @@
     código. Os ícones reais não puderam ser vistos neste ambiente (o serviço de favicons é bloqueado pela rede); o
     mecanismo foi verificado com um serviço simulado. Um site oficial pode trocar de domínio: a lista curada precisa
     de revisão periódica. Logos são marcas dos donos, usados só para identificar o ativo.
+50. **Ação do dia**: escolha por regras fixas sobre o histórico (pontuação da triagem com pesos do perfil; limite
+    de risco para uma ação sozinha — conservador: volatilidade ≤ 25% a.a. e queda máxima ≥ −40%; moderado:
+    volatilidade ≤ 35%; arrojado: sem limite; precisa comprar 1 lote ao último fechamento; o que você já tem fica de
+    fora e a pontuação cai 0,5 × a correlação com a sua carteira). Universo: só as ações do catálogo curado (grandes
+    e líquidas). Não é previsão nem recomendação: o histórico de 5 anos muda pouco de um dia para o outro, então a
+    mesma ação pode aparecer em dias seguidos. Comprar uma ação por dia concentra risco e paga custo proporcional
+    maior em compras pequenas — o resultado diz isso. Preço: último fechamento (com atraso).
 
 ## Itens pendentes / próximos passos
 

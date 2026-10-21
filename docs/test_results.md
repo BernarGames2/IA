@@ -8,11 +8,12 @@ matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-452 passed, 1 skipped (453 testes)
+464 passed, 1 skipped (465 testes)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
 
-(Registros anteriores: 414 passed, 1 skipped antes dos logos — seção 13; 361 passed, 1 skipped antes das correções
+(Registros anteriores: 452 passed, 1 skipped antes da "Ação do dia" — seção 14; 414 passed, 1 skipped antes dos
+logos — seção 13; 361 passed, 1 skipped antes das correções
 da revisão adversarial — seção 12; 328 passed, 1 skipped antes do motor dinâmico.)
 
 (Em uma execução anterior, 2 testes de `tests/test_webapp.py` falharam porque ainda assumiam o modo sintético
@@ -328,3 +329,21 @@ teses, plano de compra e mudanças com o mesmo logo; sem erros de JavaScript e s
 carteira passou a mostrar cada ativo numa linha própria (logo + nome) com os números embaixo: com as colunas "Você
 tem" e "Por aporte", o nome ficava espremido no celular. Os ícones reais não puderam ser vistos neste ambiente: o
 serviço de favicons é bloqueado pela rede (aparecem no site publicado).
+
+## 14. Ação do dia
+
+`tests/test_daily_pick.py` (12 testes, caminho de dados reais com dublês):
+
+| O que se verifica | Resultado |
+|---|---|
+| a ação escolhida e as 5 alternativas cabem no valor (custo ≤ valor, quantidade inteira na B3) e respeitam o limite de risco de cada perfil | passa (3 perfis) |
+| mesmos dados e entradas → mesma escolha; texto sem linguagem de garantia, com "não prevê o preço de amanhã" e "não é recomendação" | passa |
+| "só Brasil" escolhe ação da B3; "só EUA", ação dos EUA | passa |
+| ação que você já tem não é sugerida; a correlação com a sua carteira aparece; sem carteira informada, o aviso diz que ela não foi considerada | passa |
+| valor pequeno demais → nenhuma ação, com a mais barata e a sugestão de frações; frações dos EUA só quando a corretora permite | passa |
+| demonstração sintética rotulada; entradas inválidas recusadas; `/api/acao-do-dia` com cache de 15 min, 422/400 para valor ou carteira inválidos | passa |
+
+Navegador (Playwright, 390 px, servidor local com dublês): o atalho "Ação do dia" leva à seção; com R$ 1.000 aparece
+a ação com logo, "Comprar 4 ações a R$ 209,53 = R$ 838,11 (sobra R$ 161,89)", por quê, fatos, riscos, 5 alternativas
+com logo, regras, avisos e fontes; com R$ 5, "nenhuma ação dentro das regras" com a mais barata (R$ 22,80); sem erros
+de JavaScript e sem rolagem horizontal. Ações reais não puderam ser consultadas aqui (Yahoo bloqueado pela rede).

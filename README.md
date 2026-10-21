@@ -318,6 +318,26 @@ títulos individuais do Tesouro não são consultados. Classificação/temas dos
 editorial; o backtest escolhe o universo com dados de hoje (viés de sobrevivência/seleção, sinalizado). Impostos
 não são modelados. O modo offline usa um universo **sintético** e o resultado é marcado "NÃO É UMA CARTEIRA FINAL".
 
+## 10b. "Ação do dia" — quanto você tem hoje e qual ação as regras apontam (`POST /api/acao-do-dia`)
+
+Você diz quanto tem para investir hoje (e, se quiser, o que já tem) e o app aponta **uma ação** por regras fixas,
+mostradas no resultado (`core/stock_check/daily_pick.py`):
+
+1. universo: as ações do catálogo curado (grandes empresas da B3 e dos EUA), nos mercados escolhidos; sem ETFs,
+   fundos ou cripto;
+2. dados: ~5 anos de preços diários ajustados, em reais; a ação precisa de ~3 anos de histórico;
+3. pontuação do perfil (a mesma da triagem da carteira): Sharpe encolhido, volatilidade, queda máxima, momento de
+   12 meses e liquidez;
+4. limite de risco para UMA ação: conservador — volatilidade até 25% ao ano e queda máxima até 40%; moderado —
+   volatilidade até 35%; arrojado — sem limite;
+5. precisa caber no valor: 1 lote (B3: 1 ação no fracionário; EUA: 1 ação, ou frações se a corretora permitir);
+6. o que você já tem não é sugerido de novo, e a pontuação cai 0,5 × a correlação com a sua carteira.
+
+Resultado: a ação, quantas comprar, custo e sobra, por que ela (fatos do histórico), o que a empresa faz, riscos, 5
+alternativas que também cabem nas regras, o que ficou de fora e por quê, fontes e avisos. Com os mesmos dados a
+escolha é a mesma (pode repetir em dias seguidos). Usa só o histórico: não prevê o preço de amanhã e não é
+recomendação; para quem está começando, distribuir os aportes numa carteira costuma reduzir o risco.
+
 ## 11. "Vale a pena?" — análise de uma ação (`--acao`, `POST /api/acao`)
 
 Você digita o código ou o nome de **qualquer ação da B3 ou dos EUA** (PETR4, VALE3, WEGE3, AAPL, "Petrobras",

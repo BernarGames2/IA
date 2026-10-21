@@ -45,6 +45,7 @@ from core.purpose.report import render_markdown
 from core.purpose.report import to_dict as purpose_to_dict
 from core.stock_check.analyzer import analyze_stock
 from core.stock_check.analyzer import to_dict as stock_to_dict
+from core.stock_check.daily_pick import daily_pick
 from models.investor import InvestorProfileInput, RiskProfile
 from utils.serialization import to_jsonable
 from webapp.summary import build_summary
@@ -140,6 +141,22 @@ class StockRequest(BaseModel):
 
     def key(self) -> str:
         return "acao|" + self.model_dump_json()
+
+
+class DailyPickRequest(BaseModel):
+    """'Ação do dia' — how much the investor has today; which single stock the fixed rules point to."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    valor: float = Field(..., gt=0, le=1e9)
+    perfil: Literal["conservador", "moderado", "arrojado"] = "moderado"
+    mercados: list[Literal["BR", "US"]] | None = Field(None, min_length=1, max_length=2)
+    carteira_atual: dict[str, float] = Field(default_factory=dict, max_length=100)
+    fracionario_eua: bool = False
+    fonte_dados: Literal["real", "sintetico"] = "real"
+
+    def key(self) -> str:
+        return "dia|" + self.model_dump_json()
 
 
 app = FastAPI(title=f"{APP_NAME} — web", version=APP_VERSION, docs_url="/api/docs", redoc_url=None,
@@ -372,6 +389,44 @@ def acao(p: StockRequest, stream: bool = False) -> Response:
         except (ValueError, ArithmeticError) as e:
             if _raised_in_library(e) and not isinstance(e, ValidationError):
                 raise _analysis_error(e) from e         # 500: a defect, not the user's input
+            raise HTTPException(400, str(e)) from e
+        finally:
+            _slots.release()
+        _store(k, payload)
+        return payload
+
+    return _respond(compute, stream)
+
+
+@app.post("/api/acao-do-dia")
+def acao_do_dia(p: DailyPickRequest, stream: bool = False) -> Response:
+    if any(not (v >= 0) for v in p.carteira_atual.values()):
+        raise HTTPException(400, "valores da carteira atual devem ser números maiores ou iguais a zero")
+
+    def compute(progress: Callable[[str], None]) -> dict[str, object]:
+        k = p.key()
+        hit = _cached(k, p.fonte_dados == "real")
+        if hit is not None:
+            return hit
+        if not _slots.acquire(timeout=120):
+            raise HTTPException(503, "servidor ocupado; tente novamente em instantes")
+        try:
+            t0 = time.perf_counter()
+            res = daily_pick(p.valor, p.perfil, p.mercados, p.carteira_atual, p.fracionario_eua,
+                             offline=p.fonte_dados == "sintetico",
+                             provider=None if p.fonte_dados == "sintetico" else _market_provider(),
+                             rf_fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache", progress=progress,
+                             download_budget_s=_DOWNLOAD_BUDGET_S)
+            payload = res.to_dict()
+            payload["elapsed_s"] = round(time.perf_counter() - t0, 2)
+            payload["calculado_em_utc"] = datetime.now(UTC).isoformat(timespec="seconds")
+            payload["do_cache"] = False
+        except DataUnavailableError as e:
+            raise HTTPException(503, f"dados indisponíveis agora ({_short(e)}). Nada foi estimado no lugar: tente de "
+                                     "novo em alguns minutos ou escolha 'Demonstração sintética'.") from e
+        except (ValueError, ArithmeticError) as e:
+            if _raised_in_library(e) and not isinstance(e, ValidationError):
+                raise _analysis_error(e) from e
             raise HTTPException(400, str(e)) from e
         finally:
             _slots.release()
