@@ -171,7 +171,8 @@ def test_4b_assets_are_not_dropped_for_being_new_nor_added_for_variety(runs):
     # every selected candidate has a reason grounded in data or in the investor's rules; no "variety" slot
     for tk in base.universe["candidatos"]:
         why = t.at[tk, "motivo"]
-        assert any(k in why for k in ("pontuação", "necessário para cumprir", "tema", "recomendação", "já tem")), why
+        assert any(k in why for k in ("pontuação", "necessário para cumprir", "tema", "recomendação", "já tem",
+                                      "caixa de liquidez diária")), why
     assert not any("variedade" in str(m) for m in t["motivo"])
 
 
@@ -208,12 +209,13 @@ def test_6_unavailable_duplicate_and_short_history_assets_are_handled(tmp_path):
 
 
 def test_6b_screen_drops_duplicate_exposures_and_keeps_required_groups():
-    idx = pd.bdate_range(end="2026-10-16", periods=600)
+    n = 800                                             # above the ~3 years a candidate needs
+    idx = pd.bdate_range(end="2026-10-16", periods=n)
     rng = np.random.default_rng(3)
-    base = pd.Series(100 * np.exp(np.cumsum(rng.normal(0.0004, 0.012, 600))), index=idx)
+    base = pd.Series(100 * np.exp(np.cumsum(rng.normal(0.0004, 0.012, n))), index=idx)
     series = {"SPY": base, "VOO": base * 1.1,                               # same exposure, different price
-              "QQQ": pd.Series(100 * np.exp(np.cumsum(rng.normal(0.0005, 0.015, 600))), index=idx),
-              CASH_TICKER: pd.Series(100 * np.cumprod(np.full(600, 1.0004)), index=idx)}
+              "QQQ": pd.Series(100 * np.exp(np.cumsum(rng.normal(0.0005, 0.015, n))), index=idx),
+              CASH_TICKER: pd.Series(100 * np.cumprod(np.full(n, 1.0004)), index=idx)}
     assets = {s: CAT[s] for s in series}
     sr = screen(series, None, assets, RiskProfile.MODERADO, "crescimento", 0.10, 3,
                 required=[("o caixa mínimo", [CASH_TICKER], 1)], keep={"QQQ": "você já tem este ativo"})

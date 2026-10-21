@@ -8,13 +8,20 @@ investor's currency — one recent listing does not shorten the history used for
   se = 1/sqrt(years), tau = 0.30 — a few good years do not make an asset look great;
 * liquidity: average daily traded value over 63 sessions (cash instruments: daily liquidity).
 Every metric becomes a z-score WITHIN the asset's class (fixed income is compared with fixed income)
-and the profile sets their weights (PROFILE_WEIGHTS; "renda" adds the income flag). Then:
+and the profile sets their weights (PROFILE_WEIGHTS; "renda" adds the income flag). The daily-liquidity
+cash (CDI) is not scored against the class: its volatility is close to zero, so its Sharpe ratio is an
+extreme number that would shift every other fixed income z-score; it is always handed to the optimiser,
+which decides its weight. A missing metric (e.g. momentum of a short series) counts as neutral (z = 0).
+An asset needs MIN_CANDIDATE_OBS daily prices (about 3 years) to become a candidate: with less, the
+estimates are too noisy and the walk-forward validation has no out-of-sample period to judge it (one
+short series would also shorten the common window of every other candidate). Then:
 1. duplicates: two instruments of the same class whose daily returns correlate >= 0.95 carry the same
    exposure (two S&P 500 ETFs, an ETF in reais and its dollar twin) — the better-scored stays;
 2. correlation groups (average linkage, correlation >= 0.70): at most a few members of each group
    reach the optimiser, so the list is not many tickers for one risk;
-3. coverage first: classes the investor's limits require (fixed income minimum, cash, income), then the
-   investor's themes (up to 30%), then the best scores.
+3. coverage first: the investor's holdings and the classes the investor's limits require (fixed income
+   minimum, cash, income) — these may exceed the candidate cap, so a limit never becomes impossible
+   because the cap was filled first — then the investor's themes (up to 30%), then the best scores.
 Every asset gets a decision and a plain-language reason. The backtest that follows compares
 weighting methods on this universe; because the universe is chosen with data up to today, that
 backtest is optimistic about what a past investor would have obtained (selection bias; disclosed).
@@ -37,6 +44,7 @@ TAU_SHARPE = 0.30
 DUPLICATE_CORR = 0.95
 GROUP_CORR = 0.70
 THEME_SHARE = 0.30
+MIN_CANDIDATE_OBS = 735       # about 3 years of daily prices (B3 ~245 sessions a year, US ~252)
 PROFILE_WEIGHTS = {   # weights of the within-class z-scores (vol enters with a minus sign)
     RiskProfile.CONSERVADOR: {"sharpe": 0.20, "vol": -0.35, "mdd": 0.30, "mom": 0.00, "liq": 0.15},
     RiskProfile.MODERADO: {"sharpe": 0.40, "vol": -0.20, "mdd": 0.20, "mom": 0.05, "liq": 0.15},
@@ -52,6 +60,7 @@ class ScreenResult:
     duplicates: dict[str, str] = field(default_factory=dict)        # dropped -> kept
     groups: dict[str, int] = field(default_factory=dict)            # ticker -> correlation group
     notes: list[str] = field(default_factory=list)
+    short_history: dict[str, str] = field(default_factory=dict)     # ticker -> reason (not a candidate)
 
     def alternatives(self, ticker: str, n: int = 2) -> list[str]:
         """Best-scored assets of the same correlation group or class that were not selected."""
@@ -59,7 +68,7 @@ class ScreenResult:
         if ticker not in t.index:
             return []
         same = t[((t["grupo"] == t.at[ticker, "grupo"]) | (t["classe"] == t.at[ticker, "classe"]))
-                 & ~t.index.isin(self.selected)]
+                 & ~t.index.isin(self.selected) & ~t.index.isin(list(self.short_history))]
         return list(same.sort_values("pontuacao", ascending=False).index[:n])
 
 
@@ -99,7 +108,7 @@ def measure(series: dict[str, pd.Series], volumes: pd.DataFrame | None, assets: 
         elif volumes is not None and s in volumes.columns:
             v = (volumes[s] * x.reindex(volumes.index)).dropna()
             liq = float(v.iloc[-63:].mean()) if len(v) else np.nan
-        rows[s] = {"retorno_anual_H": mean, "volatilidade_H": vol,
+        rows[s] = {"observacoes": len(x), "retorno_anual_H": mean, "volatilidade_H": vol,
                    "queda_maxima_H": float((wealth / wealth.cummax() - 1).min()),
                    "sharpe_H": (mean - rf) / vol if vol > 1e-9 else 0.0,
                    "momento_12_1": float(x.iloc[-22] / x.iloc[-253] - 1) if len(x) > 253 else np.nan,
@@ -118,28 +127,37 @@ def measure(series: dict[str, pd.Series], volumes: pd.DataFrame | None, assets: 
 def screen(series: dict[str, pd.Series], volumes: pd.DataFrame | None, assets: dict[str, CatalogAsset],
            profile: RiskProfile, objective: str, rf: float, cap: int,
            required: list[tuple[str, list[str], int]] | None = None, themed: set[str] | None = None,
-           keep: dict[str, str] | None = None, periods: int = 252) -> ScreenResult:
+           keep: dict[str, str] | None = None, periods: int = 252, min_obs: int = MIN_CANDIDATE_OBS) -> ScreenResult:
     """``series``: each asset's price series in the investor's currency; ``required``: (label, members,
     minimum count) groups the investor's limits need; ``keep``: assets that must reach the optimiser
-    regardless of score, with the reason (the investor's holdings and previous recommendation)."""
+    regardless of score, with the reason (the investor's holdings and previous recommendation) — unless
+    their history is too short to be analysed (``short_history``)."""
     m = measure(series, volumes, assets, rf, periods)
     w = dict(PROFILE_WEIGHTS[profile])
+    money = {s for s in m.index if traits(assets[s]).market == "CAIXA"}
+    short = {s: (f"histórico curto: {int(m.at[s, 'observacoes'])} preços diários, menos que os {min_obs} (cerca de 3 "
+                 "anos) necessários para estimar risco e retorno e validar fora da amostra")
+             for s in m.index if m.at[s, "observacoes"] < min_obs}
     liq = m["liquidez_diaria"].astype(float)
     finite = liq[np.isfinite(liq)]
     top = float(finite.max()) if len(finite) else 0.0
     liq_log = np.log1p(liq.where(~np.isinf(liq), top).fillna(0.0))      # cash = most liquid; unknown = 0
+    rest = m.index.difference(sorted(money))       # cash is not scored against its class (see the module notes)
+
+    def zc(x: pd.Series) -> pd.Series:
+        return _zscore(x.loc[rest], m.loc[rest, "classe"]).reindex(m.index).fillna(0.0)
+
     z = pd.DataFrame({
-        "sharpe": _zscore(m["sharpe_encolhido"], m["classe"]), "vol": _zscore(m["volatilidade_H"], m["classe"]),
-        "mdd": _zscore(m["queda_maxima_H"], m["classe"]), "mom": _zscore(m["momento_12_1"].fillna(0.0), m["classe"]),
-        "liq": _zscore(liq_log, m["classe"]) if len(finite) else pd.Series(0.0, index=m.index)})
+        "sharpe": zc(m["sharpe_encolhido"]), "vol": zc(m["volatilidade_H"]), "mdd": zc(m["queda_maxima_H"]),
+        "mom": zc(m["momento_12_1"]), "liq": zc(liq_log) if len(finite) else pd.Series(0.0, index=m.index)})
     score = sum(w[k] * z[k] for k in w)
     if objective == "renda":
         score = score + INCOME_WEIGHT * m["renda"].astype(float) * 2.0
     m["pontuacao"] = score.round(4)
     corr = daily_returns(series).corr(min_periods=126).reindex(index=m.index, columns=m.index).fillna(0.0)
-    order = list(m.sort_values("pontuacao", ascending=False).index)
-    decision: dict[str, tuple[str, str]] = {}
-    keep = dict(keep or {})
+    decision: dict[str, tuple[str, str]] = {s: ("descartado", why) for s, why in short.items()}
+    order = [s for s in m.sort_values("pontuacao", ascending=False).index if s not in short]
+    keep = {s: why for s, why in (keep or {}).items() if s not in short}
 
     # 1. duplicates: same class, same daily behaviour
     dup: dict[str, str] = {}
@@ -147,7 +165,7 @@ def screen(series: dict[str, pd.Series], volumes: pd.DataFrame | None, assets: d
         if a in dup or a in keep:
             continue
         for b in order[i + 1:]:
-            if b in dup or b in keep or m.at[a, "classe"] != m.at[b, "classe"]:
+            if b in dup or b in keep or b in money or m.at[a, "classe"] != m.at[b, "classe"]:
                 continue
             if corr.at[a, b] >= DUPLICATE_CORR:
                 dup[b] = a
@@ -169,7 +187,8 @@ def screen(series: dict[str, pd.Series], volumes: pd.DataFrame | None, assets: d
     per_group: dict[int, int] = {}
 
     def take(s: str, why: str, force: bool = False) -> bool:
-        if s in chosen or s in dup or len(chosen) >= cap:
+        """``force``: holdings, the cash and the classes the limits require — may go past the cap."""
+        if s in chosen or s in dup or s in short or (not force and len(chosen) >= cap):
             return False
         g = group[s]
         if not force and per_group.get(g, 0) >= quota:
@@ -182,6 +201,10 @@ def screen(series: dict[str, pd.Series], volumes: pd.DataFrame | None, assets: d
     for s in order:
         if s in keep:
             take(s, keep[s], force=True)
+    for s in order:
+        if s in money:
+            take(s, "caixa de liquidez diária: sempre avaliado pelo otimizador (rende perto do CDI com oscilação "
+                    "mínima; o peso dele sai da otimização)", force=True)
     for label, members, k in required or []:
         cands = [s for s in order if s in members and s not in dup]
         got = sum(1 for s in chosen if s in members)
@@ -217,6 +240,6 @@ def screen(series: dict[str, pd.Series], volumes: pd.DataFrame | None, assets: d
             decision[s] = ("descartado", why)
     m["decisao"] = pd.Series({s: d for s, (d, _) in decision.items()})
     m["motivo"] = pd.Series({s: why for s, (_, why) in decision.items()})
-    notes = [(f"{len(m)} ativos medidos; {len(dup)} duplicatas de exposição; "
+    notes = [(f"{len(m)} ativos medidos; {len(short)} com histórico curto; {len(dup)} duplicatas de exposição; "
               f"{len(set(group.values()))} grupos de correlação; {len(chosen)} candidatos para o otimizador")]
-    return ScreenResult(chosen, m.sort_values("pontuacao", ascending=False), dup, group, notes)
+    return ScreenResult(chosen, m.sort_values("pontuacao", ascending=False), dup, group, notes, short)

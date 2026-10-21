@@ -10,7 +10,8 @@
   stock of the same market this is the visible part of the overlap: ETF compositions are not in the
   data sources, so the overlap is estimated from the co-movement and never claimed from holdings;
 * hidden concentration: risk share of the largest correlation group, and exposure by currency,
-  class, sector and market (weights) next to the share of the risk each one carries.
+  class, sector and market (weights) next to the share of the risk each one carries. The currency is
+  the one the value follows (an S&P 500 ETF quoted in reais counts as dollars), not the quote.
 """
 
 from __future__ import annotations
@@ -95,7 +96,7 @@ def analyse(w: pd.Series, cov: pd.DataFrame, returns: pd.DataFrame, assets: dict
                 {k: round(float(v), 4) for k, v in rc.groupby(lab).sum().items()})
 
     exposure, risk_exposure = {}, {}
-    for dim, key in (("moeda", lambda s: assets[s].currency), ("classe", lambda s: assets[s].macro_class),
+    for dim, key in (("moeda", lambda s: traits(assets[s]).exposure), ("classe", lambda s: assets[s].macro_class),
                      ("setor", lambda s: assets[s].sector), ("mercado", lambda s: traits(assets[s]).market)):
         exposure[dim], risk_exposure[dim] = by(key)
     eff_n = float(1.0 / (wv ** 2).sum())

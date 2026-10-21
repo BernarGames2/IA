@@ -100,8 +100,39 @@ log = get_logger("engine")
 REFERENCE_ONLY = ("equal_weight", "benchmark")   # data-independent: compared with, never chosen, in personal runs
 # Personal runs: a strategy whose REALISED validation volatility exceeds the investor's cap by up to 10% stays
 # eligible — the personal portfolio aims at the cap ex ante, and a 2-3 year realised volatility is itself an
-# estimate; the final weights still meet the cap ex ante.
+# estimate. The weights finally used meet the cap ex ante: a chosen strategy whose estimated volatility is above
+# it is replaced by the closest portfolio (minimum tracking error) within the cap and every limit (said in the
+# warnings; kept as is, and said, only when no such portfolio exists).
 VOL_BAND_TOLERANCE = 0.10
+
+
+def band_filter(elig: list[str], vol_validation: pd.Series, cap: float, tol: float,
+                reference: tuple[str, ...] = ()) -> tuple[list[str], list[str], str]:
+    """Strategies whose realised validation volatility is within the cap (+ tolerance). The filter applies
+    only when a strategy that may be chosen (not a reference baseline) passes it: a band holding only
+    baselines would hand the choice to 1/N. Returns (eligible, excluded by the band, warning)."""
+    in_band = [k for k in elig if float(vol_validation[k]) <= cap * (1 + tol) + 1e-9]
+    if any(k not in reference for k in in_band):
+        return in_band, sorted(set(elig) - set(in_band)), ""
+    return elig, [], (f"Nenhuma estratégia elegível teve volatilidade realizada na validação <= {cap:.0%} (teto da "
+                      "faixa do perfil); seleção feita sem esse filtro." if elig else "")
+
+
+def _within_vol_cap(res: OptimizationResult, cov: pd.DataFrame, pc: PortfolioConstraints, mu: pd.Series, rf: float,
+                    cap: float) -> OptimizationResult | None:
+    """Closest portfolio to ``res`` (minimum tracking error) with volatility <= ``cap`` and every limit met."""
+    c = cov.loc[pc.symbols, pc.symbols].to_numpy()
+    target = res.weights.reindex(pc.symbols).fillna(0.0).to_numpy()
+    n = pc.n
+    eps = 1e-4 * float(np.trace(c)) / n            # small distance-in-weights term: unique answer, no shuffling
+    con = [{"type": "ineq", "fun": lambda x: cap ** 2 - float(x[:n] @ c @ x[:n]),
+            "jac": lambda x: np.concatenate([-2 * c @ x[:n], np.zeros(len(x) - n)])}]
+    r = opt.solve(res.method, lambda x: float((x - target) @ c @ (x - target)) + eps * float((x - target) @ (x - target)),
+                  lambda x: 2 * c @ (x - target) + 2 * eps * (x - target), pc, mu.loc[pc.symbols].to_numpy(), c, rf,
+                  opt.SolverSettings(n_starts=3), extra_constraints=con, start_hint=[target])
+    if not r.success or r.volatility > cap * (1 + 1e-4):
+        return None
+    return r
 
 
 @dataclass
@@ -384,18 +415,15 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput,
                 wv = sb.weights.loc[:bt.validation_end]
                 if len(wv) and all(not opt.verify_weights(row.to_numpy(), pc) for _, row in wv.iterrows()):
                     elig.append(k)
-            vval = bt.metrics_validation["volatility_ann"].astype(float)
-            in_band = [k for k in elig if vval[k] <= vol_cap * (1 + vol_tol) + 1e-9]
-            if in_band:
-                excluded_band = sorted(set(elig) - set(in_band))
-                elig = in_band
-            else:
-                excluded_band = []
-                warnings.append(f"Nenhuma estratégia elegível teve volatilidade realizada na validação <= "
-                                f"{vol_cap:.0%} (teto da faixa do perfil); seleção feita sem esse filtro.")
+            elig, excluded_band, band_warning = band_filter(
+                elig, bt.metrics_validation["volatility_ann"].astype(float), vol_cap, vol_tol,
+                REFERENCE_ONLY if policy is not None else ())
+            if band_warning:
+                warnings.append(band_warning)
             if not elig:
-                elig = ["equal_weight"]
-                warnings.append("Nenhuma estratégia respeitou as restrições em toda a validação; usado pesos iguais.")
+                elig = ["utility"] if policy is not None and "utility" in bt.strategies else ["equal_weight"]
+                warnings.append("Nenhuma estratégia respeitou as restrições em toda a validação; usada "
+                                + ("a carteira de utilidade do investidor." if elig == ["utility"] else "pesos iguais."))
             baseline = "equal_weight" if "equal_weight" in elig else elig[0]
             selection = select_strategy(bt, baseline, elig, "utility" if policy is not None else None,
                                         REFERENCE_ONLY if policy is not None else (),
@@ -427,6 +455,19 @@ def run_analysis(cfg: AppConfig, profile_input: InvestorProfileInput,
     if not selection:
         selection = {"selected": selected_name, "rule": ("fallback: utilidade do investidor" if fallback == "utility"
                                                          else "fallback: mínima variância") + " (backtest não executado)"}
+    cap_v = prof.research_limits.target_volatility_band[1]
+    if policy is not None and feas.feasible and np.isfinite(selected.volatility) and selected.volatility > cap_v + 1e-6:
+        proj = _within_vol_cap(selected, cov, pc, mu, rf, cap_v)
+        if proj is not None:
+            warnings.append(f"Teto de volatilidade: a estratégia '{selected_name}' tinha volatilidade estimada "
+                            f"{selected.volatility:.1%}, acima do seu teto de {cap_v:.1%}; os pesos usados são os da "
+                            "carteira mais próxima dela dentro do teto e de todos os limites.")
+            selection["ajuste_teto_volatilidade"] = {"antes": selected.volatility, "depois": proj.volatility}
+            selected = proj
+        else:
+            warnings.append(f"Teto de volatilidade: a estratégia '{selected_name}' tem volatilidade estimada "
+                            f"{selected.volatility:.1%}, acima do seu teto de {cap_v:.1%}, e nenhuma carteira dentro "
+                            "dos limites fica abaixo dele; mantidos os pesos da estratégia.")
     sw = selected.weights
 
     # ------------------------------------------------------------- risk

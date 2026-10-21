@@ -106,15 +106,24 @@
     é otimista (viés de seleção/sobrevivência — alerta no relatório).
 33. **Caixa em reais = CDI diário do Banco Central (SGS 12)**: modelo de Tesouro Selic/CDB/fundo DI de liquidez
     diária (risco de emissor e IR não modelados); não é um ticker de bolsa. Se a série falhar, a carteira sai sem ele
-    e o alerta diz isso.
+    e o alerta diz isso; um mínimo de caixa que nenhum instrumento disponível consegue cumprir é retirado com aviso
+    explícito ("separe X% em caixa por conta própria"), em vez de tornar toda a otimização inviável. O Banco Central
+    publica o CDI com 1 dia útil de atraso e o painel usa só as datas comuns a todas as séries: a última data usada
+    pode ser o dia útil anterior (a data aparece no relatório).
 34. **Seleção pessoal**: a carteira de utilidade é a escolha padrão e só é trocada se outra estratégia a superar na
     validação por mais de 1 erro-padrão da diferença diária pareada (anualizado), medindo pela utilidade realizada
-    do investidor; volatilidade realizada na validação até 10% acima do teto é tolerada (erro de estimação), e a
-    carteira final respeita o teto ex ante. Pesos iguais e benchmark são só linhas de base.
-35. **Tamanho mínimo de compra**: carteira-alvo dimensionada para o que se tem hoje + aportes dos próximos 12 meses;
-    compra mínima padrão R$ 100 (configurável); lotes: B3 ações 1 (fracionário), FIIs/ETFs 1 cota, EUA ação inteira
-    ou 0,0001 se a corretora permitir, CDI qualquer valor. Regra gulosa (não é otimização inteira): mantém as
-    posições que alcançam a compra mínima e, se os limites não fecharem, devolve as próximas maiores no mínimo.
+    do investidor; volatilidade realizada na validação até 10% acima do teto é tolerada (erro de estimação). O filtro
+    por essa volatilidade só vale quando alguma estratégia escolhível passa nele (senão a escolha cairia em 1/N). Se a
+    estratégia escolhida tiver volatilidade estimada acima do teto, os pesos usados são os da carteira mais próxima
+    dela (mínimo tracking error) dentro do teto e dos limites — dito nos alertas. Pesos iguais e benchmark são só
+    linhas de base.
+35. **Tamanho mínimo de compra**: carteira-alvo dimensionada para o que se tem hoje + aportes dos próximos 12 meses
+    (ou dos meses que cabem no horizonte); compra mínima padrão R$ 100 (configurável); lotes: B3 ações 1
+    (fracionário), FIIs/ETFs 1 cota (inclusive ETFs de cripto, ouro e Tesouro Selic listados na B3), EUA ação inteira
+    ou 0,0001 se a corretora permitir, cripto comprada direto 0,00000001, CDI qualquer valor. Só o CDI é "dinheiro":
+    ETFs de caixa listados (LFTS11, SHY) são comprados por cota ao preço deles. Regra gulosa (não é otimização
+    inteira): mantém as posições que alcançam a compra mínima e, se os limites não fecharem, devolve as próximas
+    maiores no mínimo.
 36. **Preços para o plano**: último ponto da série diária do Yahoo (pode ser o pregão em andamento), convertido pela
     taxa de câmbio do dia; não é cotação em tempo real — confira na corretora. Custos e impostos de compra/venda
     não entram nas quantidades; a sugestão de "acima do alvo" não manda vender (IR sobre ganho de capital não é
@@ -129,8 +138,44 @@
     Nasdaq (NYSE/Nasdaq/AMEX), ETFs americanos do catálogo curado e caixa em CDI. Não cobre outros países, BDRs,
     fundos não listados, CDBs/LCIs específicos nem títulos individuais do Tesouro.
 40. **Cache**: séries de preço reutilizadas por até 4 h; resultado do site por até 15 min para o mesmo pedido (o
-    resultado informa quando foi calculado). Mais de metade do universo sem cotação → erro, nunca uma carteira
-    montada com o que sobrou ou um resultado antigo.
+    resultado informa quando foi calculado; a demonstração sintética não muda e é reaproveitada sem prazo). Mais de
+    metade das séries tentadas sem cotação → erro, nunca uma carteira montada com o que sobrou ou um resultado
+    antigo. Séries que nem foram tentadas porque o tempo de download do site acabou não contam como falha da fonte:
+    a triagem usa as baixadas e o alerta diz quantas ficaram de fora.
+41. **Moeda e caixa pela exposição**: para o limite de moeda estrangeira e a diversificação "por moeda", conta a
+    moeda que o valor acompanha, não a de cotação: ETFs de índice estrangeiro cotados em reais (IVVB11, NASD11),
+    ouro e cripto contam como dólar (país US ou GLOBAL no catálogo; nos ETFs da B3 fora do catálogo, pela regra do
+    nome). Instrumento de caixa só conta como caixa na moeda do investidor (SHY não é caixa para quem gasta reais).
+    Quem escolhe só mercados estrangeiros (ex.: só EUA com objetivo em reais) não tem o limite de moeda estrangeira
+    (ele empurraria o resto para o CDI); a regra aparece no relatório.
+42. **Setores**: uma chave por setor em português (`SECTOR_LABEL` em `catalog.py`); setores da Nasdaq são mapeados
+    para elas, então o limite por setor junta Brasil e EUA (ex.: TOTS3 + AAPL em "tecnologia"). ETFs setoriais do
+    catálogo (XLK, XLE, XLF, XLV, XLU, IBB, TAN) carregam o setor deles; ETFs amplos não são filtrados por setor. Nomes
+    digitados são normalizados ("Petróleo e gás", "oil", "bancos"); nome não reconhecido gera aviso (nada é excluído
+    em silêncio). Ações da B3 fora do catálogo não têm setor na fonte ("nao_classificado") e ficam sem limite de
+    setor (continuam com o limite por ativo e a triagem de correlação).
+43. **Histórico mínimo de candidato**: ~3 anos de preços diários (735). Abaixo disso o ativo é medido e listado, mas
+    não vira candidato: as estimativas seriam ruidosas, a validação fora da amostra não teria período para julgá-lo
+    e uma série curta encurtaria a janela comum de todos os outros. Um ativo da carteira atual nessa situação aparece
+    como "fora da análise" com o motivo (o pedido não falha por causa dele).
+44. **Triagem (etapa B) — ajustes**: o caixa CDI não entra nas notas comparativas da renda fixa (volatilidade quase
+    zero geraria um Sharpe extremo) e é sempre avaliado pelo otimizador; a carteira atual e os grupos exigidos pelas
+    suas regras podem passar do limite de candidatos; métrica ausente (ex.: momento) conta como neutra; a governança
+    é aplicada antes da triagem (ativo excluído não ocupa vaga nem aparece como alternativa); na deduplicação por
+    empresa (BRK-A/BRK-B) fica a classe de ação do catálogo.
+45. **Aportes**: o dinheiro de cada aporte nivela as posições mais abaixo do alvo (preenchimento por nível: as
+    maiores diferenças diminuem juntas), com a compra mínima por posição; a diferença é medida sobre tudo o que você
+    tem, inclusive posições fora da carteira-alvo. A sobra vai para o caixa e o caixa acima do alvo completa compras
+    que um aporte sozinho não faz (lote mais caro que o aporte) — o plano mostra o resgate. Sem dinheiro novo e com
+    posições acima do alvo, o plano "se vender o excesso" mostra onde o dinheiro da venda entraria (vender é opção,
+    não ordem; IR não calculado).
+46. **Covariância com séries quase sem oscilação** (CDI): variância mínima de (0,3% a.a.)² e covariância zero para
+    séries com volatilidade anual abaixo disso; evita uma matriz quase singular (otimização lenta e instável).
+47. **Impressão digital dos parâmetros**: não depende da ordem em que listas e posições foram digitadas nem do número
+    de trajetórias simuladas (que só muda a probabilidade do objetivo, não a carteira).
+48. **Valores digitados** (site e linha de comando, mesma regra): "1.500,00", "1500,5" e "1,500.00" são aceitos; com
+    um só tipo de separador, grupos de exatamente três dígitos ("1.500", "1,500") são milhar. Código de ativo vazio
+    é erro. Códigos: PETR4F (fracionário) vira PETR4.SA; B3SA3 e B5P211 são reconhecidos; BRK.B vira BRK-B.
 
 ## Itens pendentes / próximos passos
 

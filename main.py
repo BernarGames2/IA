@@ -29,6 +29,7 @@ from core.market_data.base import DataUnavailableError
 from core.profiler import demo_profile
 from models.investor import InvestorProfileInput, RiskProfile
 from utils.logging_config import configure_logging
+from utils.validation import parse_amount
 
 if TYPE_CHECKING:
     from core.purpose.engine import PurposeRequest
@@ -198,9 +199,9 @@ def purpose_request_from_args(a: argparse.Namespace, cfg: AppConfig) -> PurposeR
     held: dict[str, float] = {}
     for item in a.carteira_atual:
         tk, sep, val = item.partition("=")
-        if not sep:
-            raise ValueError(f"--carteira-atual espera TICKER=VALOR (ex. PETR4=1500), recebido {item!r}")
-        held[tk.strip()] = held.get(tk.strip(), 0.0) + float(val)
+        if not sep or not tk.strip():
+            raise ValueError(f"--carteira-atual espera TICKER=VALOR (ex. PETR4=1.500,00), recebido {item!r}")
+        held[tk.strip()] = held.get(tk.strip(), 0.0) + parse_amount(val)
     data.update({"objetivo_tipo": a.objetivo_tipo, "tolerancia_perda": a.queda_maxima,
                  "necessidade_liquidez": a.liquidez_12m, "mercados": a.mercados, "permitir_cripto": a.permitir_cripto,
                  "ativos_excluidos": a.excluir, "setores_excluidos": a.excluir_setores, "carteira_atual": held,

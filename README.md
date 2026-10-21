@@ -241,23 +241,29 @@ declarado. As 13 etapas, nesta ordem, ficam registradas no relatório:
    4, arrojado 2; ×1,5 preservação, ×1,25 renda); regras de horizonte (< 1 ano: ações ≤ 10%, caixa ≥ 50%; 1–3 anos:
    ações ≤ 30%, caixa ≥ 20%; 3–5 anos: ações ≤ 50%; sem renda fixa longa abaixo de 3 anos); objetivo renda (≥ 50% em
    ativos que pagam renda) ou preservação (caixa ≥ 20%); queda máxima D → volatilidade ≤ D/2; necessidade de liquidez
-   L → caixa ≥ L; teto por setor e por moeda estrangeira; cripto só com permissão. Toda informação não dada vira uma
-   **hipótese escrita** no resultado (nada é presumido em silêncio).
+   L → caixa ≥ L; teto por setor e por moeda estrangeira (pela moeda de exposição: IVVB11, ouro e cripto contam
+   como dólar; "só EUA" dispensa esse teto, e a regra aparece); caixa só na moeda do investidor; cripto só com
+   permissão; setores digitados são normalizados ("Petróleo e gás", "oil") e nome desconhecido gera aviso. Toda
+   informação não dada vira uma **hipótese escrita** no resultado (nada é presumido em silêncio).
 3. **Descoberta e filtro** (`core/universe/screen.py`, etapa A, **sem usar desempenho passado**): catálogo curado +
    listagens completas (B3: COTAHIST do dia — ações, FIIs e ETFs; EUA: screener da Nasdaq) + o que o investidor já
    tem; classe identificada (ETFs da B3 fora do catálogo são classificados pelo código/nome, ou ficam de fora);
    preferências (mercados, ativos/setores excluídos, cripto, renda fixa longa incompatível com o prazo); pisos de
-   liquidez/tamanho; uma classe de ação por empresa (PETR3/PETR4, GOOG/GOOGL); amostra estratificada por classe e
-   setor com presença mínima de cada classe e espaço para os temas do motivo. Baixa até 2× os candidatos (máx. 100).
+   liquidez/tamanho; uma classe de ação por empresa (PETR3/PETR4, GOOG/GOOGL; fica a do catálogo, se houver);
+   amostra estratificada por classe e setor com presença mínima de cada classe e espaço para os temas do motivo.
+   Baixa até 2× os candidatos (máx. 100). Setores da Nasdaq viram as mesmas chaves do catálogo.
 4. **Dados e triagem** (`core/universe/scoring.py`, etapa B): cada ativo é medido no **próprio histórico** (uma
    listagem recente não encurta o dos outros): volatilidade, queda máxima, Sharpe encolhido para a média da classe,
    momento 12-1 e liquidez, em z-scores dentro da classe com pesos do perfil; duplicatas de exposição (correlação
    ≥ 0,95 na mesma classe) e grupos que andam juntos (≥ 0,70, cota por grupo); primeiro o que os limites exigem
-   (caixa, renda, mínimo de renda fixa), depois temas e as melhores pontuações. Cada ativo recebe decisão e motivo.
+   (caixa, renda, mínimo de renda fixa — podem passar do limite de candidatos), depois temas e as melhores
+   pontuações. Candidato precisa de ~3 anos de preços (735); ativo da carteira atual com menos fica "fora da análise"
+   com o motivo. Governança é aplicada antes da triagem. Cada ativo recebe decisão e motivo.
    Caixa em reais = **CDI diário do Banco Central (SGS 12)**, rotulado como modelo de Tesouro Selic/CDB de liquidez
-   diária. Mais da metade do universo sem cotação → **nenhuma carteira** (erro claro, sem resultado antigo).
+   diária; fica fora das notas comparativas e é sempre avaliado pelo otimizador. Mais da metade das séries tentadas
+   sem cotação → **nenhuma carteira** (erro claro, sem resultado antigo).
 5. **Sleeves por moeda** (`sleeves.py`): estatísticas na moeda nativa com a rf de cada moeda (nunca rf = 0).
-6. **Governança** (`governance.py`): exclusão dura antes do otimizador.
+6. **Governança** (`governance.py`): exclusão dura antes da triagem e do otimizador.
 7. **Tamanho mínimo de compra** (`feasibility.py`): a carteira-alvo é dimensionada para o que você tem hoje + os
    aportes dos próximos 12 meses; ativo cuja menor compra possível (1 lote/cota/ação, ou a compra mínima, padrão
    R$ 100) passa do peso máximo fica de fora, com o motivo.
@@ -265,15 +271,19 @@ declarado. As 13 etapas, nesta ordem, ficam registradas no relatório:
    carteira de **utilidade pessoal** `max w'μ − λ/2·w'Σw` (com o teto de volatilidade) é a escolha padrão e só é
    trocada se outra estratégia a superar, na validação fora da amostra, por mais de 1 erro-padrão da diferença,
    medindo pela **utilidade realizada do próprio investidor**. Pesos iguais e o benchmark viram **linhas de base**
-   (comparadas no relatório, nunca escolhidas). Com carteira atual, trocar tem custo (penalidade de giro).
+   (comparadas no relatório, nunca escolhidas). Com carteira atual, trocar tem custo (penalidade de giro). Se a
+   estratégia escolhida passar do teto de volatilidade, usa-se a carteira mais próxima dela dentro do teto.
 9–10. **Temas e score de alinhamento** (`themes.py`, `alignment.py`): léxico determinístico com citação literal.
 11. **Combinação e carteira executável**: `w_final = (1 − a)·w_quant + a·w_alinhamento` dentro de todos os limites;
    depois, posições menores que uma compra mínima saem (ou sobem até ela, se os limites exigirem) e os pesos são
    recalculados como a carteira executável mais próxima. **Regra de estabilidade**: com a recomendação anterior e as
    mesmas entradas, ela é mantida se a nova não a superar por mais que o erro de estimativa + o custo de trocar.
-12. **Plano de compra e dupla justificativa**: quantidades por lote (B3: fracionário de 1 ação, FIIs/ETFs 1 cota;
-   EUA: ação inteira ou frações se a corretora permitir; CDI: qualquer valor), sobra, o que fica para os próximos
-   aportes e o que está acima do alvo na carteira atual (sem mandar vender: custo e imposto). Por ativo: mercado,
+12. **Plano de compra e dupla justificativa**: quantidades por lote (B3: fracionário de 1 ação, FIIs/ETFs 1 cota,
+   inclusive ETFs de cripto e de Tesouro Selic; EUA: ação inteira ou frações se a corretora permitir; cripto direta:
+   0,00000001; CDI: qualquer valor), sobra, o que fica para os próximos aportes e o que está acima do alvo na
+   carteira atual (sem mandar vender: custo e imposto). O dinheiro novo nivela as posições mais abaixo do alvo; a
+   sobra vai para o caixa, e o caixa acima do alvo completa um lote mais caro que um aporte (o plano mostra o
+   resgate). Sem dinheiro novo, o plano "se vender o excesso" mostra onde o dinheiro da venda entraria. Por ativo: mercado,
    classe, peso, valor, papel, riscos, por que virou candidato, fatos [H], estimativas [E], hipóteses,
    contribuição para a diversificação e alternativas consideradas.
 13. **Mudanças e diversificação real** (`changes.py`, `concentration.py`): o que entrou/saiu/subiu/caiu desde a

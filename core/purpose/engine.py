@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import json
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -78,6 +79,7 @@ from core.purpose.feasibility import (
     ExecutionPlan,
     contribution_plan,
     executable_universe,
+    is_money,
     lot_size,
     min_weight,
     plan,
@@ -100,7 +102,7 @@ from core.simulation.engine import (
 )
 from core.simulation.models import BlockBootstrapModel, GBMModel
 from core.universe.listings import load_market_listings
-from core.universe.scoring import ScreenResult, screen
+from core.universe.scoring import MIN_CANDIDATE_OBS, ScreenResult, screen
 from core.universe.screen import Funnel, listing_to_catalog, preselect
 from models.investor import RiskProfile
 from models.market_data import PriceDataset
@@ -112,13 +114,19 @@ POOL_FACTOR = 2.0             # stage A downloads up to 2x the candidates the op
 POOL_MAX = 100                # ...but never more than 100 series per request
 MAX_FAILED_SHARE = 0.5        # more than half of the pool without quotes: no portfolio is built
 PRICE_CACHE_HOURS = 4.0       # downloaded series are reused for at most 4 hours
-_B3_CODE = re.compile(r"[A-Z]{4}\d{1,2}[A-Z]?")
+_B3_CODE = re.compile(r"([A-Z][A-Z0-9]{3}\d{1,2})F?")        # PETR4, B3SA3, B5P211, TAEE11; F = fractional
+_US_CLASS = re.compile(r"([A-Z]{1,5})[./]([A-Z])")             # BRK.B, BRK/B -> BRK-B (Yahoo's code)
 
 
 def norm_ticker(t: str) -> str:
-    """'petr4' -> 'PETR4.SA' (B3 codes typed without the suffix); other codes upper-cased."""
+    """'petr4' -> 'PETR4.SA', 'b3sa3' -> 'B3SA3.SA', 'PETR4F' (fractional market) -> 'PETR4.SA', 'BRK.B' ->
+    'BRK-B'; other codes upper-cased."""
     t = t.strip().upper()
-    return f"{t}.SA" if _B3_CODE.fullmatch(t) else t
+    if m := _B3_CODE.fullmatch(t):
+        return f"{m.group(1)}.SA"
+    if m := _US_CLASS.fullmatch(t):
+        return f"{m.group(1)}-{m.group(2)}"
+    return t
 
 
 class PurposeRequest(BaseModel):
@@ -184,9 +192,11 @@ class PurposeRequest(BaseModel):
     def _positions(cls, v: dict[str, float]) -> dict[str, float]:
         out: dict[str, float] = {}
         for k, x in v.items():
+            if not k.strip():
+                raise ValueError("há uma posição sem código de ativo: informe TICKER e valor")
             if not np.isfinite(x) or x < 0:
                 raise ValueError(f"valor inválido para {k}: use números >= 0")
-            if x > 0 and k.strip():
+            if x > 0:
                 t = norm_ticker(k)
                 out[t] = out.get(t, 0.0) + float(x)
         return out
@@ -322,15 +332,17 @@ def _reference_amount(req: PurposeRequest) -> tuple[float, str]:
     m = PERIODS_PER_YEAR[req.periodicidade]
     n = min(m, int(np.floor(m * req.horizonte_anos + 1e-9))) if m and req.aporte_periodico > 0 else 0
     year = req.aporte_periodico * n
+    months = round(n * 12 / m) if n else 0
+    span = "do próximo mês" if months == 1 else f"dos próximos {months} meses"
     today = ("capital inicial + carteira atual" if req.carteira_atual and req.capital_inicial > 0 else
              "carteira atual" if req.carteira_atual else "capital inicial")
     if year <= 0:
         return now, f"carteira dimensionada para {_fmt(now, ccy)} ({today})"
     if now <= 0:
-        return year, (f"sem capital inicial: carteira dimensionada para os aportes dos próximos 12 meses "
+        return year, (f"sem capital inicial: carteira dimensionada para os aportes {span} "
                       f"({_fmt(year, ccy)}); cada aporte compra as posições mais distantes do alvo")
     return now + year, (f"carteira dimensionada para {_fmt(now + year, ccy)}: {today} ({_fmt(now, ccy)}) + aportes "
-                        f"dos próximos 12 meses ({_fmt(year, ccy)}); o dinheiro de hoje e cada aporte compram "
+                        f"{span} ({_fmt(year, ccy)}); o dinheiro de hoje e cada aporte compram "
                         "primeiro as posições mais distantes do alvo")
 
 
@@ -516,13 +528,17 @@ def _make_executable(comb: CombinedPortfolio, pc: PortfolioConstraints, cov: pd.
                for i in order if i not in held}
     if w is None:
         return comb, dropped, False
-    raised = [syms[i] for i in held if target[i] < fl[i] - 1e-12]
     w = np.where(w < 1e-10, 0.0, w)
-    ws = pd.Series(w / w.sum(), index=syms)
+    w = w / w.sum()
+    raised = [syms[i] for i in held if target[i] < fl[i] - 1e-12 and w[i] >= fl[i] - 1e-9]
+    below = [syms[i] for i in held if 0.0 < w[i] < fl[i] - 1e-9]       # the per-asset limit is under one purchase
+    ws = pd.Series(w, index=syms)
     return (_restate(comb, ws, cov, mu, al,
                      f"{len(dropped)} posição(ões) pequena(s) demais para comprar ficaram de fora e os pesos foram "
                      "recalculados dentro de todos os limites (carteira executável mais próxima da teórica)"
                      + (f"; {', '.join(raised)} subiu(ram) até a compra mínima para os limites fecharem" if raised else "")
+                     + (f"; {', '.join(below)} ficou(aram) abaixo de uma compra mínima porque o limite por ativo é "
+                        "menor que ela" if below else "")
                      + ("; para fechar os limites, o orçamento de tracking error do alinhamento foi excedido"
                         if te_relaxed else "")),
             dropped, True)
@@ -599,9 +615,12 @@ def _purpose_thesis(a: CatalogAsset, s: str, al: AlignmentResult, themes: ThemeE
 
 
 def _param_fingerprint(req: PurposeRequest) -> str:
-    """Fingerprint of everything the investor typed except the previous recommendation itself."""
-    d = req.model_dump(mode="json", exclude={"carteira_anterior", "carteira_anterior_parametros"})
-    return hashlib.sha256(repr(sorted(d.items())).encode()).hexdigest()[:12]
+    """Fingerprint of everything the investor typed that shapes the portfolio — not the previous
+    recommendation itself, nor the number of simulated paths (it changes only the goal probability).
+    Canonical: the order in which lists and holdings were typed does not matter."""
+    d = req.model_dump(mode="json", exclude={"carteira_anterior", "carteira_anterior_parametros", "n_simulacoes"})
+    d = {k: sorted(v) if isinstance(v, list) else v for k, v in d.items()}
+    return hashlib.sha256(json.dumps(d, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:12]
 
 
 def _stability(req: PurposeRequest, comb: CombinedPortfolio, res: AnalysisResult, floor: pd.Series, vol_cap: float,
@@ -628,8 +647,9 @@ def _stability(req: PurposeRequest, comb: CombinedPortfolio, res: AnalysisResult
             why.append("não respeita os limites atuais (" + "; ".join(viol[:3]) + ")")
         c = res.cov.cov.loc[pc.symbols, pc.symbols].to_numpy()
         v0 = float(np.sqrt(max(w0.to_numpy() @ c @ w0.to_numpy(), 0.0)))
-        if v0 > vol_cap + 1e-6:
-            why.append(f"volatilidade estimada {v0:.1%} acima do teto {vol_cap:.1%}")
+        cap = max(vol_cap, comb.vol_final)      # when no portfolio fits the cap, the new one is the reference
+        if v0 > cap + 1e-6:
+            why.append(f"volatilidade estimada {v0:.1%} acima do teto {cap:.1%}")
         small = [t for t in pc.symbols if 0 < w0[t] < float(floor.get(t, 0.0)) - 1e-12]
         if small:
             why.append("posições menores que uma compra mínima com o valor atual: " + ", ".join(small))
@@ -675,15 +695,20 @@ def _sources(req: PurposeRequest, ds: PriceDataset, funnel: Funnel | None, rf_sr
         return [{"dado": "preços", "fonte": "gerador sintético determinístico (semente fixa)", "data": last_quote,
                  "limite": "demonstração do método: não descreve nenhum ativo real"},
                 {"dado": "taxa livre de risco", "fonte": "; ".join(f"{k}: {v}" for k, v in rf_src.items())}]
-    providers = sorted({p.provider for p in ds.provenance.values()})
-    cached = sum(1 for p in ds.provenance.values() if p.cache_hit)
+    prices = {s: p for s, p in ds.provenance.items() if s != CASH_TICKER}
+    providers = sorted({p.provider for p in prices.values()})
+    cached = sum(1 for p in prices.values() if p.cache_hit)
+    cdi = ds.provenance.get(CASH_TICKER)
     out: list[dict[str, object]] = [
         {"dado": "preços diários ajustados", "fonte": "Yahoo Finance (" + ", ".join(providers) + ")",
          "data": last_quote, "obtido_em_utc": fetched,
          "limite": f"série diária com atraso (o último ponto pode ser o pregão em andamento), não tempo real; "
-                   f"{cached} de {len(ds.provenance)} séries vieram do cache local (até {PRICE_CACHE_HOURS:g} h)"},
+                   f"{cached} de {len(prices)} séries vieram do cache local (até {PRICE_CACHE_HOURS:g} h)"},
         {"dado": "taxa livre de risco", "fonte": "; ".join(f"{k}: {v}" for k, v in rf_src.items())},
-        {"dado": "caixa em reais", "fonte": cash_note or "não usado (classes escolhidas)"},
+        {"dado": "caixa em reais", "fonte": cash_note or "não usado (classes escolhidas)",
+         **({"data": str(cdi.last_observation), "obtido_em_utc": cdi.ingested_at_utc,
+             "limite": "o Banco Central publica o CDI com 1 dia útil de atraso; o painel usa só as datas em que todas "
+                       "as séries têm valor, então a última data usada pode ser o dia útil anterior"} if cdi else {})},
         {"dado": "classificação e temas dos ativos", "fonte": TAG_SOURCE_REAL},
     ]
     if funnel is not None:
@@ -726,6 +751,8 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
                   "resultado": f"perfil final {policy.profile.value}; aversão ao risco {policy.risk_aversion:g}; teto de "
                                f"volatilidade {policy.vol_cap:.0%} a.a.; objetivo {policy.objective}; "
                                + ("; ".join(policy.rules) if policy.rules else "limites padrão do perfil")})
+    for w_ in policy.warnings:
+        alerts.append(Alert("perfil", "WARNING", w_))
     for a_ in policy.assumptions:
         alerts.append(Alert("perfil", "INFO", "Hipótese (informação não fornecida): " + a_))
     for r_ in policy.rules:
@@ -738,8 +765,12 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
     pre_tags = {tag for t in pre.themes if t.name in THEME_TO_TAGS for tag in THEME_TO_TAGS[t.name]}
     mine = set(req.carteira_atual) | set(req.carteira_anterior)
     not_analysed: dict[str, str] = {}      # holdings / previous positions that cannot be analysed, and why
+    want_cash = req.classes is None or "caixa" in req.classes
+    classes = None if req.classes is None else [c for c in req.classes if c != "caixa"]   # caixa = the CDI model
     if req.offline:
-        base = expand(SYNTHETIC_CATALOG, req.classes)
+        base = expand(SYNTHETIC_CATALOG, classes)
+        if want_cash and classes is not None:      # the synthetic stand-in for the CDI cash
+            base += [a for a in SYNTHETIC_CATALOG if traits(a).market == "CAIXA" and a not in base]
         excluded_pref = {a.ticker: why for a in base if (why := policy.allows(a))}
         pool = [a for a in base if a.ticker not in excluded_pref]
         known = {a.ticker: a for a in SYNTHETIC_CATALOG}
@@ -766,12 +797,12 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
                 not_analysed[t] = "não reconhecido: não está no catálogo curado nem nas listagens consultadas"
             elif why := policy.allows(a_):
                 not_analysed[t] = f"fora das suas preferências: {why}"
-            elif req.classes and a_.macro_class not in req.classes:
+            elif classes is not None and a_.macro_class not in classes:
                 not_analysed[t] = "fora das classes de ativos escolhidas"
             else:
                 always.append(a_)
         pool_cap = min(max(int(POOL_FACTOR * req.max_ativos), req.max_ativos + 10), POOL_MAX)
-        pool, funnel = preselect(expand(REAL_CATALOG, req.classes), listings, pre_tags, pool_cap, req.classes,
+        pool, funnel = preselect(expand(REAL_CATALOG, classes), listings, pre_tags, pool_cap, classes,
                                  allows=policy.allows, always=always)
         excluded_pref = dict(funnel.excluded_by_preference)
         listed_txt = (f"{funnel.listed_b3} na B3 e {funnel.listed_us} nos EUA listados + catálogo curado"
@@ -785,7 +816,11 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
     cash_note = ""
     if not req.offline:
         provider = WithExtraSeries(provider or _default_provider(cache_root, progress, download_budget_s))
-        if req.classes is None or "caixa" in req.classes:
+        cash_why = policy.allows(CASH_ASSET)
+        if cash_why and want_cash:
+            excluded_pref[CASH_TICKER] = cash_why
+            cash_note = f"caixa (CDI) não usado: {cash_why}"
+        elif want_cash:
             try:
                 provider.extra[CASH_TICKER] = fetch_cdi_cash(rf_fetch)  # type: ignore[arg-type]
                 pool.append(CASH_ASSET)
@@ -822,31 +857,48 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
         raise
     excluded_data = dict(ds_pool.quality.excluded_symbols)
     failed = {k: v for k, v in excluded_data.items() if v.startswith("download failure")}
-    if not req.offline and len(failed) > MAX_FAILED_SHARE * len(pool):
-        first = next(iter(failed.values()))
-        raise DataUnavailableError(f"{len(failed)} de {len(pool)} séries sem cotação agora (exemplo — {first}); uma "
-                                   "carteira montada só com o restante não seria confiável")
+    # series left untried because the download time ran out are not failures of the source: the pool was larger
+    # than the time allowed, and the screening works with what was downloaded (said in the alerts)
+    untried = {k: v for k, v in failed.items() if "tempo de download esgotado" in v}
+    tried = len(pool) - len(untried)
+    if not req.offline and len(failed) - len(untried) > MAX_FAILED_SHARE * max(tried, 1):
+        first = next(v for k, v in failed.items() if k not in untried)
+        raise DataUnavailableError(f"{len(failed) - len(untried)} de {tried} séries sem cotação agora (exemplo — "
+                                   f"{first}); uma carteira montada só com o restante não seria confiável")
     cat = {a.ticker: a for a in pool}
-    series = {s: ds_pool.raw_prices[s] for s in ds_pool.symbols}
+    # governance is a hard exclusion applied BEFORE the screening: a flagged asset takes no candidate slot and is
+    # never offered as an alternative
+    gov = apply_governance(ds_pool.symbols, req.incluir_sob_revisao, governance_path, req.restricoes_governanca)
+    series = {s: ds_pool.raw_prices[s] for s in gov.kept}
     say(f"medindo risco, qualidade, liquidez e correlação de {len(series)} ativos…")
     scr = screen(series, ds_pool.volumes, {s: cat[s] for s in series}, policy.profile, policy.objective, rf0[ccy],
                  req.max_ativos, required=policy.required_groups([cat[s] for s in series]),
                  themed={s for s in series if set(cat[s].tags) & pre_tags},
                  keep={s: ("você já tem este ativo" if s in req.carteira_atual else "estava na recomendação anterior")
                        + ": entra na análise para ser comparado com as alternativas" for s in series if s in mine})
+    for t in sorted(mine & set(scr.short_history)):
+        not_analysed[t] = scr.short_history[t]
+        whose = "da sua carteira atual" if t in req.carteira_atual else "da recomendação anterior"
+        alerts.append(Alert("dados", "WARNING", f"{t} ({whose}) não entra na análise: {scr.short_history[t]}"))
+    if len(scr.selected) < 2:
+        raise DataUnavailableError(f"menos de dois ativos com histórico suficiente (>= {MIN_CANDIDATE_OBS} preços "
+                                   "diários) depois das suas preferências e da governança: amplie as classes ou os "
+                                   "mercados")
     if req.offline:
         ds_all = subset_dataset(ds_pool, scr.selected)
     else:       # re-aligned on the candidates only: a recent listing outside them does not shorten their history
         ds_all, _ = _load_universe(req, [cat[s] for s in scr.selected], cfg, provider)
-    providers = sorted({p.provider for p in ds_all.provenance.values()})
+    price_prov = {s_: p for s_, p in ds_all.provenance.items() if s_ != CASH_TICKER}    # the CDI is listed apart
+    providers = sorted({p.provider for p in price_prov.values()})
     last_quote = str(ds_all.prices.index[-1].date())
-    fetched = max((p.ingested_at_utc for p in ds_all.provenance.values() if p.ingested_at_utc), default="")
+    fetched = max((p.ingested_at_utc for p in price_prov.values() if p.ingested_at_utc), default="")
     universe = {"origem": "SINTÉTICA (demonstração offline)" if ds_all.is_synthetic
                 else "real — Yahoo Finance (" + ", ".join(providers) + ")",
                 "ultima_cotacao": last_quote, "obtido_em_utc": fetched,
                 "baixados": [a.ticker for a in pool], "candidatos": list(scr.selected), "validados": ds_all.symbols,
                 "excluidos_por_dados": excluded_data, "excluidos_por_preferencia": excluded_pref,
                 "fora_da_analise": not_analysed, "min_observacoes": MIN_OBS,
+                "min_observacoes_candidato": MIN_CANDIDATE_OBS, "historico_curto": scr.short_history,
                 "n_datas": len(ds_all.prices), "periodo": f"{ds_all.prices.index[0].date()} a "
                                                          f"{ds_all.prices.index[-1].date()}",
                 "cobertura": ("B3: ações, FIIs e ETFs negociados no dia de referência (listagem oficial da B3); EUA: "
@@ -857,9 +909,10 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
     if funnel is not None:
         universe["funil"] = funnel.as_dict()
     steps.append({"etapa": 4, "titulo": "Dados e triagem",
-                  "resultado": f"{len(series)} de {len(pool)} com série validada (>= {MIN_OBS} observações); "
-                               f"triagem para o perfil {policy.profile.value}: {scr.notes[0]}; "
-                               f"excluídos por dados: {len(excluded_data)}"})
+                  "resultado": f"{len(ds_pool.symbols)} de {len(pool)} com série validada (>= {MIN_OBS} observações); "
+                               f"{len(gov.removed)} fora por governança antes da triagem; triagem para o perfil "
+                               f"{policy.profile.value} (candidato precisa de >= {MIN_CANDIDATE_OBS} preços diários): "
+                               f"{scr.notes[0]}; excluídos por dados: {len(excluded_data)}"})
     if funnel is not None:
         if funnel.used_listings:
             alerts.append(Alert("dados", "INFO",
@@ -886,9 +939,14 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
                             f"obtidos em {fetched[:16].replace('T', ' ')} UTC. Fechamentos diários com atraso, não "
                             "cotações em tempo real; o provedor pode revisar séries; as métricas são históricas [H] e "
                             "estimativas [E], não previsões."))
-    if failed:
-        alerts.append(Alert("dados", "WARNING" if len(failed) > 0.2 * len(pool) else "INFO",
-                            f"{len(failed)} de {len(pool)} ativos sem cotação nesta consulta (excluídos, sem proxy)."))
+    if len(failed) > len(untried):
+        n_bad = len(failed) - len(untried)
+        alerts.append(Alert("dados", "WARNING" if n_bad > 0.2 * tried else "INFO",
+                            f"{n_bad} de {tried} ativos sem cotação nesta consulta (excluídos, sem proxy)."))
+    if untried:
+        alerts.append(Alert("dados", "INFO", f"{len(untried)} de {len(pool)} ativos não foram baixados porque o tempo "
+                                             f"de download acabou; a triagem usou os {len(ds_pool.symbols)} com dados "
+                                             "(nada foi preenchido no lugar deles)."))
     for s_, why in excluded_data.items():
         if s_ not in failed:
             alerts.append(Alert("dados", "WARNING", f"{s_} excluído (sem proxy): {why}"))
@@ -908,9 +966,8 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
             alerts.append(Alert("rf", "WARNING", f"rf de {c} = {rf[c]:.2%} é fallback de demonstração, não cotação; "
                                                  "informe a taxa real de cada moeda."))
 
-    # 6 ---------------------------------------------------------------- governance (hard exclusion)
-    gov = apply_governance(ds_all.symbols, req.incluir_sob_revisao, governance_path, req.restricoes_governanca)
-    ds = subset_dataset(ds_all, gov.kept)
+    # 6 ---------------------------------------------------------------- governance (hard exclusion, applied in 4)
+    ds = subset_dataset(ds_all, [s_ for s_ in ds_all.symbols if s_ in gov.kept])
     if len(ds.symbols) < 2:
         raise ValueError("menos de dois ativos elegíveis após dados e governança")
     steps.append({"etapa": 6, "titulo": "Filtro de governança",
@@ -929,32 +986,47 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
     ref_amount, ref_note = _reference_amount(req)
     last_px = ds.prices.iloc[-1]
     lim = policy.limits
-    caps = {s_: 1.0 if traits(cat[s_]).cash else min(lim.max_weight_per_asset,
-                                                      lim.max_class_weight.get(cat[s_].asset_class, 1.0))
+    over = policy.upper_overrides([cat[s_] for s_ in ds.symbols])
+    caps = {s_: over.get(s_, min(lim.max_weight_per_asset, lim.max_class_weight.get(cat[s_].asset_class, 1.0)))
             for s_ in ds.symbols}
     not_exec = {s_: f"a classe {cat[s_].asset_class} tem limite de 0% para o seu perfil e horizonte"
                 for s_, cp in caps.items() if cp <= 0}
     keep_x, too_big = executable_universe({s_: cat[s_] for s_ in ds.symbols if s_ not in not_exec}, last_px, caps,
-                                          ref_amount, req.valor_minimo_posicao, req.fracionario_eua)
+                                          ref_amount, req.valor_minimo_posicao, req.fracionario_eua, ccy)
     not_exec.update(too_big)
     if len(keep_x) >= 2:
         ds = subset_dataset(ds, keep_x)
+        exec_txt = (f"{len(not_exec)} ativo(s) fora: " + "; ".join(f"{k} — {v}" for k, v in list(not_exec.items())[:6])
+                    if not_exec else "todos os candidatos cabem numa compra mínima")
     else:
         alerts.append(Alert("execucao", "WARNING", f"com {_fmt(ref_amount, ccy)} quase nenhum ativo cabe numa compra "
                                                    "mínima sem passar do peso máximo: a carteira-alvo abaixo é uma "
                                                    "referência para os próximos aportes, não uma compra imediata."))
+        exec_txt = (f"só {len(keep_x)} candidato(s) cabe(m) numa compra mínima: nenhum foi retirado e a carteira-alvo "
+                    "fica como referência para os próximos aportes")
         not_exec = {}
-    steps.append({"etapa": 7, "titulo": "Tamanho mínimo de compra",
-                  "resultado": ref_note + "; " + (f"{len(not_exec)} ativo(s) fora: " + "; ".join(
-                      f"{k} — {v}" for k, v in list(not_exec.items())[:6]) if not_exec else
-                      "todos os candidatos cabem numa compra mínima")})
+    steps.append({"etapa": 7, "titulo": "Tamanho mínimo de compra", "resultado": ref_note + "; " + exec_txt})
 
     # 8 ---------------------------------------------------------------- quant optimisation
     held_w = ({t: v / start for t, v in req.carteira_atual.items() if t in ds.symbols}
               if req.carteira_atual and start > 0 else None)
     assets_ds = [cat[s_] for s_ in ds.symbols]
     cost_turnover = (cfg.transaction_cost_bps + cfg.spread_bps + cfg.slippage_bps) / 1e4
-    opt_policy = OptimizationPolicy(lim, policy.groups(assets_ds), policy.upper_overrides(assets_ds),
+    groups = policy.groups(assets_ds)
+    for g in [g for g in groups if g.lower > 0 and not g.members]:     # a minimum nothing available can meet
+        groups.remove(g)
+        if g.name.startswith("caixa"):
+            alerts.append(Alert("perfil", "WARNING",
+                                f"Regra '{g.name}' de {g.lower:.0%} não aplicada: nenhum instrumento de caixa em {ccy} "
+                                "está disponível agora" + (f" ({cash_note})" if cash_note else "") + ". A carteira "
+                                f"abaixo não tem essa reserva: separe {g.lower:.0%} em caixa por conta própria (por "
+                                "exemplo, Tesouro Selic ou CDB de liquidez diária) e aplique os pesos ao restante, ou "
+                                "tente de novo mais tarde."))
+        else:
+            alerts.append(Alert("perfil", "WARNING",
+                                f"Regra '{g.name}' de {g.lower:.0%} não aplicada: nenhum ativo que a cumpra passou pelos "
+                                "filtros agora; a carteira abaixo não atende a essa regra."))
+    opt_policy = OptimizationPolicy(lim, groups, policy.upper_overrides(assets_ds),
                                     policy.risk_aversion, held_w, cost_turnover)
     say(f"otimizando e validando no backtest walk-forward ({len(ds.symbols)} ativos)…")
     res = run_analysis(cfg, policy.profile_input, dataset=(ds, truth), policy=opt_policy)
@@ -1032,6 +1104,7 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
             prev_in = pd.Series(stability.pop("_pesos"), dtype=float)
             comb = _restate(comb, prev_in.reindex(comb.final.index).fillna(0.0), res.cov.cov, res.mu, al,
                             "recomendação anterior mantida pela regra de estabilidade")
+            dropped = {t: why for t, why in dropped.items() if float(comb.final.get(t, 0.0)) <= 0.0}
         stability.pop("_pesos", None)
     w_f = comb.final
     gap_q = _frontier_gap(res.frontier, comb.vol_quant, comb.ret_quant)
@@ -1097,6 +1170,7 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
             "ticker": s, "nome": a.name, "classe": a.macro_class, "moeda": table.loc[s, "moeda"],
             "mercado": {"B3": "B3 (Brasil)", "US": "EUA", "CAIXA": "caixa em reais (CDI)"}[mk], "peso": w_s,
             "valor_inicial": req.capital_inicial * w_s,
+            "valor_alvo": start * w_s, "valor_atual": float(req.carteira_atual.get(s, 0.0)),
             "aporte_por_periodo": req.aporte_periodico * w_s if m_per else 0.0,
             "papel": role, "proposito": purpose, "por_que": f"{role}; {purpose}",
             "negocio": a.business.replace("[sintético] ", ""), "riscos": a.class_risk,
@@ -1138,17 +1212,16 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
 
     # purchase plans: what the money buys today (lots, minimums) and what the next contribution buys
     current = dict(req.carteira_atual)
+    contributions = req.aporte_periodico > 0 and bool(m_per)
     buy_now: ExecutionPlan | None = None
     if req.capital_inicial > 0:      # all at once only when nothing else will be added; otherwise gaps first
         buy_now = (plan(w_f, last_px, cat, req.capital_inicial, req.fracionario_eua)
-                   if not current and not (req.aporte_periodico > 0 and m_per) else
+                   if not current and not contributions else
                    contribution_plan(w_f, current, last_px, cat, req.capital_inicial, req.valor_minimo_posicao,
-                                     req.fracionario_eua))
-    after = dict(current)
-    for r_ in buy_now.rows if buy_now else []:
-        after[str(r_["ticker"])] = after.get(str(r_["ticker"]), 0.0) + float(r_["valor"])
+                                     req.fracionario_eua, more_coming=contributions))
+    after = buy_now.holdings_after(current) if buy_now else dict(current)
     next_c = (contribution_plan(w_f, after, last_px, cat, req.aporte_periodico, req.valor_minimo_posicao,
-                                req.fracionario_eua) if req.aporte_periodico > 0 and m_per else None)
+                                req.fracionario_eua) if contributions else None)
     context = ""
     if stability is not None:
         context = ("recalculado para as suas entradas atuais (mudaram desde a recomendação anterior)"
@@ -1159,11 +1232,23 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
     sells = []
     if current:
         total = held_value + req.capital_inicial
-        for t, v in sorted(current.items(), key=lambda kv: -kv[1]):
+        for t, v in sorted(after.items(), key=lambda kv: -kv[1]):
+            if t == CASH_TICKER or (t in cat and is_money(cat[t])):
+                continue        # cash above the target is not sold: the plans redeem it (shown in each plan)
             tgt = float(w_f.get(t, 0.0)) * total
             if v - tgt > max(req.valor_minimo_posicao, 0.01 * total):
                 sells.append({"ticker": t, "valor_atual": v, "valor_alvo": tgt, "excesso": v - tgt,
                               "motivo": why.get(t, "")})
+    # no new money is coming: the target is reached only by selling the excess (and using the cash above the
+    # target), so say where that money would go
+    rebalance: ExecutionPlan | None = None
+    if current and not contributions:
+        sold = dict(after)
+        for v_ in sells:
+            sold[v_["ticker"]] = sold.get(v_["ticker"], 0.0) - float(v_["excesso"])
+        rb = contribution_plan(w_f, sold, last_px, cat, float(sum(v_["excesso"] for v_ in sells)),
+                               req.valor_minimo_posicao, req.fracionario_eua, more_coming=False)
+        rebalance = rb if sells or rb.rows else None
     execution = {
         "valor_de_referencia": ref_amount, "nota_referencia": ref_note,
         "precos": (f"último preço da série diária ({last_quote}), em {ccy} — dado com atraso (pode ser o pregão "
@@ -1174,20 +1259,33 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
         "compra_inicial": buy_now.as_dict() if buy_now else None,
         "proximo_aporte": next_c.as_dict() if next_c else None,
         "vendas_sugeridas": sells,
-        "nota_vendas": ("vender tem custo e pode gerar imposto sobre ganho de capital (não calculado aqui); com "
-                        "aportes regulares, dá para reequilibrar comprando o que está abaixo do alvo, sem vender."
+        "reequilibrio": rebalance.as_dict() if rebalance else None,
+        "nota_vendas": ("vender tem custo e pode gerar imposto sobre ganho de capital (não calculado aqui); "
+                        + ("com aportes regulares, dá para reequilibrar comprando o que está abaixo do alvo, sem vender."
+                           if contributions else "sem aportes, só vendendo o excesso a carteira chega ao alvo; o plano "
+                           "'se vender o excesso' mostra onde colocar esse dinheiro. Manter como está também é uma opção.")
                         if sells else ""),
     }
     if buy_now is not None and not buy_now.viable:
         alerts.append(Alert("execucao", "WARNING", "com o capital informado nem toda posição-alvo compra um lote "
                             "inteiro: " + "; ".join(f"{k} — {v}" for k, v in buy_now.skipped.items())
-                            + ". Essas posições entram pelos próximos aportes."))
+                            + (". Essas posições entram pelos próximos aportes." if contributions else
+                               ". Com este valor elas ficam fora da compra e a carteira comprada se afasta do alvo.")))
+    if buy_now:
+        plan_txt = (f"compra inicial de {_fmt(req.capital_inicial, ccy)} em {len(buy_now.rows)} posição(ões), sobra "
+                    f"{_fmt(buy_now.cash_left, ccy)}")
+    elif current:
+        plan_txt = "sem capital novo: " + ("os aportes completam as posições abaixo do alvo" if contributions else
+                                           "" if rebalance else
+                                           "a carteira atual já está perto do alvo; nada a comprar ou vender")
+    else:
+        plan_txt = "sem compra inicial (sem capital)"
+    if rebalance:
+        plan_txt += (f"{'; ' if buy_now else ''}se vender o excesso ({_fmt(rebalance.amount, ccy)}), o dinheiro compra "
+                     f"{len(rebalance.rows)} posição(ões) abaixo do alvo")
     steps.append({"etapa": 12, "titulo": "Carteira final, plano de compra e dupla justificativa",
                   "resultado": f"{int((w_f > 0).sum())} ativos com peso; teses financeira e de propósito separadas; "
-                               + (f"compra inicial de {_fmt(req.capital_inicial, ccy)} em {len(buy_now.rows)} "
-                                  f"posição(ões), sobra {_fmt(buy_now.cash_left, ccy)}" if buy_now else
-                                  "sem compra inicial (sem capital)")
-                               + (f"; próximo aporte: {len(next_c.rows)} compra(s)" if next_c else "")})
+                               + plan_txt + (f"; próximo aporte: {len(next_c.rows)} compra(s)" if next_c else "")})
 
     # 13 --------------------------------------------------------------- changes + real diversification
     conc = analyse(w_f[w_f > 0], res.cov.cov, res.returns, cat)
@@ -1290,10 +1388,10 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
         alerts.append(Alert("backtest", "WARNING", str(sel["warning"])))
     hhi = float((wv ** 2).sum())
     held_tbl = table[table["peso"] > 0]
-    by_ccy = held_tbl.groupby("moeda")["peso"].sum()
+    by_ccy = held_tbl["peso"].groupby(held_tbl.index.map(lambda t: traits(cat[t]).exposure)).sum()
     by_cls = held_tbl.groupby("classe")["peso"].sum()
     alerts.append(Alert("concentracao", "WARNING" if wv.max() > 0.25 else "INFO",
-                        f"maior peso {wv.max():.1%} ({w_f.idxmax()}); N efetivo {1 / hhi:.1f}; por moeda: "
+                        f"maior peso {wv.max():.1%} ({w_f.idxmax()}); N efetivo {1 / hhi:.1f}; por moeda de exposição: "
                         + ", ".join(f"{k} {v:.0%}" for k, v in by_ccy.items()) + "; por classe: "
                         + ", ".join(f"{k} {v:.0%}" for k, v in by_cls.items())))
     lo = sensitivity.iloc[1]["p_objetivo"]
@@ -1307,6 +1405,8 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
     for w_ in res.warnings:
         if "Nenhum retorno esperado" in w_ or "INVIÁVEIS" in w_:
             alerts.append(Alert("sensibilidade", "WARNING", w_))
+        elif w_.startswith(("Teto de volatilidade", "Nenhuma estratégia")):
+            alerts.append(Alert("validacao", "WARNING", w_))
     for c in res.profile.conflicts:
         alerts.append(Alert("perfil", "INFO", c))
     if reqc.rate is not None and exp_cagr is not None and exp_cagr < reqc.rate:

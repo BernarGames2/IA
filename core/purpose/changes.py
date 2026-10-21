@@ -109,9 +109,13 @@ def stability_test(before: pd.Series, after: pd.Series, mu: pd.Series, cov: pd.D
     cost = float(cost_per_turnover * np.abs(d).sum())
     gain = u(w1) - u(w0)
     keep = bool(gain <= se + cost)
+    margin = (f"a margem de erro da estimativa ({se * 100:.2f} p.p.) somada ao custo de trocar ({cost * 100:.2f} p.p.)")
+    if gain < 0.00005:          # not better at all (less than 0.005 p.p.): no comparison with the margin is needed
+        text = ("a nova carteira não melhora a utilidade esperada [E] em relação à anterior "
+                f"({gain * 100:+.2f} p.p. ao ano): a recomendação anterior foi mantida.")
+    else:
+        text = (f"a nova carteira melhora a utilidade esperada [E] em {gain * 100:.2f} p.p. ao ano, "
+                + ("menos que " if keep else "mais que ") + margin + ": "
+                + ("a recomendação anterior foi mantida." if keep else "a mudança foi adotada."))
     return {"ganho_utilidade_E": gain, "erro_padrao_aprox": se, "custo_da_troca": cost, "manter_anterior": keep,
-            "explicacao": (f"a nova carteira melhora a utilidade esperada [E] em {gain * 100:.2f} p.p. ao ano, "
-                           + ("menos que" if keep else "mais que")
-                           + f" a margem de erro da estimativa ({se * 100:.2f} p.p.) somada ao custo de trocar "
-                             f"({cost * 100:.2f} p.p.): "
-                           + ("a recomendação anterior foi mantida." if keep else "a mudança foi adotada."))}
+            "explicacao": text}

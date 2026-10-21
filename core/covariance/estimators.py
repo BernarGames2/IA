@@ -159,10 +159,36 @@ ESTIMATORS = {
 }
 
 
+VOL_FLOOR = 0.003   # annual volatility below which a series is treated as near-riskless (daily-liquidity cash)
+
+
 def estimate_cov(r: pd.DataFrame, method: str, periods: int = 252) -> CovarianceResult:
+    """``method`` on the assets that move; series that barely move (annual volatility < VOL_FLOOR, e.g. CDI
+    cash, whose daily rate changes only with the Selic) get variance max(sample, VOL_FLOOR^2) and zero
+    covariance with the rest. Without this the matrix is nearly singular (condition numbers up to 1e29
+    were seen), solvers crawl and risk-based portfolios treat cash as exactly riskless."""
     if method not in ESTIMATORS:
         raise ValueError(f"unknown covariance method {method!r}; options {list(ESTIMATORS)}")
-    return ESTIMATORS[method](r, periods)
+    var = r.var(ddof=1).to_numpy(dtype=float) * periods
+    quiet = ~(var >= VOL_FLOOR ** 2)                       # NaN (constant or too short) counts as quiet
+    if not quiet.any() or quiet.all():
+        return ESTIMATORS[method](r, periods)
+    cols = list(r.columns)
+    moving = [c for c, q in zip(cols, quiet, strict=True) if not q]
+    still = [c for c, q in zip(cols, quiet, strict=True) if q]
+    base = (ESTIMATORS[method](r[moving], periods) if len(moving) >= 2 else
+            _finish("sample", np.atleast_2d(np.cov(r[moving].to_numpy(), rowvar=False, ddof=1) * periods), moving,
+                    len(r), {}))
+    c = pd.DataFrame(0.0, index=cols, columns=cols)
+    c.loc[moving, moving] = base.cov.to_numpy()
+    for s, v in zip(cols, var, strict=True):
+        if s in still:
+            c.loc[s, s] = max(float(np.nan_to_num(v)), VOL_FLOOR ** 2)
+    res = _finish(base.method, c.to_numpy(), cols, len(r), base.params)
+    res.warnings = [*base.warnings, *res.warnings,
+                    (f"{len(still)} ativo(s) quase sem oscilação ({', '.join(still)}): volatilidade mínima de "
+                     f"{VOL_FLOOR:.1%} a.a. e correlação zero com os demais")]
+    return res
 
 
 def _gmv_weights(c: np.ndarray) -> np.ndarray:

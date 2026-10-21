@@ -16,6 +16,8 @@ petroleo_gas, mineracao, florestal, industria, especulativo.
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from dataclasses import dataclass, field
 
 TAG_SOURCE_REAL = "curadoria editorial estática do catálogo (revisar periodicamente); não é dado de mercado"
@@ -142,8 +144,10 @@ def _fii(t: str, name: str, business: str) -> CatalogAsset:
                         ("imoveis", "renda_recorrente"), _FII)
 
 
-def _etf_us(t: str, name: str, cls: str, business: str, tags: tuple[str, ...], risk: str) -> CatalogAsset:
-    return CatalogAsset(t, name, "etf_eua", cls, "etf", "US", "USD", business, tags, risk)
+def _etf_us(t: str, name: str, cls: str, business: str, tags: tuple[str, ...], risk: str,
+            sector: str = "etf") -> CatalogAsset:
+    """US ETF; sector funds carry their sector (sector limits and exclusions apply to them too)."""
+    return CatalogAsset(t, name, "etf_eua", cls, sector, "US", "USD", business, tags, risk)
 
 
 EXTENDED_CATALOG: tuple[CatalogAsset, ...] = (
@@ -376,19 +380,19 @@ EXTENDED_CATALOG: tuple[CatalogAsset, ...] = (
     _etf_us("VYM", "Vanguard High Dividend Yield", "equity", "ETF de ações americanas de alto dividendo",
             ("renda_recorrente", "diversificacao_global"), _EQ_US),
     _etf_us("XLV", "Health Care Select Sector SPDR", "equity", "ETF do setor de saúde do S&P 500",
-            ("saude", "diversificacao_global"), _EQ_US),
+            ("saude", "diversificacao_global"), _EQ_US, "saude"),
     _etf_us("XLK", "Technology Select Sector SPDR", "equity", "ETF do setor de tecnologia do S&P 500",
-            ("tecnologia", "diversificacao_global"), _EQ_US),
+            ("tecnologia", "diversificacao_global"), _EQ_US, "tecnologia"),
     _etf_us("XLE", "Energy Select Sector SPDR", "equity", "ETF do setor de petróleo e gás do S&P 500",
-            ("petroleo_gas", "diversificacao_global"), _EQ_US),
+            ("petroleo_gas", "diversificacao_global"), _EQ_US, "petroleo_gas"),
     _etf_us("XLF", "Financial Select Sector SPDR", "equity", "ETF do setor financeiro do S&P 500",
-            ("financeiro", "diversificacao_global"), _EQ_US),
+            ("financeiro", "diversificacao_global"), _EQ_US, "financeiro"),
     _etf_us("XLU", "Utilities Select Sector SPDR", "equity", "ETF do setor de energia elétrica e utilidades",
-            ("infraestrutura", "diversificacao_global"), _EQ_US),
+            ("infraestrutura", "diversificacao_global"), _EQ_US, "utilidades"),
     _etf_us("IBB", "iShares Biotechnology", "equity", "ETF de empresas de biotecnologia",
-            ("saude", "inovacao", "diversificacao_global"), _EQ_US),
+            ("saude", "inovacao", "diversificacao_global"), _EQ_US, "saude"),
     _etf_us("TAN", "Invesco Solar", "equity", "ETF de empresas de energia solar",
-            ("energia_limpa", "sustentabilidade", "diversificacao_global"), _EQ_US),
+            ("energia_limpa", "sustentabilidade", "diversificacao_global"), _EQ_US, "energia"),
     _etf_us("ARKK", "ARK Innovation", "equity", "ETF ativo de empresas de inovação disruptiva",
             ("inovacao", "tecnologia", "especulativo"), _EQ_US),
     _etf_us("VNQ", "Vanguard Real Estate", "real_estate", "ETF de REITs dos EUA",
@@ -462,3 +466,48 @@ def expand(catalog: tuple[CatalogAsset, ...], macro_classes: list[str] | None = 
     if unknown:
         raise ValueError(f"classes desconhecidas: {sorted(unknown)}")
     return [a for a in catalog if a.macro_class in macro_classes]
+
+
+# --------------------------------------------------------------------------------------------
+# Sector vocabulary: one Portuguese key per sector, used by the catalogue, by the exchange listings
+# (Nasdaq sectors are mapped to these keys in core/universe/screen.py) and by the investor's exclusions.
+SECTOR_LABEL: dict[str, str] = {
+    "agronegocio": "agronegócio", "automotivo": "automotivo", "caixa": "caixa", "construcao": "construção civil",
+    "consumo": "consumo e varejo", "cripto": "cripto", "diversos": "diversos", "educacao": "educação",
+    "energia": "energia limpa/renovável", "etf": "ETFs amplos", "financeiro": "financeiro (bancos, seguros, pagamentos)",
+    "florestal": "papel e celulose", "imobiliario": "imobiliário", "indice": "ETFs de índice", "industria": "indústria",
+    "logistica": "logística e transporte", "materiais_basicos": "materiais básicos (química, metais)",
+    "mineracao": "mineração", "nao_classificado": "setor não informado pela fonte", "ouro": "ouro",
+    "petroleo_gas": "petróleo e gás", "pos_fixado": "pós-fixado", "saneamento": "saneamento", "saude": "saúde",
+    "servicos": "serviços", "siderurgia": "siderurgia", "tecnologia": "tecnologia", "telecom": "telecomunicações",
+    "titulos": "títulos de renda fixa", "titulos_publicos": "títulos públicos",
+    "utilidades": "energia elétrica e utilidades",
+}
+_SECTOR_SYNONYMS: dict[str, str] = {
+    "petroleo": "petroleo_gas", "petroleo_e_gas": "petroleo_gas", "oleo_e_gas": "petroleo_gas", "oleo_gas": "petroleo_gas",
+    "oil": "petroleo_gas", "oil_gas": "petroleo_gas", "oil_and_gas": "petroleo_gas", "combustiveis": "petroleo_gas",
+    "combustiveis_fosseis": "petroleo_gas", "fosseis": "petroleo_gas", "technology": "tecnologia", "tech": "tecnologia",
+    "health": "saude", "health_care": "saude", "healthcare": "saude", "finance": "financeiro", "financial": "financeiro",
+    "financas": "financeiro", "banco": "financeiro", "bancos": "financeiro", "seguros": "financeiro",
+    "real_estate": "imobiliario", "imoveis": "imobiliario", "fii": "imobiliario", "fiis": "imobiliario",
+    "utilities": "utilidades", "energia_eletrica": "utilidades", "eletricas": "utilidades",
+    "consumer_discretionary": "consumo", "consumer_staples": "consumo", "varejo": "consumo", "bebidas": "consumo",
+    "industrials": "industria", "industrial": "industria", "basic_materials": "materiais_basicos",
+    "materiais": "materiais_basicos", "quimica": "materiais_basicos", "telecommunications": "telecom",
+    "telecomunicacoes": "telecom", "mining": "mineracao", "mineradoras": "mineracao", "education": "educacao",
+    "energia_limpa": "energia", "renovaveis": "energia", "energia_renovavel": "energia", "miscellaneous": "diversos",
+    "papel_e_celulose": "florestal", "celulose": "florestal", "aco": "siderurgia", "construcao_civil": "construcao",
+    "construtoras": "construcao", "transporte": "logistica", "agro": "agronegocio", "automoveis": "automotivo",
+    "carros": "automotivo", "criptomoedas": "cripto", "crypto": "cripto",
+}
+
+
+def _sector_key(name: str) -> str:
+    folded = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", "_", folded).strip("_")
+
+
+def canonical_sector(name: str) -> str | None:
+    """'Petróleo e Gás', 'technology', 'Bancos' -> the sector key; None when the name is not recognised."""
+    k = _sector_key(name)
+    return k if k in SECTOR_LABEL else _SECTOR_SYNONYMS.get(k)

@@ -10,13 +10,17 @@ information that does not depend on past returns, so it cannot chase performance
 2. normalise and classify: B3 ETFs outside the catalogue get a class from their ticker/name
    (fixed income, gold, crypto, international or Brazilian equity index) or are left out when the
    class cannot be identified; US stocks get sector/industry from Nasdaq;
-3. de-duplicate: one share class per company (PETR3/PETR4, GOOG/GOOGL — the most liquid stays);
+3. de-duplicate: one share class per company (PETR3/PETR4, GOOG/GOOGL, BRK-A/BRK-B — the catalogue's class
+   stays when there is one, since its class is documented; otherwise the most liquid);
 4. filter: investor preferences (markets, excluded tickers/sectors, crypto permission, horizon-
    incompatible long bonds) and liquidity/size floors (B3: R$ 5 mi traded on the reference day; US:
    market cap of US$ 2 bi);
 5. pool: stratified by class and sector, largest first within each stratum, so every class the
    profile may need is represented; no ticker is ever forced in. Assets linked to the investor's
-   themes get up to 30% of the pool.
+   themes get up to 30% of the pool. Sizes are compared only within a market (B3 traded value in
+   reais and US market value in dollars are different measures), so the strata alternate by rank.
+Sectors use the catalogue's Portuguese keys (``core.purpose.catalog.SECTOR_LABEL``): Nasdaq sectors are
+mapped to them, so a sector limit or exclusion covers B3 and US names alike.
 
 Stage B (``core/universe/scoring.py``) then downloads the pool, measures risk, quality, liquidity
 and correlation, and picks the candidates for the optimiser.
@@ -28,7 +32,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from core.purpose.catalog import CatalogAsset
+from core.purpose.catalog import CatalogAsset, canonical_sector
 from core.purpose.themes import _fold
 from core.universe.listings import ListedAsset, MarketListings
 
@@ -66,26 +70,39 @@ _SECTOR_RULES = {"technology": ("tecnologia",), "health care": ("saude",), "fina
                  "consumer discretionary": ("consumo",), "consumer staples": ("consumo",),
                  "industrials": ("industria",), "basic materials": ("industria",),
                  "telecommunications": ("infraestrutura",)}
+# Nasdaq sector/industry -> sector key of the catalogue (industry rules first)
+_NASDAQ_SECTOR = {"technology": "tecnologia", "health care": "saude", "finance": "financeiro",
+                  "energy": "petroleo_gas", "utilities": "utilidades", "real estate": "imobiliario",
+                  "consumer discretionary": "consumo", "consumer staples": "consumo", "industrials": "industria",
+                  "basic materials": "materiais_basicos", "telecommunications": "telecom",
+                  "miscellaneous": "diversos"}
+_NASDAQ_INDUSTRY_SECTOR = ((r"solar|renewable|alternative energ|wind", "energia"),
+                           (r"real estate investment trust|reit", "imobiliario"),
+                           (r"water supply|water util", "saneamento"))
 
 # B3 ETFs outside the catalogue: class inferred from ticker root + short name (documented; unknown -> out)
-_B3_ETF_RULES: tuple[tuple[str, str, str, str, str, tuple[str, ...], str], ...] = (
-    # (pattern, macro_class, asset_class, sector, description, tags, risk)
-    (r"SELIC|LFTS|TESOURO SELIC|\bDI\b|CDI", "renda_fixa_br", "fixed_income", "titulos_publicos",
+_B3_ETF_RULES: tuple[tuple[str, str, str, str, str, str, tuple[str, ...], str], ...] = (
+    # (pattern, macro_class, asset_class, sector, country of the exposure, description, tags, risk);
+    # gold, crypto and foreign indices are priced abroad: their value in reais moves with the dollar
+    (r"SELIC|LFTS|TESOURO SELIC|\bDI\b|CDI", "renda_fixa_br", "fixed_income", "titulos_publicos", "BR",
      "ETF de títulos pós-fixados (Tesouro Selic/DI): caixa, prazo curto", ("preservacao_capital",), _RF_BR),
-    (r"B5P2|IB5M|IMA-?B ?5|IMAB5|\bB5\b", "renda_fixa_br", "fixed_income", "titulos_publicos",
+    (r"IB5M|IMA-?B ?5 ?\+|IMAB ?5 ?\+", "renda_fixa_br", "fixed_income", "titulos_publicos", "BR",
+     "ETF de títulos IPCA+ com vencimento acima de 5 anos (IMA-B 5+): prazo longo",
+     ("preservacao_capital", "protecao_inflacao"), _RF_BR),
+    (r"B5P2|IMA-?B ?5|IMAB5|\bB5\b", "renda_fixa_br", "fixed_income", "titulos_publicos", "BR",
      "ETF de títulos IPCA+ de até 5 anos: prazo curto", ("preservacao_capital", "protecao_inflacao"), _RF_BR),
-    (r"IMAB|IMA-?B|IMBB|IPCA|INFLA", "renda_fixa_br", "fixed_income", "titulos_publicos",
+    (r"IMAB|IMA-?B|IMBB|IPCA|INFLA", "renda_fixa_br", "fixed_income", "titulos_publicos", "BR",
      "ETF de títulos IPCA+: prazo longo", ("preservacao_capital", "protecao_inflacao"), _RF_BR),
-    (r"IRFM|IRF-?M|\bPRE\b|FIXA|RENDA ?FIXA|DEBB|DEBENT|IDKA", "renda_fixa_br", "fixed_income", "titulos",
+    (r"IRFM|IRF-?M|\bPRE\b|FIXA|RENDA ?FIXA|DEBB|DEBENT|IDKA", "renda_fixa_br", "fixed_income", "titulos", "BR",
      "ETF de renda fixa: prazo médio", ("preservacao_capital",), _RF_BR),
-    (r"OURO|GOLD", "ouro", "commodity", "ouro", "ETF que acompanha o ouro", ("reserva_valor",), _GOLD),
-    (r"BTC|BITC|ETH|HASH|CRIPT|CRYPT|QBTC|QETH|SOLH|BITH|DEFI|XRP", "cripto", "crypto", "cripto",
+    (r"OURO|GOLD", "ouro", "commodity", "ouro", "GLOBAL", "ETF que acompanha o ouro", ("reserva_valor",), _GOLD),
+    (r"BTC|BITC|ETH|HASH|CRIPT|CRYPT|QBTC|QETH|SOLH|BITH|DEFI|XRP", "cripto", "crypto", "cripto", "GLOBAL",
      "ETF de criptoativos", ("especulativo",), _CRYPTO),
     (r"IVVB|S&P|SP ?500|SPXI|NASD|QQQ|WRLD|ACWI|EURP|EURO|ASIA|XINA|CHIN|JAPA|EUAA|USAL|GLOB|INTE?R|EMER|BDOM",
-     "etf_br", "equity", "indice", "ETF listado na B3 de ações internacionais (exposição cambial)",
+     "etf_br", "equity", "indice", "GLOBAL", "ETF listado na B3 de ações internacionais (exposição cambial)",
      ("diversificacao_global",), _ETF_INT),
     (r"BOVA|BOVV|BOVB|XBOV|IBOV|BRAX|IBRX|PIBB|SMAL|SMLL|DIVO|DIVD|IDIV|ECOO|ISUS|FIND|MATB|UTIL|GOVE|BBSD|SMAC",
-     "etf_br", "equity", "indice", "ETF de índice de ações brasileiras", ("diversificacao_local",), _ETF_BR),
+     "etf_br", "equity", "indice", "BR", "ETF de índice de ações brasileiras", ("diversificacao_local",), _ETF_BR),
 )
 
 
@@ -97,12 +114,23 @@ def us_tags(sector: str, industry: str) -> tuple[str, ...]:
     return _SECTOR_RULES.get(sector.lower(), ())
 
 
+def us_sector(sector: str, industry: str) -> str:
+    """Nasdaq sector/industry -> sector key of the catalogue ('nao_classificado' when the source has none)."""
+    ind = industry.lower()
+    for rx, key in _NASDAQ_INDUSTRY_SECTOR:
+        if re.search(rx, ind):
+            return key
+    if not sector.strip():
+        return "nao_classificado"
+    return _NASDAQ_SECTOR.get(sector.strip().lower()) or canonical_sector(sector) or "diversos"
+
+
 def classify_b3_etf(a: ListedAsset) -> CatalogAsset | None:
     """Class of a B3 ETF from its ticker root and short name; None when it cannot be identified."""
     text = f"{a.ticker.removesuffix('.SA')} {_fold(a.name).upper()}"
-    for rx, macro, cls, sector, desc, tags, risk in _B3_ETF_RULES:
+    for rx, macro, cls, sector, country, desc, tags, risk in _B3_ETF_RULES:
         if re.search(rx, text):
-            return CatalogAsset(a.ticker, a.name, macro, cls, sector, "BR", "BRL",
+            return CatalogAsset(a.ticker, a.name, macro, cls, sector, country, "BRL",
                                 f"{desc} (classe inferida pelo código/nome '{a.name}' na listagem da B3)", tags, risk)
     return None
 
@@ -115,7 +143,7 @@ def listing_to_catalog(a: ListedAsset) -> CatalogAsset | None:
         business = (f"{a.industry} ({a.sector}) — classificação setorial da Nasdaq" if a.industry or a.sector
                     else "setor não informado pela fonte")
         return CatalogAsset(a.ticker, a.name, "acoes_eua", "real_estate" if reit else "equity",
-                            (a.sector or "nao_classificado").lower(), "US", "USD", business,
+                            us_sector(a.sector, a.industry), "US", "USD", business,
                             (*tags, "diversificacao_global"), _REIT if reit else _EQ_US)
     if a.market == "B3" and a.kind == "acao":
         return CatalogAsset(a.ticker, a.name, "acoes_br", "equity", "nao_classificado", "BR", "BRL",
@@ -190,6 +218,7 @@ def preselect(curated: list[CatalogAsset], listings: MarketListings | None, them
     for i, a in enumerate(curated):                 # curated first: its documented metadata wins
         pool[a.ticker] = a
         order[a.ticker] = i
+    curated_set = set(order)
     if listings is not None and listings.available:
         fun.used_listings = True
         fun.listed_b3, fun.listed_us = len(listings.b3), len(listings.us)
@@ -226,7 +255,7 @@ def preselect(curated: list[CatalogAsset], listings: MarketListings | None, them
 
     listed_name = {la.ticker: la.name for la in listings.all()} if fun.used_listings and listings else {}
     best_of: dict[str, str] = {}
-    for t in sorted(pool, key=rank_key):
+    for t in sorted(pool, key=lambda t: (t not in curated_set, rank_key(t))):    # catalogue class first
         k = company_key(pool[t], listed_name.get(t))
         if k is None:
             continue
@@ -271,7 +300,12 @@ def preselect(curated: list[CatalogAsset], listings: MarketListings | None, them
             strata.setdefault((a.macro_class, a.sector), []).append(t)
     for g in strata.values():
         g.sort(key=rank_key)
-    cycle = sorted(strata, key=lambda k: rank_key(strata[k][0]))
+    # sizes are comparable only within a market (B3: reais traded; US: dollars of market value)
+    in_market: dict[str, int] = {}
+    for mk in ("B3", "US", "CAIXA"):
+        ranked = sorted((t for t in pool if _market(pool[t]) == mk), key=rank_key)
+        in_market.update({t: i for i, t in enumerate(ranked)})
+    cycle = sorted(strata, key=lambda k: (in_market.get(strata[k][0], 10**6), _market(pool[strata[k][0]]), k))
     while len(chosen) < cap and any(strata[k] for k in cycle):
         for k in cycle:
             if strata[k] and len(chosen) < cap:

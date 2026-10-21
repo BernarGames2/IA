@@ -73,25 +73,25 @@ A carteira-base era 5% ou 3% em cada um dos 28 ativos (pesos iguais projetados n
 
 ## Evidência (depois da correção)
 
-Mesmas variações, mesmo script (`python scripts/audit_repetition.py`), mercado de teste em que as famílias de ativos
+Mesmas variações, mesmo script (`python scripts/audit_repetition.py`; rodado de novo depois das correções da revisão adversarial — histórico mínimo de candidato, caixa fora das notas comparativas, exposição cambial, setores unificados), mercado de teste em que as famílias de ativos
 têm retorno e risco diferentes, mas ativos da mesma família têm o mesmo retorno verdadeiro (quem "ganhou" no passado
 ganhou por sorte):
 
 | Variação | Estratégia | Candidatos iguais à base? | Carteira igual à base? | Posições | Volatilidade |
 |---|---|---|---|---|---|
-| base (moderado, 10 anos, R$ 100 mil, alvo R$ 500 mil) | paridade de risco | — | — | 30 | 4,5% |
-| perfil conservador | utilidade pessoal | não | não | 9 | 4,0% |
-| perfil arrojado | utilidade pessoal | não | não | 9 | 11,6% |
-| horizonte 30 anos | paridade de risco | sim | **sim** (justificado) | 30 | 4,5% |
-| horizonte 6 anos | paridade de risco | sim | **sim** (justificado) | 30 | 4,5% |
-| horizonte 2 anos | utilidade pessoal | não | não | 8 | 5,6% |
-| capital R$ 1.000 | paridade de risco | sim | não | 16 | 3,3% |
-| capital R$ 5 milhões | paridade de risco | sim | **sim** (justificado) | 30 | 4,5% |
-| alvo R$ 5 milhões | paridade de risco | sim | **sim** (justificado) | 30 | 4,5% |
-| objetivo renda | paridade de risco | não | não | 30 | 4,3% |
-| só Brasil | utilidade pessoal | não | não | 10 | 7,5% |
-| outro conjunto de preços de mercado | utilidade pessoal | não | não | 12 | 7,2% |
-| mais um conjunto de preços | paridade de risco | não | não | 30 | 5,1% |
+| base (moderado, 10 anos, R$ 100 mil, alvo R$ 500 mil) | paridade de risco | — | — | 30 | 4,1% |
+| perfil conservador | paridade de risco | não | não | 29 | 3,2% |
+| perfil arrojado | utilidade pessoal | não | não | 8 | 12,0% |
+| horizonte 30 anos | paridade de risco | sim | **sim** (justificado) | 30 | 4,1% |
+| horizonte 6 anos | paridade de risco | sim | **sim** (justificado) | 30 | 4,1% |
+| horizonte 2 anos | utilidade pessoal | não | não | 7 | 5,1% |
+| capital R$ 1.000 | paridade de risco | sim | não | 11 | 3,3% |
+| capital R$ 5 milhões | paridade de risco | sim | **sim** (justificado) | 30 | 4,1% |
+| alvo R$ 5 milhões | paridade de risco | sim | **sim** (justificado) | 30 | 4,1% |
+| objetivo renda | paridade de risco | não | não | 30 | 3,8% |
+| só Brasil | utilidade pessoal | não | não | 11 | 7,6% |
+| outro conjunto de preços de mercado | utilidade pessoal | não | não | 14 | 7,2% |
+| mais um conjunto de preços | utilidade pessoal | não | não | 15 | 7,0% |
 
 Leitura: perfil, prazo curto, objetivo, mercados, capital pequeno e dados novos mudam candidatos e/ou carteira.
 Prazo acima de 5 anos, capital grande e valor-alvo **não** mudam a alocação, de propósito: não alteram nenhum limite

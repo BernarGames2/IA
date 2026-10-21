@@ -460,6 +460,10 @@ const fmtPct = (x, d = 2) => (x === null || x === undefined || !isFinite(x)) ? "
 const fmtNum = (x, d = 2) => (x === null || x === undefined || !isFinite(x)) ? "n/d" : x.toFixed(d).replace(".", ",");
 const fmtMoney = (x) => (x === null || x === undefined || !isFinite(x)) ? "n/d" :
   "R$ " + Math.round(x).toLocaleString("pt-BR");
+const fmtMoney2 = (x) => (x === null || x === undefined || !isFinite(x)) ? "n/d" :
+  "R$ " + x.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// quantities: whole lots as integers, fractions with the decimals they need (crypto: up to 8)
+const fmtQty = (q) => Number.isInteger(q) ? String(q) : String(Number(q.toFixed(8))).replace(".", ",");
 const fmtMoneyShort = (x) => Math.abs(x) >= 1e6 ? "R$ " + (x / 1e6).toFixed(1).replace(".", ",") + " mi" :
   "R$ " + Math.round(x / 1000).toLocaleString("pt-BR") + " mil";
 
@@ -915,17 +919,28 @@ $("p-slider").addEventListener("input", (ev) => {
   $("p-slider-lab").textContent = `${100 - a}% quant / ${a}% alinhamento`;
 });
 // holdings typed one per line: "PETR4 1500", "PETR4: 1.500,00", "BOVA11;3000"
+// "1.500,00", "1500,5" (Brazilian) and "1,500.00", "1500.5" (US). With one kind of separator, groups of
+// exactly three digits ("1.500", "1,500") are thousands; otherwise it is the decimal mark (same rule as the CLI).
+function parseAmount(v) {
+  v = String(v).trim();
+  if (!/^\d[\d.,]*$/.test(v)) return NaN;
+  const dot = v.lastIndexOf("."), comma = v.lastIndexOf(",");
+  let dec = null, thou = null;
+  if (dot >= 0 && comma >= 0) [dec, thou] = dot > comma ? [".", ","] : [",", "."];
+  else if (comma >= 0) [dec, thou] = /^[1-9]\d{0,2}(,\d{3})+$/.test(v) ? [null, ","] : [",", null];
+  else if (dot >= 0) [dec, thou] = /^[1-9]\d{0,2}(\.\d{3})+$/.test(v) ? [null, "."] : [".", null];
+  if (thou) v = v.split(thou).join("");
+  if (dec) { if (v.split(dec).length > 2) return NaN; v = v.replace(dec, "."); }
+  return Number(v);
+}
 function parseHoldings(text) {
   const out = {}, bad = [];
   for (const raw of String(text || "").split(/\n/)) {
     const line = raw.trim();
     if (!line) continue;
-    const m = line.match(/^([A-Za-z0-9_.\-^=]+)\s*[:;,\s]\s*R?\$?\s*([\d.,]+)$/);
+    const m = line.match(/^([A-Za-z0-9_.\-^=\/]+)\s*[:;,\s]\s*R?\$?\s*([\d.,]+)$/);
     if (!m) { bad.push(line); continue; }
-    let v = m[2];
-    if (v.includes(",")) v = v.replace(/\./g, "").replace(",", ".");      // 1.500,00 -> 1500.00
-    else if (/^\d{1,3}(\.\d{3})+$/.test(v)) v = v.replace(/\./g, "");    // 1.500 -> 1500
-    const x = Number(v);
+    const x = parseAmount(m[2]);
     if (!(x >= 0)) { bad.push(line); continue; }
     const t = m[1].toUpperCase();
     out[t] = (out[t] || 0) + x;
@@ -972,7 +987,7 @@ function renderPurpose(d) {
   $("p-banner").textContent = d.dados_sinteticos
     ? "DEMONSTRAÇÃO COM DADOS SINTÉTICOS — NÃO É UMA CARTEIRA FINAL. Os tickers SINT_* não existem no mercado. " + d.aviso
     : `Dados reais: ${d.universo.origem}; período ${d.universo.periodo}; última cotação ${d.universo.ultima_cotacao}. ` + d.aviso;
-  if (d.calculado_em_utc) $("p-banner").textContent += ` Calculado em ${d.calculado_em_utc.replace("T", " ").slice(0, 16)} UTC` + (d.do_cache ? " (reaproveitado: mesmo pedido há menos de 15 min)." : ".");
+  if (d.calculado_em_utc) $("p-banner").textContent += ` Calculado em ${d.calculado_em_utc.replace("T", " ").slice(0, 16)} UTC` + (d.do_cache ? (d.dados_sinteticos ? " (reaproveitado: mesmo pedido; os dados sintéticos não mudam)." : " (reaproveitado: mesmo pedido há menos de 15 min).") : ".");
   const u = d.universo, fu = u && u.funil;
   const funnel = !fu ? `Universo de demonstração: ${u.baixados.length} ativos → ${u.candidatos.length} candidatos após a triagem. `
     : (fu.used_listings
@@ -980,15 +995,20 @@ function renderPurpose(d) {
       : `Universo: catálogo curado (listagens completas indisponíveis agora) → ${fu.selected} baixados → ${u.candidatos.length} candidatos → ${u.validados.length} com dados válidos. `);
   $("p-strategy").textContent = d.estrategia_texto || "";
   $("p-funnel").textContent = funnel + (u.cobertura ? "Cobertura consultada: " + u.cobertura : "");
-  const noCapital = !(d.entrada && d.entrada.capital_inicial > 0);
+  const ent = d.entrada || {};
+  const hasHoldings = Object.keys(ent.carteira_atual || {}).length > 0;
+  const noCapital = !(ent.capital_inicial > 0) && !hasHoldings;
+  const hasContrib = ent.aporte_periodico > 0 && ent.periodicidade !== "nenhum";
   // each asset: one row of numbers, then its reason on a full-width row (readable on a phone)
-  const cols = ["Ativo", "Peso", ...(noCapital ? [] : ["Inicial"]), "Por aporte"];
+  const cols = ["Ativo", "Peso", ...(noCapital ? [] : [hasHoldings ? "Alvo hoje" : "Inicial"]),
+    ...(hasHoldings ? ["Você tem"] : []), ...(hasContrib ? ["Por aporte"] : [])];
   const isNum = (i) => i > 0;
   const tbody = el("tbody");
   for (const a of d.onde_investir) {
     const row = d.carteira.find((r) => r.ticker === a.ticker) || {};
     const score = row.score_alinhamento === null || row.score_alinhamento === undefined ? "não calculado" : fmtNum(row.score_alinhamento);
-    const cells = [a.ticker + " — " + a.nome, fmtPct(a.peso, 1), ...(noCapital ? [] : [fmtMoney(a.valor_inicial)]), fmtMoney(a.aporte_por_periodo)];
+    const cells = [a.ticker + " — " + a.nome, fmtPct(a.peso, 1), ...(noCapital ? [] : [fmtMoney(a.valor_alvo)]),
+      ...(hasHoldings ? [fmtMoney(a.valor_atual)] : []), ...(hasContrib ? [fmtMoney(a.aporte_por_periodo)] : [])];
     const alts = (a.alternativas || []).map((x) => `${x.ticker} (${x.motivo})`).join("; ");
     const evidence = el("details", {}, el("summary", {}, "Fatos, estimativas, hipóteses e alternativas"),
       el("ul", { class: "evidence" },
@@ -1006,7 +1026,9 @@ function renderPurpose(d) {
   setChildren("p-alloc", el("table", {}, el("thead", {}, el("tr", {}, ...cols.map((h, i) => el("th", isNum(i) ? { class: "num" } : {}, h)))), tbody));
   $("p-alloc-note").textContent = (noCapital
     ? "Você começa sem capital inicial: a coluna Por aporte mostra como dividir cada aporte entre os ativos (aporte × peso; o plano de compra abaixo arredonda para lotes reais). "
-    : "Inicial = capital inicial × peso; por aporte = aporte × peso (o plano de compra abaixo arredonda para lotes reais). ")
+    : (hasHoldings ? "Alvo hoje = (o que você já tem + capital novo) × peso; Você tem = valor atual da posição. "
+      : "Inicial = capital inicial × peso. ") + (hasContrib ? "Por aporte = aporte × peso. " : "")
+      + "O plano de compra abaixo diz o que comprar de fato, em lotes reais. ")
     + "Alocação de um modelo de pesquisa, não uma recomendação: confira custos, impostos e a sua situação antes de qualquer decisão.";
   const c = d.cagr, g = d.objetivo;
   setChildren("p-kpis",
@@ -1042,18 +1064,22 @@ function renderPurpose(d) {
 const KIND_PT = { entrou: "entrou", saiu: "saiu", aumentou: "aumentou", reduziu: "reduziu", mantido: "mantido" };
 function planBlock(pl, title) {
   const out = [el("h3", {}, title)];
-  if (!pl || !pl.posicoes || !pl.posicoes.length) { out.push(el("p", { class: "muted" }, "Nenhuma compra nesta etapa.")); return out; }
-  const qty = (r) => r.ticker === "CAIXA_CDI" || r.ticker === "SINT_SELIC" ? "aplicar " + fmtMoney(r.valor)
-    : (Number.isInteger(r.quantidade) ? String(r.quantidade) : fmtNum(r.quantidade, 4)) + (r.quantidade === 1 ? " unidade" : " unidades");
-  const tb = el("tbody");
-  for (const r of pl.posicoes) {
-    tb.append(el("tr", { class: "asset" }, el("td", {}, r.ticker), el("td", {}, qty(r)), el("td", { class: "num" }, fmtMoney(r.valor))),
-      el("tr", { class: "asset-why" }, el("td", { colspan: "3" },
-        `preço ${fmtMoney(r.preco)} · peso-alvo ${fmtPct(r.peso_alvo, 1)}` + (r.peso_executado !== undefined ? ` · peso comprado ${fmtPct(r.peso_executado, 1)}`
-          : r.peso_apos_compra !== undefined ? ` · peso depois da compra ${fmtPct(r.peso_apos_compra, 1)}` : "") + ` · ${r.regra_de_lote}`)));
+  if (!pl) { out.push(el("p", { class: "muted" }, "Nenhuma compra nesta etapa.")); return out; }
+  const qty = (r) => r.em_dinheiro ? "aplicar " + fmtMoney2(r.valor)
+    : fmtQty(r.quantidade) + (r.quantidade === 1 ? " unidade" : " unidades");
+  if (pl.posicoes && pl.posicoes.length) {
+    const tb = el("tbody");
+    for (const r of pl.posicoes) {
+      tb.append(el("tr", { class: "asset" }, el("td", {}, r.ticker), el("td", {}, qty(r)), el("td", { class: "num" }, fmtMoney2(r.valor))),
+        el("tr", { class: "asset-why" }, el("td", { colspan: "3" },
+          `preço ${fmtMoney2(r.preco)} · peso-alvo ${fmtPct(r.peso_alvo, 1)}` + (r.peso_executado !== undefined ? ` · peso comprado ${fmtPct(r.peso_executado, 1)}`
+            : r.peso_apos_compra !== undefined ? ` · peso depois da compra ${fmtPct(r.peso_apos_compra, 1)}` : "") + ` · ${r.regra_de_lote}`)));
+    }
+    out.push(el("div", { class: "tbl" }, el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Ativo"), el("th", {}, "Quanto comprar"), el("th", { class: "num" }, "Valor"))), tb)));
+  } else {
+    out.push(el("p", { class: "muted" }, "Nenhuma compra nesta etapa."));
   }
-  out.push(el("div", { class: "tbl" }, el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Ativo"), el("th", {}, "Quanto comprar"), el("th", { class: "num" }, "Valor"))), tb)));
-  const notes = [`Sobra sem investir: ${fmtMoney(pl.caixa_nao_investido)}.`, ...(pl.notas || [])];
+  const notes = [`Sobra sem investir: ${fmtMoney2(pl.caixa_nao_investido)}.`, ...(pl.notas || [])];
   out.push(el("p", { class: "muted" }, notes.join(" ")));
   const later = Object.entries(pl.fora_desta_compra || {});
   if (later.length) out.push(el("ul", { class: "clean" }, ...later.map(([t, w]) => el("li", { class: "muted" }, `${t}: ${w}`))));
@@ -1073,6 +1099,7 @@ function renderPlan(d) {
       el("ul", { class: "clean" }, ...ex.vendas_sugeridas.map((v) => el("li", {}, `${v.ticker}: tem ${fmtMoney(v.valor_atual)}, alvo ${fmtMoney(v.valor_alvo)} — ${v.motivo}`))),
       el("p", { class: "muted" }, ex.nota_vendas || ""));
   }
+  if (ex.reequilibrio) kids.push(...planBlock(ex.reequilibrio, `Se vender o excesso (${fmtMoney(ex.reequilibrio.valor)}): onde colocar o dinheiro`));
   if (!kids.length) kids.push(el("p", { class: "muted" }, "Sem valor para comprar agora."));
   setChildren("p-plan", ...kids);
 }
@@ -1108,11 +1135,11 @@ function renderConc(d) {
     + `(N efetivo pelos pesos: ${fmtNum(c.n_efetivo_pesos, 1)}). Maior posição: ${c.maior_posicao.ticker} (${fmtPct(c.maior_posicao.peso, 1)}).`)];
   for (const w of c.alertas || []) kids.push(el("p", {}, el("span", { class: "st", style: "--c:var(--warn)" }, "atenção"), " " + w));
   for (const g of c.grupos_que_andam_juntos || []) kids.push(el("p", { class: "muted" }, `Andam juntos: ${g.ativos.join(", ")} — ${fmtPct(g.peso, 0)} do dinheiro, ${fmtPct(g.participacao_no_risco, 0)} do risco (correlação média ${fmtNum(g.correlacao_media)}).`));
-  for (const [dim, lab] of [["moeda", "Por moeda"], ["classe", "Por classe"], ["mercado", "Por mercado"]]) {
+  for (const [dim, title] of [["moeda", "Por moeda de exposição"], ["classe", "Por classe"], ["mercado", "Por mercado"]]) {
     const ex = (c.exposicao || {})[dim] || {}, rk = (c.exposicao_ao_risco || {})[dim] || {};
-    const lab = dim === "classe" ? CLASS_LABEL : dim === "mercado" ? MARKET_LABEL : {};
-    const rows = Object.entries(ex).sort((a, b) => b[1] - a[1]).map(([k, v]) => [lab[k] || k, fmtPct(v, 0), fmtPct(rk[k] || 0, 0)]);
-    kids.push(el("h3", {}, lab), el("div", { class: "tbl" }, table(["", "do dinheiro", "do risco"], rows, [1, 2])));
+    const names = dim === "classe" ? CLASS_LABEL : dim === "mercado" ? MARKET_LABEL : {};
+    const rows = Object.entries(ex).sort((a, b) => b[1] - a[1]).map(([k, v]) => [names[k] || k, fmtPct(v, 0), fmtPct(rk[k] || 0, 0)]);
+    kids.push(el("h3", {}, title), el("div", { class: "tbl" }, table(["", "do dinheiro", "do risco"], rows, [1, 2])));
   }
   setChildren("p-conc", ...kids);
 }
@@ -1123,6 +1150,7 @@ function renderScreen(d) {
 function renderRules(d) {
   const r = d.regras_pessoais || {};
   const items = [el("li", {}, `Perfil final: ${r.perfil_final || "?"}; aversão ao risco ${fmtNum(r.aversao_ao_risco, 1)}; teto de volatilidade ${fmtPct(r.teto_volatilidade, 1)} ao ano; objetivo: ${r.objetivo || "?"}.`)];
+  for (const x of r.avisos || []) items.push(el("li", {}, el("span", { class: "st", style: "--c:var(--warn)" }, "atenção"), " " + x));
   for (const x of r.regras || []) items.push(el("li", {}, "Regra aplicada: " + x));
   for (const x of r.hipoteses || []) items.push(el("li", { class: "muted" }, "Hipótese (você não informou): " + x));
   for (const x of r.notas_perfil || []) items.push(el("li", { class: "muted" }, x));

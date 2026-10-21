@@ -1,18 +1,19 @@
 # Resultados de testes e execuções registrados
 
 Ambiente: Linux x86_64, Python 3.13.16, numpy 2.5.3, pandas 3.0.5, scipy 1.18.1, scikit-learn 1.9.1,
-matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-20.
+matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-21.
 
 ## 1. Suíte automatizada
 
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-361 passed, 1 skipped (362 testes)
+414 passed, 1 skipped (415 testes)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
 
-(Registro anterior, antes do motor dinâmico: 328 passed, 1 skipped — 329 testes.)
+(Registros anteriores: 361 passed, 1 skipped antes das correções da revisão adversarial — seção 12; 328 passed,
+1 skipped antes do motor dinâmico.)
 
 (Em uma execução anterior, 2 testes de `tests/test_webapp.py` falharam porque ainda assumiam o modo sintético
 como padrão do site; foram ajustados ao novo padrão — dados reais — e a suíte completa voltou a passar.)
@@ -258,3 +259,51 @@ Verificação no navegador (Playwright, iPhone 13, dados sintéticos): formulár
 plano de compra, "o que mudou", diversificação, triagem, regras/hipóteses e fontes; segunda execução com as mesmas
 entradas mostra "nenhuma mudança material — recomendação anterior mantida"; sem erros de JavaScript e sem rolagem
 horizontal.
+
+## 12. Revisão adversarial do motor dinâmico (achados reproduzidos e corrigidos)
+
+Três revisões independentes (execução e estabilidade; universo e regras pessoais; otimizador, seleção, site e
+linha de comando) reproduziram cada achado com os dublês de mercado. Cada correção tem um teste em
+`tests/test_portfolio_review_fixes.py` (53 testes), além dos testes anteriores.
+
+| Área | Achado reproduzido | Correção |
+|---|---|---|
+| execução | ETFs de caixa listados (SHY, LFTS11) eram tratados como dinheiro: preço 1, lote de R$ 0,01 e destino da sobra | só o CDI é dinheiro; ETFs de caixa são comprados por cota ao preço deles |
+| execução | ETF de cripto da B3 (HASH11) recebia lote de cripto (0,00000001) | ETFs da B3 negociam cotas inteiras; frações só para cripto comprada direto |
+| execução | ativo cujo lote custa mais que um aporte nunca era comprado ("entra nos próximos aportes" para sempre) | a sobra vai para o caixa e o caixa acima do alvo completa a compra (o plano mostra o resgate) |
+| execução | só carteira atual, sem capital e sem aportes: vendas sugeridas sem dizer onde pôr o dinheiro; etapa 12 dizia "sem capital" | plano "se vender o excesso" e texto da etapa 12 conforme o caso |
+| execução | regra de estabilidade mantinha a carteira anterior mas listava um ativo dela como "retirado" | lista limpa quando a anterior é mantida |
+| execução | "valor inicial = capital × peso" contradizia o plano quando havia carteira atual; "peso depois da compra" ignorava posições fora do alvo | valor-alvo e valor atual por ativo; diferenças medidas sobre tudo o que se tem |
+| execução | quantidades com 2 casas (bitcoin aparecia como 0,00) | casas decimais conforme a quantidade (até 8) no relatório e no site |
+| execução | impressão digital dos parâmetros mudava com a ordem digitada e com o número de simulações | JSON canônico, listas ordenadas, sem o número de trajetórias |
+| execução | mensagens: compra mínima × preço do lote; "todos cabem" no caso contrário; "próximos aportes" sem aportes; "12 meses" com prazo menor; plano vazio escondia a sobra; CDI listado como Yahoo e com o horário dele; "melhora em −0,00 p.p." | textos conforme o que de fato aconteceu; CDI como fonte separada |
+| execução | dinheiro novo com carteira fora do alvo ia todo para uma posição (a primeira das maiores diferenças) | preenchimento por nível: as maiores diferenças diminuem juntas |
+| universo | ativo com pouco mais de 1 ano de histórico (inclusive da carteira atual) encurtava a janela comum e derrubava o pedido | candidato precisa de ~3 anos (735 preços); o da carteira atual fica "fora da análise" com o motivo |
+| universo | carteira atual enchia o limite de candidatos antes dos grupos exigidos pelas regras | escolhas obrigatórias podem passar do limite |
+| universo | Sharpe extremo do CDI (volatilidade quase zero) distorcia as notas da renda fixa | CDI fora das notas comparativas e sempre avaliado pelo otimizador |
+| universo | SHY contava como caixa para quem gasta reais; IVVB11, NASD11 e GOLD11 não contavam como dólar | caixa só na moeda do investidor; limite de moeda pela exposição |
+| universo | exclusão e limite de setor só funcionavam com a chave exata (Nasdaq em inglês × catálogo em português) | chaves únicas, mapeamento da Nasdaq, normalização e aviso para nome desconhecido |
+| universo | "só EUA" com objetivo em reais colidia com o limite de moeda estrangeira sem aviso | o limite não se aplica e a regra aparece |
+| universo | códigos B3SA3/B5P211, PETR4F e BRK.B não eram reconhecidos; "caixa" na lista de classes quebrava | normalização dos códigos; "caixa" tratado como o CDI |
+| universo | governança aplicada depois da triagem (ativo excluído ocupava vaga e aparecia como alternativa); IMA-B 5+ descrito como prazo curto; momento ausente virava 0 | governança antes da triagem; IMA-B 5+ é prazo longo; ausente é neutro |
+| seleção | quando só a linha de base (1/N) passava no filtro de volatilidade, a escolha caía em 1/N | o filtro só vale se alguma estratégia escolhível passa |
+| seleção | estratégia escolhida podia ficar acima do teto de volatilidade ex ante | projeção para a carteira mais próxima dentro do teto (dito nos alertas) |
+| site | títulos "[object Object]" na diversificação; "1,500.00" lido como 1,5; resultado sintético reaproveitado rotulado "há menos de 15 min" | variável renomeada; leitor de valores com as duas convenções; rótulo correto |
+| linha de comando | `--carteira-atual PETR4=1.500,00` quebrava e "1.500" virava 1,5; código vazio era ignorado | mesmo leitor de valores do site; código vazio é erro |
+| dados | séries não tentadas porque o tempo de download acabou contavam como falha da fonte | contadas à parte, com alerta |
+| dados | com o CDI fora do ar, o mínimo de caixa tornava toda a otimização inviável (antes, o SHY em dólar "resolvia") | o mínimo é retirado com aviso explícito para separar essa parte em caixa |
+| covariância | o CDI quase sem oscilação deixava a matriz quase singular (otimização de 1 s → 0,03 s após a correção) | variância mínima (0,3% a.a.)² e covariância zero para essas séries |
+
+Verificações feitas depois das correções:
+
+* Suíte completa: 414 passed, 1 skipped (o teste online, bloqueado pela rede do ambiente).
+* `ruff`: nenhum aviso novo nos arquivos alterados (os avisos que existem são anteriores, em outros trechos).
+* Tempo de uma montagem do tamanho do site (40 candidatos, dublês de mercado, máquina sem outra carga): 13,8 s e
+  11,3 s (antes desta rodada: 15,0 s e 9,4 s — a versão anterior escolhia sempre pesos iguais com 38 ativos).
+* Navegador (Playwright, 390 px, dados sintéticos): colunas "Alvo hoje"/"Você tem", títulos da diversificação
+  corretos, plano "se vender o excesso" depois da lista do que está acima do alvo, "1,500.00" lido como 1.500; sem
+  erros de JavaScript e sem rolagem horizontal.
+* Linha de comando: `--carteira-atual SINT_ENERGIA3=30.000,00 --carteira-atual SINT_SELIC=2,500.50
+  --excluir-setores "Petróleo e Gás" xyz` roda; o setor é excluído, "xyz" gera aviso, sem "nan"/"None" e sem
+  linguagem de garantia no relatório.
+* Auditoria de repetição refeita (`docs/audit_repeticao.md`).

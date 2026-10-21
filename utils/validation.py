@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+import re
 from collections.abc import Sequence
 
 import numpy as np
@@ -61,3 +63,33 @@ def validate_covariance(cov: NDArray[np.floating], n: int | None = None) -> NDAr
     if not d.is_psd:
         raise ValidationError(f"covariance not PSD (min eigenvalue {d.min_eigenvalue:.2e})")
     return c
+
+
+_THOUSANDS = {".": re.compile(r"[1-9]\d{0,2}(\.\d{3})+"), ",": re.compile(r"[1-9]\d{0,2}(,\d{3})+")}
+
+
+def parse_amount(text: str) -> float:
+    """'1.500,00', '1500,5', 'R$ 1.500' (Brazilian) and '1,500.00', '1500.5' (US) -> float >= 0.
+    With both separators the last one is the decimal mark; with one kind only, groups of exactly three
+    digits ('1.500', '1,500') are thousands, otherwise it is the decimal mark (same rule as the web page)."""
+    v = re.sub(r"^\s*(R\$|US\$|\$)\s*", "", str(text)).strip()
+    if not re.fullmatch(r"\d[\d.,]*", v):
+        raise ValidationError(f"valor inválido: {text!r} (use, por exemplo, 1500 ou 1.500,00)")
+    dot, comma = v.rfind("."), v.rfind(",")
+    if dot >= 0 and comma >= 0:
+        dec, thou = (".", ",") if dot > comma else (",", ".")
+    elif comma >= 0 or dot >= 0:
+        sep = "," if comma >= 0 else "."
+        dec, thou = (None, sep) if _THOUSANDS[sep].fullmatch(v) else (sep, None)
+    else:
+        dec = thou = None
+    if thou:
+        v = v.replace(thou, "")
+    if dec:
+        if v.count(dec) > 1:
+            raise ValidationError(f"valor inválido: {text!r} (use, por exemplo, 1500 ou 1.500,00)")
+        v = v.replace(dec, ".")
+    x = float(v)
+    if not math.isfinite(x):
+        raise ValidationError(f"valor inválido: {text!r}")
+    return x

@@ -38,21 +38,29 @@ def _num(x: float, d: int = 2) -> str:
     return f"{x:,.{d}f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def _qty(q: float, money: bool) -> str:
+    """Money with cents; whole lots as integers; fractions with the decimals they need (crypto: up to 8)."""
+    if money:
+        return _num(q, 2)
+    if abs(q - round(q)) < 1e-9:
+        return f"{round(q)}"
+    return f"{q:.8f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
 def _plan_table(L: list[str], plan: dict[str, object], ccy: str) -> None:
     rows = plan.get("posicoes") or []
-    if not rows:
+    if rows:
+        key = "peso_executado" if "peso_executado" in rows[0] else "peso_apos_compra"  # type: ignore[index]
+        L.append("| ativo | quantidade | preço (último da série diária) | valor | peso-alvo | "
+                 + ("peso comprado" if key == "peso_executado" else "peso depois da compra") + " | regra de lote |")
+        L.append("|---|---|---|---|---|---|---|")
+        for r_ in rows:  # type: ignore[union-attr]
+            qty = _qty(float(r_["quantidade"]), bool(r_.get("em_dinheiro")))
+            L.append(f"| {_cell(r_['ticker'])} | {qty} | {ccy} {_num(float(r_['preco']))} | {ccy} {_num(float(r_['valor']))} | "
+                     f"{float(r_['peso_alvo']):.1%} | {float(r_[key]):.1%} | {_cell(r_['regra_de_lote'])} |")
+    else:
         L.append("Nenhuma compra nesta etapa.")
-        return
-    key = "peso_executado" if "peso_executado" in rows[0] else "peso_apos_compra"  # type: ignore[index]
-    L.append("| ativo | quantidade | preço (último da série diária) | valor | peso-alvo | "
-             + ("peso comprado" if key == "peso_executado" else "peso depois da compra") + " | regra de lote |")
-    L.append("|---|---|---|---|---|---|---|")
-    for r_ in rows:  # type: ignore[union-attr]
-        q = float(r_["quantidade"])
-        qty = _num(q, 2) if r_["ticker"] == "CAIXA_CDI" or q != int(q) else f"{int(q)}"
-        L.append(f"| {_cell(r_['ticker'])} | {qty} | {ccy} {_num(float(r_['preco']))} | {ccy} {_num(float(r_['valor']))} | "
-                 f"{float(r_['peso_alvo']):.1%} | {float(r_[key]):.1%} | {_cell(r_['regra_de_lote'])} |")
-    L.append(f"\nSobra sem investir: {ccy} {_num(float(plan.get('caixa_nao_investido', 0.0)))}."
+    L.append(f"\nSobra sem investir: {ccy} {_num(float(plan.get('caixa_nao_investido', 0.0)))}."  # type: ignore[arg-type]
              + (" " + " ".join(map(str, plan.get("notas") or [])) if plan.get("notas") else ""))
     for t, why in (plan.get("fora_desta_compra") or {}).items():  # type: ignore[union-attr]
         L.append(f"- {t}: {why}")
@@ -107,15 +115,20 @@ def render_markdown(r: PurposeResult) -> str:
     if r.strategy_text:
         L.append(r.strategy_text + "\n")
     if r.allocation:
-        L.append("**Onde investir e por quê** (alocação do modelo; valor inicial = capital inicial × peso, aporte "
-                 "por período = aporte × peso" + ("; sem capital inicial, cada aporte é dividido pelos pesos" if
-                                                  q.capital_inicial == 0 else "") + "):\n")
-        L.append("| ativo | peso | valor inicial | aporte por período | por quê |")
-        L.append("|---|---|---|---|---|")
+        held = bool(q.carteira_atual)
+        L.append("**Onde investir e por quê** (alocação do modelo; "
+                 + ("valor-alvo hoje = (o que você já tem + capital novo) × peso; você tem = valor atual da posição"
+                    if held else "valor-alvo = capital inicial × peso")
+                 + "; aporte por período = aporte × peso"
+                 + ("; sem capital inicial, cada aporte é dividido pelos pesos" if q.capital_inicial == 0 and not held
+                    else "") + "; o plano de compra da seção 7 arredonda para lotes reais):\n")
+        L.append("| ativo | peso | valor-alvo | " + ("você tem | " if held else "") + "aporte por período | por quê |")
+        L.append("|---|---|---|" + ("---|" if held else "") + "---|---|")
         for a in r.allocation:
             L.append(f"| {_cell(a['ticker'])} — {_cell(a['nome'])} | {a['peso']:.1%} | "
-                     f"{_money(float(a['valor_inicial']), ccy)} | {_money(float(a['aporte_por_periodo']), ccy)} | "
-                     f"{_cell(a['por_que'])} |")
+                     f"{_money(float(a['valor_alvo']), ccy)} | "
+                     + (f"{_money(float(a['valor_atual']), ccy)} | " if held else "")
+                     + f"{_money(float(a['aporte_por_periodo']), ccy)} | {_cell(a['por_que'])} |")
         L.append("")
     L.append("| ticker | classe | peso | score_alinhamento | moeda | peso só-quant |")
     L.append("|---|---|---|---|---|---|")
@@ -210,6 +223,10 @@ def render_markdown(r: PurposeResult) -> str:
                      f"{_money(float(v['valor_alvo']), ccy)} ({_cell(v['motivo'])})")
         if ex.get("nota_vendas"):
             L.append(f"\n{ex['nota_vendas']}")
+        if ex.get("reequilibrio"):
+            rb = ex["reequilibrio"]
+            L.append(f"\n**Se vender o excesso ({_money(float(rb['valor']), ccy)}), onde colocar o dinheiro:**\n")  # type: ignore[index]
+            _plan_table(L, rb, ccy)  # type: ignore[arg-type]
 
     # 8
     L.append("\n## 8. O que mudou e por quê\n")
@@ -239,7 +256,7 @@ def render_markdown(r: PurposeResult) -> str:
                      f"{float(g['participacao_no_risco']):.0%} do risco (correlação média {g['correlacao_media']})")  # type: ignore[arg-type]
         for dim in ("moeda", "classe", "mercado", "setor"):
             ex_w, ex_r = co.exposure.get(dim, {}), co.risk_exposure.get(dim, {})
-            L.append(f"- por {dim}: " + ", ".join(f"{k} {v:.0%} do dinheiro / {ex_r.get(k, 0.0):.0%} do risco"
+            L.append(f"- por {'moeda de exposição' if dim == 'moeda' else dim}: " + ", ".join(f"{k} {v:.0%} do dinheiro / {ex_r.get(k, 0.0):.0%} do risco"
                                                  for k, v in sorted(ex_w.items(), key=lambda kv: -kv[1])))
         for w_ in co.warnings:
             L.append(f"- **atenção:** {_cell(w_)}")
