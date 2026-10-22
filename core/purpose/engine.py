@@ -27,6 +27,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import math
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -51,7 +52,12 @@ from core.market_data.quality import QualitySettings
 from core.market_data.risk_free import RiskFreeQuote, fetch_live_rates
 from core.market_data.yahoo_chart import FetchFn, YahooChartProvider
 from core.optimization import optimizers as opt
-from core.optimization.constraints import check_feasibility, verify_weights
+from core.optimization.constraints import (
+    build_constraints,
+    check_feasibility,
+    semicontinuous_weights,
+    verify_weights,
+)
 from core.portfolio_engine import AnalysisResult, OptimizationPolicy, run_analysis
 from core.purpose.alignment import (
     THEME_LABEL,
@@ -117,6 +123,10 @@ MAX_FAILED_SHARE = 0.5        # more than half of the pool without quotes: no po
 PRICE_CACHE_HOURS = 4.0       # downloaded series are reused for at most 4 hours
 _B3_CODE = re.compile(r"([A-Z][A-Z0-9]{3}\d{1,2})F?")        # PETR4, B3SA3, B5P211, TAEE11; F = fractional
 _US_CLASS = re.compile(r"([A-Z]{1,5})[./]([A-Z])")             # BRK.B, BRK/B -> BRK-B (Yahoo's code)
+
+
+class AmountTooSmall(ValueError):
+    """The money cannot buy a portfolio within the investor's limits: said plainly, never computed around."""
 
 
 def norm_ticker(t: str) -> str:
@@ -347,6 +357,43 @@ def _reference_amount(req: PurposeRequest) -> tuple[float, str]:
                         "primeiro as posições mais distantes do alvo")
 
 
+_SMALL_FIX = ("Aumente o capital ou o aporte, reduza a 'Compra mínima por ativo' (em 'Mais sobre você') ou use a seção "
+              "Ação do dia, que aponta uma ação para o valor que você tem.")
+
+
+def _buyable(symbols: list[str], floor: dict[str, float], meta: dict, cat: dict[str, CatalogAsset],
+             policy: InvestorPolicy, cfg: AppConfig) -> bool:
+    """Whether at least two positions, each at no less than its floor (the minimum purchase as a weight of the
+    amount), make a portfolio within every limit of the investor: the linear constraints the optimiser gets in step 8
+    (per asset, class, sector, currency, cash...)."""
+    if len(symbols) < 2:
+        return False
+    assets = [cat[s] for s in symbols]
+    pi = policy.profile_input
+    pc = build_constraints(symbols, meta, policy.limits, max_weight=cfg.max_weight, min_weight=cfg.min_weight,
+                           excluded=pi.excluded_assets, excluded_classes=pi.excluded_asset_classes)
+    pc.groups.extend(g for g in policy.groups(assets) if g.members or g.lower <= 0)
+    over = policy.upper_overrides(assets)
+    for i, s in enumerate(pc.symbols):
+        if s in over and pc.upper[i] > 0:
+            pc.upper[i] = over[s]
+    return semicontinuous_weights(pc, np.array([floor[s] for s in symbols]), min_held=2) is not None
+
+
+def _least_amount(ok: Callable[[float], bool], start: float, top: float = 1e9) -> float | None:
+    """Smallest amount (within 0.5%) for which ``ok`` holds, knowing it fails at ``start``: more money only lowers
+    each position's minimum weight, so ``ok`` is monotone. None when not even ``top`` is enough."""
+    lo, hi = start, max(start, 1.0) * 2
+    while not ok(hi):
+        lo, hi = hi, hi * 2
+        if hi > top:
+            return None
+    while hi - lo > max(1.0, 0.005 * hi):
+        mid = (lo + hi) / 2
+        lo, hi = (lo, mid) if ok(mid) else (mid, hi)
+    return hi
+
+
 def _default_provider(cache_dir: Path, progress: Callable[[str], None] | None = None,
                       budget_s: float | None = None) -> YahooChartProvider:
     """Real prices: Yahoo chart endpoint through the standard library, with a file cache,
@@ -470,7 +517,8 @@ def _make_executable(comb: CombinedPortfolio, pc: PortfolioConstraints, cov: pd.
     """Every position must be at least its floor (``WEIGHT_FLOOR``, or the smallest sensible purchase — one
     lot or the minimum position — as a weight of the reference amount). Greedy semi-continuous rule: hold
     the positions whose theoretical weight reaches the floor; if the limits cannot be met with them alone,
-    add back the next largest positions (raised to their floor) until they can. The weights of the held
+    add back the next largest positions (raised to their floor) until they can; if that order never meets them,
+    the held set is chosen exactly (mixed-integer, closest to the theoretical weights). The weights of the held
     set are then the executable portfolio closest to the theoretical one (minimum tracking error, plus a
     small distance-in-weights term so near-riskless assets are not shuffled), within every limit, the
     volatility cap and, when the alignment tilt was applied, its tracking-error budget against the quant
@@ -503,26 +551,47 @@ def _make_executable(comb: CombinedPortfolio, pc: PortfolioConstraints, cov: pd.
                          lambda x: 2 * c @ (x - target) + 2 * eps * (x - target), pc2, m, c, 0.0,
                          opt.SolverSettings(n_starts=3), extra_constraints=cons, start_hint=[hint / hint.sum()])
 
-    w, te_relaxed = None, False
-    while True:
-        idx = np.array(held, int)
+    def bounds(h: list[int]) -> tuple[np.ndarray, np.ndarray]:
+        idx = np.array(h, int)
         lower, upper = np.zeros(n), np.zeros(n)
         upper[idx] = pc.upper[idx]
         lower[idx] = np.minimum(np.maximum(pc.lower[idx], fl[idx]), upper[idx])
-        if lower.sum() > 1 + 1e-9:
-            break
+        return lower, upper
+
+    def attempt(h: list[int]) -> np.ndarray | None:
+        nonlocal te_relaxed
+        lower, upper = bounds(h)
         pc2 = dataclasses.replace(pc, lower=lower, upper=upper)
-        if check_feasibility(pc2).feasible:
-            r = project(pc2, vol_con + te_con)
-            if not r.success and te_con:
-                r = project(pc2, vol_con)
-                te_relaxed = r.success
-            if r.success:
-                w = r.weights.to_numpy()
-                break
-        if not cand:
+        if lower.sum() > 1 + 1e-9 or not check_feasibility(pc2).feasible:
+            return None
+        r = project(pc2, vol_con + te_con)
+        if not r.success and te_con:
+            r = project(pc2, vol_con)
+            te_relaxed = r.success
+        return r.weights.to_numpy() if r.success else None
+
+    w, te_relaxed = None, False
+    while bounds(held)[0].sum() <= 1 + 1e-9:
+        w = attempt(held)
+        if w is not None or not cand:
             break
         held.append(cand.pop(0))
+    if w is None:
+        # the greedy order can spend the money on large lots before a group minimum (e.g. fixed income) is met: pick
+        # the held set exactly instead (each position out or at least its floor, every linear limit, closest to the
+        # theoretical weights), among the theoretical positions first, then the whole universe; a held set the
+        # volatility cap rules out is not tried again
+        for pool in (order, [i for i in range(n) if pc.upper[i] > 0]):
+            tried: list[list[int]] = []
+            while w is None and len(tried) < 5:
+                x = semicontinuous_weights(pc, fl, target, pool, tried)
+                if x is None:
+                    break
+                tried.append([int(i) for i in np.flatnonzero(x > 0)])
+                w = attempt(tried[-1])
+            if w is not None:
+                held = tried[-1]
+                break
     dropped = {syms[i]: (f"peso calculado {target[i]:.2%} menor que uma compra mínima ({fl[i]:.2%} do valor)"
                          if fl[i] > WEIGHT_FLOOR + 1e-12 else
                          f"peso calculado {target[i]:.2%} abaixo de {WEIGHT_FLOOR:.1%} (resíduo numérico)")
@@ -758,6 +827,21 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
         alerts.append(Alert("perfil", "INFO", "Hipótese (informação não fornecida): " + a_))
     for r_ in policy.rules:
         alerts.append(Alert("perfil", "INFO", "Regra aplicada: " + r_))
+    # a portfolio needs at least two positions of at least the minimum purchase each, none above its cap (only cash
+    # may hold everything, under a cash minimum): below that no portfolio is executable, said before any data is
+    # fetched (step 7 checks today's prices)
+    ref_amount, ref_note = _reference_amount(req)
+    w_top = 1.0 if policy.min_cash > 0 else policy.limits.max_weight_per_asset
+    k_min = max(2, math.ceil(1 / w_top - 1e-9))
+    if req.valor_minimo_posicao > 0 and ref_amount < k_min * req.valor_minimo_posicao - 1e-9:
+        why = (f"o perfil {policy.profile.value} não deixa nenhum ativo passar de {w_top:.0%} da carteira, então "
+               if w_top < 1 else "")
+        raise AmountTooSmall(
+            f"Valor pequeno demais para montar uma carteira: {why}são necessárias pelo menos {k_min} posições de "
+            f"{_fmt(req.valor_minimo_posicao, ccy)} ou mais cada (a 'Compra mínima por ativo'), e com "
+            f"{_fmt(ref_amount, ccy)} entre o que você tem hoje e os aportes dos próximos 12 meses isso não fecha. Uma "
+            f"carteira assim pede pelo menos {_fmt(k_min * req.valor_minimo_posicao, ccy)}, e com os preços de hoje "
+            "pode pedir mais. " + _SMALL_FIX)
 
     # 3 ---------------------------------------------------------------- discovery + stage A
     cache_root = cache_dir or Path(".cache") / "market_data"
@@ -984,7 +1068,6 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
         alerts.append(Alert("governanca", "WARNING", f"flag de governança de {t} ignorada: {why}"))
 
     # 7 ---------------------------------------------------------------- executable universe
-    ref_amount, ref_note = _reference_amount(req)
     last_px = ds.prices.iloc[-1]
     lim = policy.limits
     over = policy.upper_overrides([cat[s_] for s_ in ds.symbols])
@@ -995,17 +1078,37 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
     keep_x, too_big = executable_universe({s_: cat[s_] for s_ in ds.symbols if s_ not in not_exec}, last_px, caps,
                                           ref_amount, req.valor_minimo_posicao, req.fracionario_eua, ccy)
     not_exec.update(too_big)
-    if len(keep_x) >= 2:
-        ds = subset_dataset(ds, keep_x)
-        exec_txt = (f"{len(not_exec)} ativo(s) fora: " + "; ".join(f"{k} — {v}" for k, v in list(not_exec.items())[:6])
-                    if not_exec else "todos os candidatos cabem numa compra mínima")
-    else:
-        alerts.append(Alert("execucao", "WARNING", f"com {_fmt(ref_amount, ccy)} quase nenhum ativo cabe numa compra "
-                                                   "mínima sem passar do peso máximo: a carteira-alvo abaixo é uma "
-                                                   "referência para os próximos aportes, não uma compra imediata."))
-        exec_txt = (f"só {len(keep_x)} candidato(s) cabe(m) numa compra mínima: nenhum foi retirado e a carteira-alvo "
-                    "fica como referência para os próximos aportes")
-        not_exec = {}
+    cands = [s_ for s_ in ds.symbols if caps[s_] > 0]
+
+    def buyable(amount: float) -> bool:
+        return _buyable(cands, {s_: max(WEIGHT_FLOOR, min_weight(cat[s_], float(last_px[s_]), amount,
+                                                                 req.valor_minimo_posicao, req.fracionario_eua))
+                                for s_ in cands}, ds.meta, cat, policy, cfg)
+
+    if not buyable(ref_amount):
+        # the money cannot buy a portfolio within the limits: said with the least amount that can, never computed
+        # around with positions the money cannot buy
+        least = _least_amount(buyable, ref_amount)
+        frac = ("Se a sua corretora compra frações de ações dos EUA, marque essa opção. "
+                if not req.fracionario_eua and any(cat[s_].macro_class in ("acoes_eua", "etf_eua") for s_ in too_big)
+                else "")
+        if least is not None:
+            raise AmountTooSmall(
+                f"Valor pequeno demais para montar uma carteira dentro dos limites do seu perfil: com "
+                f"{_fmt(ref_amount, ccy)} entre o que você tem hoje e os aportes dos próximos 12 meses, não há "
+                "combinação de ativos em que cada posição compre pelo menos 1 ação ou cota e "
+                f"{_fmt(req.valor_minimo_posicao, ccy)} sem passar dos limites do perfil {policy.profile.value} (peso "
+                "máximo por ativo, por classe e por setor, e os mínimos do perfil). Com os preços de hoje, a menor "
+                f"carteira possível pede pelo menos {_fmt(math.ceil(least / 10) * 10, ccy)}. " + frac + _SMALL_FIX)
+        if len(keep_x) < 2:
+            raise AmountTooSmall(
+                f"com {_fmt(ref_amount, ccy)} entre o que você tem hoje e os aportes dos próximos 12 meses, menos de dois "
+                "ativos do universo escolhido cabem numa compra mínima, e nem com mais dinheiro os ativos escolhidos "
+                f"fecham uma carteira dentro das regras do perfil {policy.profile.value}: amplie os mercados e as "
+                "classes. " + frac + _SMALL_FIX)
+    ds = subset_dataset(ds, keep_x)
+    exec_txt = (f"{len(not_exec)} ativo(s) fora: " + "; ".join(f"{k} — {v}" for k, v in list(not_exec.items())[:6])
+                if not_exec else "todos os candidatos cabem numa compra mínima")
     steps.append({"etapa": 7, "titulo": "Tamanho mínimo de compra", "resultado": ref_note + "; " + exec_txt})
 
     # 8 ---------------------------------------------------------------- quant optimisation
@@ -1095,7 +1198,8 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
     if not viable:
         alerts.append(Alert("execucao", "WARNING", "sem as posições pequenas demais para comprar ("
                             + ", ".join(dropped) + ") os limites do perfil não fecham: a carteira-alvo foi mantida e "
-                            "essas posições entram aos poucos pelos aportes."))
+                            + ("essas posições entram aos poucos pelos aportes." if req.aporte_periodico > 0 else
+                               "essas posições ficam fora da compra com o valor informado.")))
         dropped = {}
     # stability: the previous recommendation is kept unless the new one is better beyond error + cost
     stability = None
@@ -1217,13 +1321,13 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
     contributions = req.aporte_periodico > 0 and bool(m_per)
     buy_now: ExecutionPlan | None = None
     if req.capital_inicial > 0:      # all at once only when nothing else will be added; otherwise gaps first
-        buy_now = (plan(w_f, last_px, cat, req.capital_inicial, req.fracionario_eua)
+        buy_now = (plan(w_f, last_px, cat, req.capital_inicial, req.fracionario_eua, ccy)
                    if not current and not contributions else
                    contribution_plan(w_f, current, last_px, cat, req.capital_inicial, req.valor_minimo_posicao,
-                                     req.fracionario_eua, more_coming=contributions))
+                                     req.fracionario_eua, more_coming=contributions, ccy=ccy))
     after = buy_now.holdings_after(current) if buy_now else dict(current)
     next_c = (contribution_plan(w_f, after, last_px, cat, req.aporte_periodico, req.valor_minimo_posicao,
-                                req.fracionario_eua) if contributions else None)
+                                req.fracionario_eua, ccy=ccy) if contributions else None)
     context = ""
     if stability is not None:
         context = ("recalculado para as suas entradas atuais (mudaram desde a recomendação anterior)"
@@ -1249,7 +1353,7 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
         for v_ in sells:
             sold[v_["ticker"]] = sold.get(v_["ticker"], 0.0) - float(v_["excesso"])
         rb = contribution_plan(w_f, sold, last_px, cat, float(sum(v_["excesso"] for v_ in sells)),
-                               req.valor_minimo_posicao, req.fracionario_eua, more_coming=False)
+                               req.valor_minimo_posicao, req.fracionario_eua, more_coming=False, ccy=ccy)
         rebalance = rb if sells or rb.rows else None
     execution = {
         "valor_de_referencia": ref_amount, "nota_referencia": ref_note,

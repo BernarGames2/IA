@@ -522,6 +522,7 @@ const fmtMoney2 = (x) => (x === null || x === undefined || !isFinite(x)) ? "n/d"
   "R$ " + x.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 // quantities: whole lots as integers, fractions with the decimals they need (crypto: up to 8)
 const fmtQty = (q) => Number.isInteger(q) ? String(q) : String(Number(q.toFixed(8))).replace(".", ",");
+const fmtMoneyAuto = (x) => (x !== null && x !== undefined && isFinite(x) && Math.abs(x) < 1000) ? fmtMoney2(x) : fmtMoney(x);
 const fmtMoneyShort = (x) => Math.abs(x) >= 1e6 ? "R$ " + (x / 1e6).toFixed(1).replace(".", ",") + " mi" :
   "R$ " + Math.round(x / 1000).toLocaleString("pt-BR") + " mil";
 
@@ -911,7 +912,9 @@ async function httpError(r) {
   let msg = "HTTP " + r.status;
   if (data && data.detail) msg = typeof data.detail === "string" ? data.detail : data.detail.map((x) => (x.loc || []).slice(1).join(".") + ": " + x.msg).join("; ");
   else if (r.status === 504) msg = "o servidor passou do tempo limite; tente de novo (a segunda tentativa usa os dados já baixados)";
-  return new Error(msg);
+  const e = new Error(msg);
+  e.status = r.status;
+  return e;
 }
 // streamed request: newline-delimited JSON events (progresso / ping / resultado / erro)
 async function postStream(url, body, onProgress) {
@@ -920,14 +923,14 @@ async function postStream(url, body, onProgress) {
     r = await fetch(url + "?stream=1", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   } catch (e) { throw new Error(NET_ERR); }
   if (!r.ok) throw await httpError(r);
-  let result = null, err = null, buf = "";
+  let result = null, err = null, errStatus = 0, buf = "";
   const handle = (line) => {
     line = line.trim();
     if (!line) return;
     const ev = JSON.parse(line);
     if (ev.tipo === "progresso" && onProgress) onProgress(ev.msg);
     else if (ev.tipo === "resultado") result = ev.dados;
-    else if (ev.tipo === "erro") err = ev.detail || ("HTTP " + ev.status);
+    else if (ev.tipo === "erro") { err = ev.detail || ("HTTP " + ev.status); errStatus = ev.status; }
   };
   try {
     if (r.body && r.body.getReader) {
@@ -947,7 +950,7 @@ async function postStream(url, body, onProgress) {
     if (e instanceof SyntaxError) throw new Error("resposta inválida do servidor");
     throw new Error(NET_ERR);
   }
-  if (err) throw new Error(err);
+  if (err) { const e = new Error(err); e.status = errStatus; throw e; }
   if (!result) throw new Error(NET_ERR);
   return result;
 }
@@ -1087,8 +1090,8 @@ function renderPurpose(d) {
   for (const a of d.onde_investir) {
     const row = d.carteira.find((r) => r.ticker === a.ticker) || {};
     const score = row.score_alinhamento === null || row.score_alinhamento === undefined ? "não calculado" : fmtNum(row.score_alinhamento);
-    const cells = [fmtPct(a.peso, 1), ...(noCapital ? [] : [fmtMoney(a.valor_alvo)]),
-      ...(hasHoldings ? [fmtMoney(a.valor_atual)] : []), ...(hasContrib ? [fmtMoney(a.aporte_por_periodo)] : [])];
+    const cells = [fmtPct(a.peso, 1), ...(noCapital ? [] : [fmtMoneyAuto(a.valor_alvo)]),
+      ...(hasHoldings ? [fmtMoneyAuto(a.valor_atual)] : []), ...(hasContrib ? [fmtMoneyAuto(a.aporte_por_periodo)] : [])];
     const alts = (a.alternativas || []).map((x) => `${x.ticker} (${x.motivo})`).join("; ");
     const evidence = el("details", {}, el("summary", {}, "Fatos, estimativas, hipóteses e alternativas"),
       el("ul", { class: "evidence" },
@@ -1269,7 +1272,8 @@ $("p-form").addEventListener("submit", async (ev) => {
     st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s.` + (d.do_cache ? " (resultado calculado há poucos minutos, reaproveitado)" : "");
   } catch (e) {
     live.stop();
-    st.textContent = "Erro: " + e.message + " Nenhuma carteira foi mostrada: um resultado antigo não substitui uma consulta que falhou.";
+    st.textContent = e.status === 400 ? "Atenção: " + e.message      // the inputs cannot give a portfolio: not a failure
+      : "Erro: " + e.message + " Nenhuma carteira foi mostrada: um resultado antigo não substitui uma consulta que falhou.";
   } finally { btn.disabled = false; }
 });
 

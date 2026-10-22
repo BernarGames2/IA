@@ -154,7 +154,7 @@ def _fill(targets: pd.Series, units: dict[str, float], steps: dict[str, float], 
 
 
 def plan(weights: pd.Series, prices: pd.Series, assets: dict[str, CatalogAsset], amount: float,
-         us_fractional: bool = False) -> ExecutionPlan:
+         us_fractional: bool = False, ccy: str = "") -> ExecutionPlan:
     """Quantities for an amount invested all at once in the target weights (already executable)."""
     w = weights[weights > 1e-9].astype(float)
     w = w / w.sum()
@@ -179,7 +179,7 @@ def plan(weights: pd.Series, prices: pd.Series, assets: dict[str, CatalogAsset],
     tracking = sum(abs(val[s] / total - float(w[s])) for s in w.index) + (left / total if total else 0.0)
     notes = []
     if left > 0.01:
-        notes.append(f"sobra não investida: {_money(left)} (frações de lote)")
+        notes.append(f"sobra não investida: {_money(left, ccy)} (frações de lote)")
     return ExecutionPlan(amount, rows, round(left, 2), zero, round(tracking, 4), not zero, notes)
 
 
@@ -201,7 +201,7 @@ def _level(gaps: pd.Series, money: float) -> pd.Series:
 
 def contribution_plan(weights: pd.Series, current_values: dict[str, float], prices: pd.Series,
                       assets: dict[str, CatalogAsset], amount: float, min_position: float = DEFAULT_MIN_POSITION,
-                      us_fractional: bool = False, more_coming: bool = True) -> ExecutionPlan:
+                      us_fractional: bool = False, more_coming: bool = True, ccy: str = "") -> ExecutionPlan:
     """What to buy with ONE contribution (or one amount of new money): the positions furthest below the
     target, levelling their gaps, each purchase of at least ``min_position`` (or one lot); cash held above its
     target completes purchases the contribution alone cannot make. ``current_values``: everything the investor holds, inside the
@@ -235,7 +235,7 @@ def contribution_plan(weights: pd.Series, current_values: dict[str, float], pric
         if not small:
             break
         s_ = min(small, key=lambda x: budget[x])
-        later[s_] = f"{later_txt} (a parte dele agora seria menor que uma compra mínima de {_money(smallest(s_))})"
+        later[s_] = f"{later_txt} (a parte dele agora seria menor que uma compra mínima de {_money(smallest(s_), ccy)})"
         active = active.drop(s_)
     for s in budget.sort_values(ascending=False).index:
         if budget[s] <= 1e-9:
@@ -244,7 +244,7 @@ def contribution_plan(weights: pd.Series, current_values: dict[str, float], pric
         q = math.floor(budget[s] / (units[s] * steps[s]) + 1e-9) * steps[s]
         cost = q * units[s]
         if q <= 0 or cost > left + 1e-9:
-            later[s] = f"{later_txt} (1 lote custa {_money(units[s] * steps[s])}, mais que o dinheiro que sobrou)"
+            later[s] = f"{later_txt} (1 lote custa {_money(units[s] * steps[s], ccy)}, mais que o dinheiro que sobrou)"
             continue
         buy[s] = (q, cost)
         left -= cost
@@ -286,9 +286,9 @@ def contribution_plan(weights: pd.Series, current_values: dict[str, float], pric
     notes = ([f"{len(later)} ativo(s) da carteira-alvo {'entram nos próximos aportes' if more_coming else 'não couberam neste valor'}."]
              if later else [])
     if redeemed > 0:
-        notes.append(f"inclui {_money(redeemed)} resgatados do caixa, que está acima do alvo (dinheiro guardado de "
+        notes.append(f"inclui {_money(redeemed, ccy)} resgatados do caixa, que está acima do alvo (dinheiro guardado de "
                      "aportes anteriores ou já aplicado), para completar as compras")
     if left > 0.01:
-        notes.append(f"sobra deste aporte: {_money(left)}")
+        notes.append(f"sobra deste aporte: {_money(left, ccy)}")
     return ExecutionPlan(amount, rows, round(left, 2), later, 0.0, True, notes, round(redeemed, 2),
                          sink if redeemed > 0 and sink is not None else "")

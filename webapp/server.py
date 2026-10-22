@@ -40,7 +40,12 @@ from core.market_data.base import DataUnavailableError
 from core.market_data.logos import clean_domain, domain_for, fetch_logo
 from core.portfolio_engine import AnalysisResult, run_analysis
 from core.profiler import demo_profile
-from core.purpose.engine import PurposeRequest, PurposeResult, run_purpose
+from core.purpose.engine import (
+    AmountTooSmall,
+    PurposeRequest,
+    PurposeResult,
+    run_purpose,
+)
 from core.purpose.report import render_markdown
 from core.purpose.report import to_dict as purpose_to_dict
 from core.stock_check.analyzer import analyze_stock
@@ -349,6 +354,8 @@ def proposito(p: PurposeWebRequest, stream: bool = False) -> Response:
                               provider=None if offline else _market_provider(), rf_fetch=_rf_fetch(),
                               progress=progress, fast=True, download_budget_s=_DOWNLOAD_BUDGET_S)
             payload = _purpose_payload(res, time.perf_counter() - t0)
+        except AmountTooSmall as e:
+            raise HTTPException(400, str(e)) from e
         except DataUnavailableError as e:
             raise HTTPException(503, f"dados reais indisponíveis agora ({_short(e)}). Nenhum dado sintético foi "
                                      "usado em substituição: tente de novo em alguns minutos (as cotações já "

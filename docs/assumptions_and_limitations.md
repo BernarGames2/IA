@@ -192,6 +192,19 @@
     e líquidas). Não é previsão nem recomendação: o histórico de 5 anos muda pouco de um dia para o outro, então a
     mesma ação pode aparecer em dias seguidos. Comprar uma ação por dia concentra risco e paga custo proporcional
     maior em compras pequenas — o resultado diz isso. Preço: último fechamento (com atraso).
+51. **Valor pequeno demais para uma carteira**: cada posição precisa de pelo menos uma compra mínima (1 lote e a
+    "Compra mínima por ativo", padrão R$ 100) e nenhuma pode passar do limite por ativo do perfil (conservador 35%,
+    moderado 30%, arrojado 40%; o caixa só passa disso quando há um mínimo de caixa). Antes de baixar qualquer dado, o
+    valor de referência (o que você tem hoje + aportes dos próximos 12 meses) é comparado com ⌈1 / limite⌉ × compra
+    mínima, com pelo menos 2 posições (com mínimo de caixa: 2 × compra mínima). Depois, com os preços do dia, um
+    problema inteiro-misto (cada ativo fora ou com pelo menos a sua compra mínima; todos os limites lineares do
+    perfil: por ativo, classe, setor, moeda, caixa, renda) diz se existe carteira; se não existe, a resposta é uma
+    recusa com o menor valor que forma uma (busca binária com precisão de 0,5%, arredondada para cima em R$ 10).
+    A mesma formulação escolhe as posições da carteira executável quando ficar com as maiores posições teóricas não
+    fecha os limites. O teto de volatilidade não entra nessa conta (não é linear): se ele barrar as combinações
+    tentadas (até 5 por etapa), a carteira-alvo fica como referência e o aviso diz que as posições pequenas ficam
+    fora da compra (ou entram pelos aportes, quando há aportes). Turnover máximo também não entra (não é usado no
+    motor de propósito). O mínimo depende dos preços do dia: pode mudar de um dia para o outro.
 
 ## Itens pendentes / próximos passos
 

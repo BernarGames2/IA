@@ -8,11 +8,12 @@ matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-464 passed, 1 skipped (465 testes)
+476 passed, 1 skipped (477 testes)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
 
-(Registros anteriores: 452 passed, 1 skipped antes da "Ação do dia" — seção 14; 414 passed, 1 skipped antes dos
+(Registros anteriores: 464 passed, 1 skipped antes da correção de valores pequenos — seção 15; 452 passed, 1 skipped
+antes da "Ação do dia" — seção 14; 414 passed, 1 skipped antes dos
 logos — seção 13; 361 passed, 1 skipped antes das correções
 da revisão adversarial — seção 12; 328 passed, 1 skipped antes do motor dinâmico.)
 
@@ -347,3 +348,32 @@ Navegador (Playwright, 390 px, servidor local com dublês): o atalho "Ação do 
 a ação com logo, "Comprar 4 ações a R$ 209,53 = R$ 838,11 (sobra R$ 161,89)", por quê, fatos, riscos, 5 alternativas
 com logo, regras, avisos e fontes; com R$ 5, "nenhuma ação dentro das regras" com a mais barata (R$ 22,80); sem erros
 de JavaScript e sem rolagem horizontal. Ações reais não puderam ser consultadas aqui (Yahoo bloqueado pela rede).
+
+## 15. Valor pequeno demais (relato "ERRO" com R$ 1 + R$ 1/mês)
+
+Relato: com capital de R$ 1 e aporte de R$ 1/mês o site mostrou uma carteira de 7 ativos (PETR4, GOLD11, CAIXA_CDI,
+SBSP3, NVDA, WELL, LLY) com "R$ 0" em todas as linhas e "LLY: entra nos próximos aportes (… compra mínima de
+6.465,80)". Causa: quando quase nada cabia numa compra mínima, um plano B montava a carteira-alvo como "referência para
+os próximos aportes" com o universo inteiro — inclusive ativos que nem 12 meses de aportes compram; valores abaixo de
+R$ 1 apareciam arredondados como "R$ 0". Reproduzido também em outros valores: R$ 400 (sintético) dava 60% numa ação
+só (FAIL de limites); R$ 1.000 (dados reais simulados) mantinha 12 posições, algumas de R$ 4, porque a regra que
+escolhe as posições compráveis gastava o dinheiro em lotes caros antes de incluir a renda fixa mínima do perfil.
+
+`tests/test_small_amounts.py` (12 testes):
+
+| O que se verifica | Resultado |
+|---|---|
+| R$ 1 + R$ 1/mês → recusa imediata ("Valor pequeno demais…", R$ 13 em 12 meses, pede pelo menos R$ 400), sem pedir nenhum dado de mercado | passa |
+| o primeiro mínimo segue o limite por ativo e a compra mínima: conservador e arrojado R$ 300, moderado R$ 400, compra mínima de R$ 50 → R$ 200, com mínimo de caixa → R$ 200 | passa (5 casos) |
+| abaixo do mínimo pelos preços do dia (sintético, R$ 600) a recusa diz o menor valor; com esse valor sai uma carteira em que toda posição compra ≥ 1 lote e ≥ R$ 100, dentro do limite por ativo, comprada inteira na compra inicial | passa |
+| R$ 1.000 com dados reais simulados: só posições compráveis, sem aviso de execução nem violação de limites | passa |
+| só aportes (R$ 50/mês): carteira para R$ 600; o próximo aporte compra e os demais "entram nos próximos aportes" com "R$ 100,00" | passa |
+| escolha exata das posições (inteira-mista): onde ficar com as maiores falha, acha a combinação mais próxima; não repete uma combinação descartada; sem renda fixa possível ou com lotes somando 120% → nenhuma | passa |
+| site: `/api/proposito` responde 400 com a mensagem (também no modo streaming), sem "não pôde ser executada"; a página mostra "Atenção:" e valores pequenos com centavos | passa |
+
+Exploração com a mesma regra (fora dos testes): sintético — recusa até R$ 790 e carteira de 4 posições a partir daí;
+dados reais simulados, moderado — R$ 400 → 4 posições de 25% (CDI, KLBN11, IMAB11, IRFM11), R$ 600 e R$ 50/mês → 4
+posições, R$ 1.000 → 6 (conservador 4, arrojado 5), R$ 2.000 → 8. A recusa pelos preços leva ≈ 0,3 s depois dos dados
+baixados. Observação não alterada aqui: no caso de R$ 400 o validador independente da etapa quantitativa acusa FAIL de
+consistência da fronteira (ponto com Sharpe −0,3036 contra −0,3090 do máximo de Sharpe; com todos os Sharpes
+negativos, o máximo de Sharpe é mal definido) — o aviso aparece na lista de alertas.

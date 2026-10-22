@@ -266,7 +266,12 @@ declarado. As 13 etapas, nesta ordem, ficam registradas no relatório:
 6. **Governança** (`governance.py`): exclusão dura antes da triagem e do otimizador.
 7. **Tamanho mínimo de compra** (`feasibility.py`): a carteira-alvo é dimensionada para o que você tem hoje + os
    aportes dos próximos 12 meses; ativo cuja menor compra possível (1 lote/cota/ação, ou a compra mínima, padrão
-   R$ 100) passa do peso máximo fica de fora, com o motivo.
+   R$ 100) passa do peso máximo fica de fora, com o motivo. **Valor pequeno demais**: se nenhuma combinação de ativos
+   tem cada posição com pelo menos uma compra mínima dentro dos limites do perfil (problema inteiro-misto com os
+   preços do dia), a resposta é uma recusa (HTTP 400, "Atenção:" no site) com o menor valor que forma uma carteira;
+   antes de baixar dados vale a conta rápida ⌈1 / limite por ativo⌉ × compra mínima (R$ 400 no moderado, R$ 300 no
+   conservador e no arrojado). Nunca sai uma carteira com posições que o dinheiro não compra; para valores pequenos,
+   a seção "Ação do dia" aponta uma ação.
 8. **Otimização** (`core/portfolio_engine.py` com `OptimizationPolicy`): os limites pessoais viram restrições; a
    carteira de **utilidade pessoal** `max w'μ − λ/2·w'Σw` (com o teto de volatilidade) é a escolha padrão e só é
    trocada se outra estratégia a superar, na validação fora da amostra, por mais de 1 erro-padrão da diferença,
@@ -276,7 +281,9 @@ declarado. As 13 etapas, nesta ordem, ficam registradas no relatório:
 9–10. **Temas e score de alinhamento** (`themes.py`, `alignment.py`): léxico determinístico com citação literal.
 11. **Combinação e carteira executável**: `w_final = (1 − a)·w_quant + a·w_alinhamento` dentro de todos os limites;
    depois, posições menores que uma compra mínima saem (ou sobem até ela, se os limites exigirem) e os pesos são
-   recalculados como a carteira executável mais próxima. **Regra de estabilidade**: com a recomendação anterior e as
+   recalculados como a carteira executável mais próxima; se ficar com as maiores posições não fechar os limites (o
+   dinheiro acaba em lotes caros antes da renda fixa mínima, por exemplo), as posições são escolhidas de forma exata
+   (inteira-mista: a combinação mais próxima da teórica). **Regra de estabilidade**: com a recomendação anterior e as
    mesmas entradas, ela é mantida se a nova não a superar por mais que o erro de estimativa + o custo de trocar.
 12. **Plano de compra e dupla justificativa**: quantidades por lote (B3: fracionário de 1 ação, FIIs/ETFs 1 cota,
    inclusive ETFs de cripto e de Tesouro Selic; EUA: ação inteira ou frações se a corretora permitir; cripto direta:
