@@ -181,9 +181,15 @@ Resumo (lista completa em [`docs/assumptions_and_limitations.md`](docs/assumptio
 
 ## 9. Site (Vercel)
 
-A versão web fica em `webapp/`: API FastAPI (`webapp/server.py`) + página única (`webapp/static/index.html`)
-com formulário, gráficos interativos (tooltips, tema claro/escuro, layout para celular), tabelas e o analista
-de IA. A **Carteira com propósito** usa por padrão **cotações reais**: preços diários ajustados de ~30 ações e
+A versão web fica em `webapp/`: API FastAPI (`webapp/server.py`) + página única (`webapp/static/index.html`, sem
+etapa de build). Identidade visual própria: fundo azul-marinho/grafite, fonte Inter servida pelo próprio app
+(`/static/fonts/`, SIL OFL), ícones Lucide (ISC) embutidos, tokens de cor/espaçamento/raio, tema escuro (padrão) e
+claro, `prefers-reduced-motion` respeitado. Navegação por telas (`#/painel`, `#/acoes`, `#/oportunidades`,
+`#/carteira`, `#/laboratorio`, `#/perfil`): menu lateral no computador, trilho de ícones no tablet e barra inferior
+no celular; links antigos por âncora (`#d-title`, `#p-title`…) abrem a tela certa. O **Painel** mostra o que existe
+de fato neste aparelho (última carteira montada, histórico de análises, perfil); o **Perfil** guarda as respostas do
+investidor no navegador (`localStorage`, com exportar/importar/apagar) e preenche os formulários de todas as
+ferramentas. Nada do investidor vai para o servidor fora dos pedidos de análise. A **Carteira com propósito** usa por padrão **cotações reais**: preços diários ajustados de ~30 ações e
 fundos da B3 e dos EUA baixados na hora do endpoint de gráficos do Yahoo Finance (biblioteca padrão, sem
 `yfinance`; cache em `/tmp`), Selic do Banco Central (SGS 432) e T-bill (`^IRX`) como taxas livres de risco. O
 site mostra só métricas derivadas (não republica cotações) e, se o provedor não responder, mostra o erro — nunca

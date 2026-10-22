@@ -377,3 +377,16 @@ posições, R$ 1.000 → 6 (conservador 4, arrojado 5), R$ 2.000 → 8. A recusa
 baixados. Observação não alterada aqui: no caso de R$ 400 o validador independente da etapa quantitativa acusa FAIL de
 consistência da fronteira (ponto com Sharpe −0,3036 contra −0,3090 do máximo de Sharpe; com todos os Sharpes
 negativos, o máximo de Sharpe é mal definido) — o aviso aparece na lista de alertas.
+
+## 16. Redesign do site (identidade visual, navegação por telas)
+
+Lógica de cada ferramenta preservada (mesmas funções de renderização e de pedido; só a apresentação mudou): os testes
+que conferem a página (`tests/test_webapp.py`, `test_logos.py`, `test_daily_pick.py`, `test_small_amounts.py`,
+`test_portfolio_review_fixes.py`, `test_zero_capital.py`, `test_dynamic_portfolio.py`) passam sem alteração, e a
+suíte completa deu 476 aprovados e 1 pulado depois do redesign.
+
+Navegador (Playwright, servidor local com dublês): computador 1440 px, tablet 1024 px e celular 390 px. Navegação
+por todas as telas pelo menu lateral, pela barra inferior e pela folha "Mais"; busca global (PETR4 → análise pronta
+em 0,8 s); Ação do dia (0,5 s); laboratório sintético (17 s); perfil salvo e aplicado aos formulários (perfil
+arrojado; horizonte 8 anos → opção mais próxima, 10 anos); tema claro e escuro; link antigo `#d-title` abre a tela
+Oportunidades. Sem erros de JavaScript e sem rolagem horizontal em nenhum dos tamanhos.

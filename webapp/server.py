@@ -58,6 +58,9 @@ from webapp.summary import build_summary
 log = logging.getLogger("qpi.web")
 
 _INDEX_HTML = (Path(__file__).parent / "static" / "index.html").read_text(encoding="utf-8")
+# the page's own static files (served from the app's address; a font changes rarely: cached for 30 days)
+_ASSETS = {"fonts/inter-latin-wght-normal.woff2": "font/woff2"}
+_ASSET_BYTES = {k: (Path(__file__).parent / "static" / k).read_bytes() for k in _ASSETS}
 _OUTPUT_DIR = Path(tempfile.gettempdir()) / "qpi-web"   # only /tmp is writable on serverless hosts
 _MAX_CONCURRENT = 2
 _CACHE_SIZE = 4
@@ -235,6 +238,14 @@ def _analysis(p: AnalyzeRequest) -> tuple[AnalysisResult, float]:
 @app.get("/", response_class=HTMLResponse)
 def index() -> HTMLResponse:
     return HTMLResponse(_INDEX_HTML)
+
+
+@app.get("/static/{path:path}", include_in_schema=False)
+def static_asset(path: str) -> Response:
+    if path not in _ASSETS:
+        raise HTTPException(404, "arquivo não encontrado")
+    return Response(_ASSET_BYTES[path], media_type=_ASSETS[path],
+                    headers={"Cache-Control": "public, max-age=2592000", "X-Content-Type-Options": "nosniff"})
 
 
 @app.get("/api/health")

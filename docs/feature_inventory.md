@@ -1,0 +1,55 @@
+# Inventário de funcionalidades (auditoria de 22/10/2026)
+
+Estado de cada recurso pedido no plano de redesign e inteligência financeira, verificado no código antes de qualquer
+mudança. **Funcional** = implementado e testado; **Parcial** = existe com limitação; **Ausente** = não existe.
+A coluna "Mudança" registra o que foi feito e a verificação; a regra é não reescrever o que já funciona.
+
+## Rotas da API (antes da auditoria)
+
+| Rota | O que faz | Dados |
+|---|---|---|
+| `GET /` | página única do site | — |
+| `GET /api/health` | versão e commit publicados | — |
+| `POST /api/acao` | "Vale a pena?": veredito por regras, empresa, fundamentos, projeção Monte Carlo | reais (Yahoo chart + quoteSummary, B3) ou sintéticos rotulados |
+| `POST /api/acao-do-dia` | uma ação para o valor de hoje, por regras fixas | reais ou sintéticos rotulados |
+| `POST /api/proposito` | carteira personalizada com plano de compra em lotes | reais (B3, Nasdaq, Yahoo, BCB) ou sintéticos rotulados |
+| `POST /api/analisar` | laboratório: fronteira, Monte Carlo, VaR/ES, EVT, estresse, backtest, validação | **somente sintéticos** |
+| `POST /api/perguntar` | analista determinístico baseado em ferramentas (sobre o laboratório) | sintéticos |
+| `GET /api/logo/...` | logos das empresas pelo próprio app | Google favicons |
+
+## Funcionalidades
+
+| Funcionalidade | Estado inicial | Onde | Mudança |
+|---|---|---|---|
+| Análise de uma ação ("Vale a pena?") | Funcional | `core/stock_check/analyzer.py`, `company.py`, `/api/acao` | lógica mantida; só apresentação nova (tela "Análise de ações") |
+| Ação do dia | Funcional | `core/stock_check/daily_pick.py`, `/api/acao-do-dia` | lógica mantida; tela "Oportunidades" |
+| Carteira com propósito (montar carteira) | Funcional | `core/purpose/*`, `/api/proposito` | lógica mantida; tela "Carteira" |
+| Laboratório quantitativo (Markowitz, fronteira, Monte Carlo, VaR/ES, EVT, estresse, backtest, validação) | Parcial: só mercado sintético | `core/portfolio_engine.py`, `core/optimization`, `core/extreme_risk`, `core/backtesting`, `/api/analisar` | lógica mantida; tela "Laboratório" rotulada como demonstração |
+| Assistente de IA | Parcial: só sobre o laboratório sintético; regras determinísticas, sem LLM | `core/ai_analyst/*`, `/api/perguntar` | mantido dentro do Laboratório |
+| Logos das empresas | Funcional (mecanismo) | `core/market_data/logos.py` | mantido |
+| Fundamentos da empresa (indicadores) | Parcial: um retrato atual (quoteSummary); sem séries de demonstrações, pares ou revisões | `core/stock_check/company.py` | — |
+| Dashboard (patrimônio, evolução, benchmarks, distribuição, alertas, movimentações) | Ausente: não há cadastro de carteira | — | painel novo com o que existe de fato neste aparelho (última carteira montada, histórico de análises, perfil) |
+| Radar de oportunidades com evidências | Parcial: a Ação do dia ordena ações por histórico de preços; sem fundamentos, contra-evidências ou invalidação | `daily_pick.py`, `core/universe/scoring.py` | — |
+| Previsões probabilísticas | Parcial: projeção com percentis, P(superar a renda fixa) e sensibilidade; sem calibração histórica | `analyzer.py`, `core/simulation` | — |
+| Auditoria das próprias previsões | Ausente | — | — |
+| Simulador de futuros empresariais (cenários, valuation) | Ausente | — | — |
+| Efeitos econômicos em cadeia | Ausente (o setor tem motivos gerais de crescimento, sem medição) | `core/stock_check/sectors.py` | — |
+| Risco avançado da carteira do investidor (dados reais) | Parcial: os motores existem (VaR, CVaR, EVT, estresse, cauda, regimes, concentração) mas só rodam no laboratório sintético; a carteira com propósito mede concentração | `core/extreme_risk`, `core/purpose/concentration.py` | — |
+| Detector de armadilhas de valor | Ausente (só regras soltas no "Vale a pena?", ex.: P/L baixo com ressalva) | `company.growth_case` | — |
+| Tese de investimento estruturada | Parcial: motivos a favor/contra e teses duplas da carteira; sem invalidação, catalisadores datados ou refutação | `company.py`, `core/purpose/report.py` | — |
+| Descoberta e validação de estratégias | Parcial: walk-forward com custos, PSR/DSR e correção de testes múltiplos existem para carteiras do laboratório; sem laboratório de hipóteses | `core/backtesting/*` | — |
+| Monitoramento contínuo | Ausente; a infraestrutura (função sem servidor, sem banco nem agendador) só atualiza dados quando o usuário pede | — | não simulado |
+| Personalização do investidor | Funcional na carteira com propósito; ausente como perfil salvo para todas as ferramentas | `core/purpose/personalization.py` | perfil salvo neste aparelho, que preenche os formulários de todas as ferramentas |
+| Histórico de análises | Ausente | — | histórico neste aparelho, no painel |
+| Configurações | Parcial: só o tema | — | tela "Perfil e dados": perfil, tema, exportar/importar/apagar os dados deste aparelho, fontes e licenças |
+
+## Dependências e riscos identificados
+
+* **Persistência**: o site roda como uma função sem servidor (Vercel) sem banco de dados nem agendador. Tudo o que é do
+  investidor fica no navegador dele (`localStorage`), com exportar/importar; não há conta nem sincronização entre aparelhos.
+* **Rede neste ambiente de desenvolvimento**: Yahoo, BCB, B3, Nasdaq, SEC e CVM estão bloqueados aqui; integrações novas
+  só podem ser testadas com dublês e precisam ser conferidas no site publicado.
+* **Limite de tempo por pedido** (~60 s na plataforma): cada recurso novo precisa de orçamento de tempo, cache e limite
+  de ativos.
+* **Fundamentos**: a fonte disponível sem custo é o Yahoo Finance (quoteSummary com cookie + crumb, já usado em produção);
+  cobertura de estimativas de analistas é pequena para ações brasileiras.
