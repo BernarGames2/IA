@@ -370,6 +370,30 @@ banco de dados: as posições ficam no navegador (`localStorage`, com exportar/i
   com ativos em dólar), com t de Newey–West; crises reais (COVID-19, pior mês e pior trimestre do Ibovespa nos dados)
   e choques hipotéticos pelos betas medidos. Estimativas do passado, não limites de perda.
 
+## 10d. Previsões probabilísticas e registro auditável (`POST /api/previsoes/prever`, `/registrar`, `/avaliar`)
+
+Em vez de preço-alvo, a **distribuição do retorno** de um ativo no prazo escolhido (3 meses a 5 anos), com o mesmo
+modelo do "Vale a pena?" escrito em forma fechada (`core/forecasting/model.py`): retorno esperado = renda fixa +
+beta × prêmio de risco, puxado para a média histórica conforme a precisão dela (encolhimento), volatilidade
+histórica, retorno log-normal. Mostra quantis de 5% a 95%, cenários P10/P50/P90 e as chances de subir, de superar a
+renda fixa (Selic/CDI ou T-bill), de cair mais de 20% e de superar o índice de referência (BOVA11 ou SPY; fórmula
+exata da normal bivariada com a correlação medida), mais uma tabela de sensibilidade (prêmio 2/6%, tau 5/20%,
+volatilidade ±25%, só o histórico, sem prêmio).
+
+* **Calibração histórica no próprio ativo** (`calibration.py`): o modelo é refeito todo mês dos últimos 10 anos
+  usando só os dados até cada data (nada do futuro — testado) e as previsões de 12 meses (ou do prazo, se menor)
+  são comparadas com o que aconteceu: Brier e habilidade contra a frequência do passado, log score, tabela de
+  confiabilidade (previsto × aconteceu), cobertura da faixa de 80%, histograma PIT e teste KS, por regime de
+  volatilidade, com o aviso de que janelas sobrepostas reduzem o tamanho efetivo da amostra.
+* **Registro auditável** (`audit.py`): a previsão sai do servidor com data e assinatura HMAC (chave
+  `QPI_AUDIT_KEY`, quando configurada); ao registrar, recebe a hora do servidor e um hash encadeado ao anterior
+  (`sha256` do JSON canônico). O registro fica no aparelho do investidor. A avaliação, só quando pedida, confere a
+  cadeia (alteração, remoção ou troca de ordem aparecem), marca como **retroativa** a entrada registrada mais de 3
+  dias úteis depois da data dos dados (fora das notas), deixa **pendente** até o dia seguinte ao fim do prazo e mede o
+  resultado com a série ajustada atual (proventos contam), contra a renda fixa efetivamente paga, o índice e após
+  custos; notas por evento, classe, prazo e regime. Limites ditos no resultado: apagar as últimas entradas não é
+  detectável pela cadeia, e sem a chave do servidor quem reescreve tudo não é detectado.
+
 ## 11. "Vale a pena?" — análise de uma ação (`--acao`, `POST /api/acao`)
 
 Você digita o código ou o nome de **qualquer ação da B3 ou dos EUA** (PETR4, VALE3, WEGE3, AAPL, "Petrobras",

@@ -8,11 +8,11 @@ matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-484 passed, 1 skipped (485 testes)
+493 passed, 1 skipped (494 testes)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
 
-(Registros anteriores: 476 passed, 1 skipped antes de "Minha carteira" e do risco — seção 17; 464 passed, 1 skipped antes da correção de valores pequenos — seção 15; 452 passed, 1 skipped
+(Registros anteriores: 484 passed, 1 skipped antes das previsões — seção 18; 476 passed, 1 skipped antes de "Minha carteira" e do risco — seção 17; 464 passed, 1 skipped antes da correção de valores pequenos — seção 15; 452 passed, 1 skipped
 antes da "Ação do dia" — seção 14; 414 passed, 1 skipped antes dos
 logos — seção 13; 361 passed, 1 skipped antes das correções
 da revisão adversarial — seção 12; 328 passed, 1 skipped antes do motor dinâmico.)
@@ -411,4 +411,28 @@ Navegador (servidor local com dublês, 1440 e 390 px): lista colada ("PETR4 100 
 (VaR/CVaR em reais, contribuição para o risco, correlação normal × estresse, liquidez, sensibilidades, crises), resumo
 no Painel; o link antigo `#p-title` abre a aba "Montar carteira"; sem erros de JavaScript e sem rolagem horizontal.
 Cotações reais não puderam ser consultadas aqui (Yahoo e BCB bloqueados pela rede). Suíte completa depois desta etapa: 484 aprovados, 1 pulado (o teste online).
+
+## 18. Previsões probabilísticas, calibração e registro auditável
+
+`tests/test_forecasting.py` (9 testes, dublês de mercado e do BCB):
+
+| O que se verifica | Resultado |
+|---|---|
+| o modelo é o do "Vale a pena?": retorno esperado, peso do histórico, prior, volatilidade e beta iguais aos de `_stats`/`_expected` (até 1e−12); a forma fechada reproduz o Monte Carlo do analisador (chance de superar a renda fixa e P10, diferença ≤ 1 p.p. com 40 mil trajetórias) | passa |
+| Brier, log score, habilidade, tabela de confiabilidade e PIT conferidos à mão; índice de juros a partir de `^IRX` | passa |
+| sem olhar o futuro: multiplicar os preços e os juros depois de uma data não muda nenhuma previsão feita antes dela; origem sem taxa conhecida é descartada (nunca juros zero) | passa |
+| sem viés quando o modelo é o verdadeiro: em 12 mercados simulados, cobertura média da faixa de 80% entre 68% e 90% e PIT médio entre 0,42 e 0,58 | passa |
+| distribuição: quantis em ordem, mediana = exp(m) − 1, chances iguais às fórmulas, cenários = P10/P50/P90, chance de superar o índice igual à fórmula e a 400 mil sorteios da normal bivariada | passa |
+| sem histórico de juros: taxa de demonstração rotulada, calibração não calculada, prazo longo explicado | passa |
+| registro: sobrevive à ida e volta pelo navegador (JSON); probabilidade alterada é recusada pela assinatura e apontada pela cadeia mesmo com o hash recalculado; remover ou trocar a ordem quebra a cadeia; sem chave, a reescrita completa não é detectada (limite declarado) | passa |
+| estados: pendente antes do fim do prazo (com o retorno até agora), avaliada depois (retorno pela série atual, CDI pago, custo na compra e na venda, Brier e PIT conferidos), retroativa fora das notas | passa |
+| rotas: previsão 200 com assinatura e calibração; registro 200; registro alterado 400; avaliação 200; SINT_* 400; prazo de 20 anos 422; código sem dados 503 | passa |
+
+Navegador (servidor local com dublês terminando hoje e chave de auditoria, 1440 e 390 px): previsão de PETR4 em
+2,6 s com distribuição, previsto × aconteceu, PIT, regimes e sensibilidade; registro guardado no aparelho e listado
+como pendente; avaliação sob pedido; entrada alterada no aparelho → "conteúdo alterado" e "assinatura inválida";
+9 entradas antigas (seladas com a mesma chave) → 8 avaliadas e 1 pendente, notas por evento e por classe; remover a
+4ª entrada → "cadeia quebrada" na entrada seguinte; botão no "Vale a pena?" (VALE3) abre a previsão do mesmo ativo;
+sem erros de JavaScript e sem rolagem horizontal. Cotações reais não puderam ser consultadas aqui. Suíte
+completa depois desta etapa: 493 aprovados, 1 pulado (o teste online).
 

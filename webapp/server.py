@@ -16,6 +16,7 @@ Local run:  uvicorn webapp.server:app --reload   ->  http://127.0.0.1:8000
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -36,6 +37,14 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from config import APP_NAME, APP_VERSION, AppConfig
 from core.ai_analyst.analyst import ResearchAnalyst
 from core.ai_analyst.tools import AnalysisContext
+from core.forecasting.api import (
+    EvaluateRequest,
+    ForecastRequest,
+    RegisterRequest,
+    handle_evaluate,
+    handle_forecast,
+    handle_register,
+)
 from core.market_data.base import DataUnavailableError
 from core.market_data.logos import clean_domain, domain_for, fetch_logo
 from core.portfolio_analytics.api import handle_dashboard, handle_risk
@@ -502,6 +511,33 @@ def carteira_risco(p: PortfolioRequest, stream: bool = False) -> Response:
     return _engine(p.key() + "|risco", lambda progress: handle_risk(
         p, provider=_market_provider(), fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache", progress=progress,
         budget_s=_DOWNLOAD_BUDGET_S), stream, unavailable="confira os códigos ou tente de novo em alguns minutos")
+
+
+@app.post("/api/previsoes/prever")
+def previsoes_prever(p: ForecastRequest, stream: bool = False) -> Response:
+    """Probabilistic forecast of one asset (distribution, probabilities, sensitivity) and the model's own historical
+    calibration on that asset; carries a sealed record that the investor may register."""
+    return _engine(p.key(), lambda progress: handle_forecast(
+        p, provider=_market_provider(), fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache", progress=progress,
+        budget_s=_DOWNLOAD_BUDGET_S), stream, unavailable="confira o código ou tente de novo em alguns minutos")
+
+
+@app.post("/api/previsoes/registrar")
+def previsoes_registrar(p: RegisterRequest) -> Response:
+    """Chains a sealed forecast to the investor's registry (kept in their browser); no data download."""
+    try:
+        return JSONResponse(to_jsonable(handle_register(p)))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.post("/api/previsoes/avaliar")
+def previsoes_avaliar(p: EvaluateRequest, stream: bool = False) -> Response:
+    """Integrity of the registry and how each forecast turned out (pending until its horizon ends)."""
+    k = "avaliar|" + hashlib.sha256(json.dumps(p.model_dump(), sort_keys=True, default=str).encode()).hexdigest()
+    return _engine(k, lambda progress: handle_evaluate(
+        p, provider=_market_provider(), fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache", progress=progress,
+        budget_s=_DOWNLOAD_BUDGET_S), stream, unavailable="tente de novo em alguns minutos")
 
 
 _OWN_PACKAGES = {"core", "webapp", "models", "utils", "config", "main", "tests", "__main__"}

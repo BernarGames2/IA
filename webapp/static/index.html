@@ -486,6 +486,7 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
       <span class="nav-label">Pesquisar</span>
       <a href="#/acoes" data-nav="acoes"><svg class="icon"><use href="#i-chart-candlestick"/></svg><span>Análise de ações</span></a>
       <a href="#/oportunidades" data-nav="oportunidades"><svg class="icon"><use href="#i-radar"/></svg><span>Oportunidades</span></a>
+      <a href="#/previsoes" data-nav="previsoes"><svg class="icon"><use href="#i-compass"/></svg><span>Previsões</span></a>
       <span class="nav-label">Investir</span>
       <a href="#/carteira" data-nav="carteira"><svg class="icon"><use href="#i-wallet"/></svg><span>Carteira</span></a>
       <a href="#/laboratorio" data-nav="laboratorio"><svg class="icon"><use href="#i-flask-conical"/></svg><span>Laboratório</span></a>
@@ -665,6 +666,92 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
             <section class="card"><h2>Como foi escolhida</h2><ol id="d-rules"></ol><p class="muted" id="d-out"></p></section>
           </div>
           <section class="card"><h2>Avisos</h2><ul class="clean" id="d-warn"></ul><p class="kind" id="d-src"></p></section>
+        </div>
+      </section>
+
+      <!-- ============================================================ PREVISÕES -->
+      <section class="view" data-view="previsoes" data-title="Previsões" data-eyebrow="Pesquisar" aria-label="Previsões" hidden>
+        <div class="tabs" role="tablist" aria-label="Previsões" data-tabs="previsoes">
+          <button type="button" role="tab" data-tab="prever" aria-selected="true"><svg class="icon"><use href="#i-compass"/></svg>Prever</button>
+          <button type="button" role="tab" data-tab="registro" aria-selected="false"><svg class="icon"><use href="#i-list-checks"/></svg>Registro e acertos</button>
+        </div>
+
+        <div role="tabpanel" data-panel="prever">
+          <section class="card">
+            <div class="card-head"><div>
+              <h2 id="fc-title">Previsão probabilística de um ativo</h2>
+              <p class="lead">Em vez de um preço-alvo, a faixa de resultados possíveis no prazo escolhido e a chance de cada
+                um: subir, superar a renda fixa (CDI ou T-bill), cair mais de 20%, superar o índice de referência. O modelo
+                é o mesmo da análise "Vale a pena?". Junto vem a nota do próprio modelo: ele foi testado nos últimos anos
+                deste ativo, mês a mês, usando só os dados de cada data, e você vê quantas vezes as probabilidades dele se
+                confirmaram. Usa só o histórico de preços; não prevê notícias.</p></div>
+              <span class="badge real"><svg class="icon"><use href="#i-database"/></svg>Cotações reais</span></div>
+            <form id="fc-form">
+              <label class="span-all">Ativo<input name="ativo" maxlength="60" required placeholder="Ex.: PETR4, BOVA11, AAPL ou Petrobras"></label>
+              <label>Horizonte
+                <select name="horizonte_anos"><option value="0.25">3 meses</option><option value="0.5">6 meses</option>
+                  <option value="1" selected>1 ano</option><option value="3">3 anos</option><option value="5">5 anos</option></select>
+              </label>
+              <label>Prêmio de risco das ações (% a.a.)<input name="premio" type="number" min="0" max="10" step="0.5" value="4"></label>
+              <button id="fc-run" type="submit"><svg class="icon"><use href="#i-compass"/></svg>Prever</button>
+            </form>
+            <div class="status" id="fc-status" role="status" aria-live="polite"></div>
+          </section>
+          <div id="fc-results" class="hidden">
+            <section class="card"><div id="fc-head"></div></section>
+            <div class="kpis" id="fc-kpis"></div>
+            <div class="grid2">
+              <section class="card"><h2 id="fc-dist-title">Distribuição do retorno</h2><p class="muted" id="fc-dist-note"></p><div class="chart" id="fc-dist"></div></section>
+              <section class="card"><h2>Cenários</h2><p class="muted">Estimativa [E] do modelo: 1 em cada 10 resultados fica abaixo do pessimista e 1 em cada 10 acima do otimista.</p>
+                <div class="tbl" id="fc-scen"></div><h3>Faixas de probabilidade</h3><div class="tbl" id="fc-quant"></div></section>
+            </div>
+            <section class="card"><h2>O modelo acerta neste ativo?</h2>
+              <ul class="clean" id="fc-cal-read"></ul>
+              <div class="kpis" id="fc-cal-kpis"></div>
+              <div class="grid2">
+                <div><h3>Previsto × aconteceu</h3><p class="muted">Cada ponto junta as previsões com chances parecidas. Na linha tracejada, o que foi previsto aconteceu na mesma proporção.</p>
+                  <div class="legend" id="fc-rel-legend"></div><div class="chart" id="fc-rel"></div></div>
+                <div><h3>Onde o resultado caiu dentro da previsão</h3><p class="muted">Posição do resultado real na distribuição prevista (PIT), em faixas de 10%. Se o modelo estiver calibrado, as barras ficam perto da linha tracejada (10% das previsões em cada faixa); barra alta à direita: resultados melhores que o previsto.</p>
+                  <div class="chart" id="fc-pit"></div></div>
+              </div>
+              <div class="tbl" id="fc-regime"></div>
+              <details><summary>Últimas previsões testadas no passado</summary><div class="tbl" id="fc-origins"></div></details>
+              <p class="muted" id="fc-cal-note"></p>
+            </section>
+            <section class="card"><h2>Sensibilidade às premissas</h2><p class="muted">Como as chances mudam com outra premissa: o modelo mistura o histórico do ativo com o retorno exigido pelo risco (renda fixa + beta × prêmio), e o peso do histórico depende da dispersão tau.</p><div class="tbl" id="fc-sens"></div></section>
+            <section class="card"><h2>Registrar esta previsão</h2>
+              <p id="fc-hyp"></p>
+              <h3>Ela deixa de valer se, antes do fim do prazo:</h3><ul class="clean" id="fc-inval"></ul>
+              <div class="row"><button id="fc-register" type="button"><svg class="icon"><use href="#i-save"/></svg>Registrar esta previsão</button>
+                <span class="hint">Fica guardada neste aparelho, com data e hash; quando o prazo terminar, a aba "Registro e acertos" mostra se o modelo acertou.</span></div>
+              <div class="status" id="fc-reg-status" role="status" aria-live="polite"></div>
+            </section>
+            <section class="card"><h2>Como foi calculado e avisos</h2><ul class="clean" id="fc-notes"></ul></section>
+          </div>
+        </div>
+
+        <div role="tabpanel" data-panel="registro" hidden>
+          <section class="card">
+            <div class="card-head"><div>
+              <h2 id="rg-title">Registro de previsões e acertos</h2>
+              <p class="lead">Cada previsão registrada guarda o que o modelo disse e quando, encadeada à anterior por um hash: se
+                alguém alterar ou apagar uma entrada do meio, a conferência mostra. Registrada mais de 3 dias úteis depois
+                da data dos dados, ela é marcada como retroativa e fica fora das notas. Nada roda em segundo plano: a
+                avaliação busca as cotações e mede os acertos quando você pede.</p></div>
+              <span class="badge local"><svg class="icon"><use href="#i-lock"/></svg>Só neste aparelho</span></div>
+            <div id="rg-list"></div>
+            <form id="rg-form" style="margin-top:16px">
+              <label>Custo por operação (% de compra e de venda)<input name="custo" type="number" min="0" max="5" step="0.05" value="0.1"></label>
+              <button id="rg-run" type="submit"><svg class="icon"><use href="#i-refresh-cw"/></svg>Avaliar agora</button>
+            </form>
+            <div class="status" id="rg-status" role="status" aria-live="polite"></div>
+          </section>
+          <div id="rg-results" class="hidden">
+            <div class="kpis" id="rg-kpis"></div>
+            <section class="card" id="rg-metrics-card"><h2>Acertos por evento</h2><p class="muted">Brier: erro quadrático médio das probabilidades (0 é perfeito; sempre dizer 50% dá 0,25). Habilidade: quanto o modelo foi melhor (+) ou pior (−) que sempre dizer 50%.</p><div class="tbl" id="rg-metrics"></div></section>
+            <section class="card" id="rg-groups-card"><h2>Por classe, prazo e regime de volatilidade</h2><div id="rg-groups"></div></section>
+            <section class="card"><h2>Integridade e avisos</h2><ul class="clean" id="rg-notes"></ul></section>
+          </div>
         </div>
       </section>
 
@@ -1098,6 +1185,7 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
   <div class="sheet-backdrop" id="more-backdrop"></div>
   <div class="sheet" id="more-sheet" role="dialog" aria-modal="true" aria-label="Mais seções">
     <div class="grip"></div>
+    <a href="#/previsoes" data-nav="previsoes"><svg class="icon"><use href="#i-compass"/></svg>Previsões</a>
     <a href="#/laboratorio" data-nav="laboratorio"><svg class="icon"><use href="#i-flask-conical"/></svg>Laboratório quantitativo</a>
     <a href="#/perfil" data-nav="perfil"><svg class="icon"><use href="#i-user-round"/></svg>Perfil e dados</a>
     <button type="button" id="theme-mobile"><svg class="icon"><use href="#i-moon"/></svg>Alternar tema</button>
@@ -1999,6 +2087,11 @@ function renderStock(d) {
     el("p", {}, v.manchete),
     el("p", { class: "muted" }, "Para o seu perfil: " + d.perfil.leitura + "."),
     el("p", { class: "kind" }, "Regras do veredito: " + v.regras));
+  if (d.origem === "real") {
+    const go = el("button", { class: "secondary sm", type: "button" }, icon("compass"), "Previsão em faixas e acertos do modelo neste ativo");
+    go.addEventListener("click", () => forecastTicker(shortTk(d.ticker)));
+    box.append(el("p", {}, go));
+  }
   renderCompany(d);
   const p50 = pj.cenarios.find((c) => c.cenario.startsWith("base")), p10 = pj.cenarios.find((c) => c.cenario.startsWith("pess")),
     p90 = pj.cenarios.find((c) => c.cenario.startsWith("otim"));
@@ -2171,7 +2264,7 @@ $("ask-form").addEventListener("submit", async (ev) => {
 
 // ---------- history of analyses (this device)
 const HIST_KEY = "qpi-historico";
-const HIST_ICON = { acao: "chart-candlestick", dia: "zap", carteira: "briefcase-business", lab: "flask-conical" };
+const HIST_ICON = { acao: "chart-candlestick", dia: "zap", carteira: "briefcase-business", lab: "flask-conical", previsao: "compass" };
 function addHistory(item) {
   const prev = store.get(HIST_KEY, []);
   const list = Array.isArray(prev) ? prev : [];
@@ -2197,6 +2290,7 @@ function renderHistory() {
       el("span", { class: "when" }, fmtWhen(h.quando)));
     item.addEventListener("click", () => {
       if (h.tipo === "acao" && h.ticker) analyzeTicker(h.ticker.replace(/\.SA$/, ""));
+      else if (h.tipo === "previsao" && h.ticker) forecastTicker(h.ticker.replace(/\.SA$/, ""));
       else location.hash = h.link || "#/painel";
     });
     return el("li", {}, item);
@@ -2286,7 +2380,7 @@ function renderDataSummary() {
   const keys = store.keys();
   const label = { "qpi-perfil": "perfil", "qpi-historico": "histórico de análises", "qpi-ultima-carteira-real": "última carteira (real)",
     "qpi-ultima-carteira-sintetico": "última carteira (demonstração)", "qpi-theme": "tema", "qpi-carteira": "minha carteira (posições e movimentações)",
-    "qpi-carteira-resumo": "resumo do painel da carteira" };
+    "qpi-carteira-resumo": "resumo do painel da carteira", "qpi-previsoes": "registro de previsões" };
   $("data-summary").textContent = keys.length ? "Guardado neste aparelho: " + keys.map((k) => label[k] || k.replace(/^qpi-/, "")).join(", ") + "."
     : "Nada guardado neste aparelho ainda.";
 }
@@ -2655,14 +2749,275 @@ function renderMine() {
 }
 renderPosEditor(); renderMovEditor();
 
+// ---------- forecasts: distribution, the model's own track record on the asset, auditable registry (this device)
+const FC_KEY = "qpi-previsoes", GENESIS = "0".repeat(64);
+let fcData = null, rgData = null;
+const horizonLabel = (h) => h === 0.25 ? "3 meses" : h === 0.5 ? "6 meses" : h === 1 ? "1 ano" : `${fmtNum(h, h % 1 ? 1 : 0)} anos`;
+const fcEntries = () => { const v = store.get(FC_KEY, []); return Array.isArray(v) ? v : []; };
+const shortTk = (t) => String(t || "").replace(/\.SA$/, "");
+const nextDay = (iso) => new Date(Date.parse(iso + "T00:00:00Z") + 864e5).toISOString().slice(0, 10);
+const fmtPrice = (x, ccy) => (CCY[ccy] || ccy) + " " + Number(x).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function chartDist(id, d) {
+  const e = d.distribuicao.bordas, pr = d.distribuicao.probabilidades;
+  const W = widthOf(id, 560), H = 300, L = 46, R = 14, T = 46, B = 40;
+  const lo = e[0], hi = e[e.length - 1], top = Math.max(...pr) * 1.12;
+  const x = lin(lo, hi, L, W - R), y = lin(0, top, H - B, T);
+  const svg = frame(W, H);
+  if (lo < 0) svg.append(s("rect", { x: x(lo), y: T, width: Math.max(0, x(Math.min(0, hi)) - x(lo)), height: H - B - T, fill: "var(--neg)", opacity: 0.08 }));
+  gridY(svg, y, ticks(0, top, 4), L, W - R, (v) => fmtPct(v, 0));
+  pr.forEach((v, i) => {
+    const x0 = x(e[i]) + 1, x1 = x(e[i + 1]) - 1;
+    svg.append(s("rect", { x: x0, y: y(v), width: Math.max(0.5, x1 - x0), height: Math.max(0, y(0) - y(v)), rx: 2, fill: "var(--s1)",
+      "data-tip": `retorno de ${fmtPctS(e[i], 0)} a ${fmtPctS(e[i + 1], 0)}\nchance: ${fmtPct(v, 1)}` }));
+  });
+  const q = d.quantis, rows = [-1e9, -1e9, -1e9];
+  [[q.p10, "P10"], [q.p50, "mediana"], [q.p90, "P90"], [d.rf_no_horizonte, d.nome_taxa]]
+    .filter(([v]) => v !== null && v >= lo && v <= hi).sort((a, b) => a[0] - b[0])
+    .forEach(([v, lab]) => {
+      const px = x(v), free = rows.findIndex((last) => px - last > 64), row = free < 0 ? 2 : free;
+      rows[row] = px;
+      svg.append(s("line", { x1: px, x2: px, y1: T - 2, y2: H - B, stroke: "var(--ink2)", "stroke-width": 1, "stroke-dasharray": lab === d.nome_taxa ? "6 3" : "3 3" }));
+      svg.append(s("text", { x: px, y: T - 8 - row * 12, "text-anchor": "middle", "font-size": 10.5, fill: "var(--ink)" }, lab));
+    });
+  for (const v of ticks(lo, hi, 5)) svg.append(s("text", { x: x(v), y: H - B + 15, "text-anchor": "middle", "font-size": 11, fill: "var(--muted)" }, fmtPctS(v, 0)));
+  axisLabel(svg, (L + W) / 2, H - 6, "Retorno no prazo (fundo avermelhado: prejuízo)");
+  setChildren(id, svg);
+}
+function chartReliability(id, events) {
+  const W = widthOf(id, 440), H = 300, L = 46, R = 14, T = 12, B = 40, tk = [0, 0.25, 0.5, 0.75, 1];
+  const x = lin(0, 1, L, W - R), y = lin(0, 1, H - B, T);
+  const svg = frame(W, H);
+  gridY(svg, y, tk, L, W - R, (v) => fmtPct(v, 0));
+  gridX(svg, x, tk, T, H - B, (v) => fmtPct(v, 0));
+  svg.append(s("line", { x1: x(0), y1: y(0), x2: x(1), y2: y(1), stroke: "var(--axis)", "stroke-width": 1.2, "stroke-dasharray": "5 4" }));
+  for (const ev of events) {
+    const pts = ev.bins.filter((b) => b.n > 0 && b.previsto_medio !== null).sort((a, b) => a.previsto_medio - b.previsto_medio);
+    if (pts.length > 1) svg.append(s("path", { d: pts.map((b, i) => (i ? "L" : "M") + x(b.previsto_medio).toFixed(1) + " " + y(b.observado).toFixed(1)).join(" "),
+      fill: "none", stroke: ev.color, "stroke-width": 1.5, opacity: 0.75 }));
+    for (const b of pts) svg.append(s("circle", { cx: x(b.previsto_medio), cy: y(b.observado), r: 4 + Math.min(5, Math.sqrt(b.n) / 2), fill: ev.color,
+      stroke: "var(--surface)", "stroke-width": 2, "data-tip": `${ev.name}\nchance prevista (média): ${fmtPct(b.previsto_medio, 0)}\naconteceu: ${fmtPct(b.observado, 0)} das vezes\n${b.n} previsões` }));
+  }
+  axisLabel(svg, (L + W) / 2, H - 6, "Chance prevista");
+  axisLabel(svg, 11, (T + H - B) / 2, "Aconteceu", true);
+  setChildren(id, svg);
+}
+function chartPit(id, counts) {
+  const n = counts.reduce((a, b) => a + b, 0), W = widthOf(id, 440), H = 260, L = 40, R = 12, T = 14, B = 40;
+  const top = Math.max(...counts, n / 10) * 1.2, x = lin(0, 1, L, W - R), y = lin(0, top, H - B, T);
+  const svg = frame(W, H);
+  gridY(svg, y, ticks(0, top, 4).filter((v) => Number.isInteger(v)), L, W - R, (v) => String(v));
+  counts.forEach((c, i) => {
+    const x0 = x(i / 10) + 1, x1 = x((i + 1) / 10) - 1;
+    svg.append(s("rect", { x: x0, y: y(c), width: Math.max(0.5, x1 - x0), height: Math.max(0, y(0) - y(c)), rx: 2, fill: "var(--s1)",
+      "data-tip": `resultado entre ${i * 10}% e ${(i + 1) * 10}% da distribuição prevista\n${c} previsões` }));
+  });
+  svg.append(s("line", { x1: L, x2: W - R, y1: y(n / 10), y2: y(n / 10), stroke: "var(--ink2)", "stroke-width": 1.2, "stroke-dasharray": "5 4" }));
+  [[0, "0% (pior)"], [0.5, "50%"], [1, "100% (melhor)"]].forEach(([v, lab]) => svg.append(s("text", { x: x(v), y: H - B + 15,
+    "text-anchor": v === 0 ? "start" : v === 1 ? "end" : "middle", "font-size": 11, fill: "var(--muted)" }, lab)));
+  axisLabel(svg, (L + W) / 2, H - 6, "Posição do resultado real na previsão");
+  setChildren(id, svg);
+}
+function renderFc(d) {
+  fcData = d;
+  $("fc-results").classList.remove("hidden");
+  const p = d.probabilidades, h = horizonLabel(d.horizonte_anos), ref = d.referencia, q = d.quantis, cur = CCY[d.moeda] || d.moeda;
+  setChildren("fc-head", el("div", { class: "with-logo" }, logoEl(d.ticker, d.logo, 40),
+    el("div", {}, el("strong", {}, `${d.nome} (${shortTk(d.ticker)})`),
+      el("div", { class: "muted" }, `Cotação de ${fmtDateBR(d.data_referencia)}: ${fmtPrice(d.preco_referencia, d.moeda)} · prazo de ${h} (até ${fmtDateBR(d.registro.data_fim)})`),
+      el("div", { class: "kind" }, d.interpretacao || ""))));
+  setChildren("fc-kpis",
+    kpi("Chance de subir", fmtPct(p.p_alta, 0), `retorno acima de 0% em ${h}`),
+    kpi(`Chance de superar o ${d.nome_taxa}`, fmtPct(p.p_superar_rf, 0), `${d.nome_taxa} no período: ${fmtPctS(d.rf_no_horizonte, 1)}`),
+    kpi("Chance de cair mais de 20%", fmtPct(p.p_queda_20, 0), "no fim do prazo"),
+    ...(ref ? [kpi(`Chance de superar o ${ref.nome}`, fmtPct(p.p_superar_referencia, 0), `correlação de ${fmtNum(ref.correlacao, 2)} com ele`)] : []),
+    kpi("Cenário base (mediana)", fmtPctS(q.p50, 1), `faixa de 80%: ${fmtPctS(q.p10, 0)} a ${fmtPctS(q.p90, 0)}`));
+  $("fc-dist-title").textContent = "Distribuição do retorno em " + h;
+  $("fc-dist-note").textContent = "Estimativa [E]: cada barra é a chance de o retorno cair naquela faixa; as linhas marcam P10, a mediana, P90 e a renda fixa no período.";
+  chartDist("fc-dist", d);
+  setChildren("fc-scen", table(["Cenário", "Retorno no prazo", `${cur} 100 viram`],
+    d.cenarios.map((c) => [c.cenario, fmtPctS(c.retorno, 1), fmtPrice(c.valor_de_100, d.moeda)]), [1, 2]));
+  setChildren("fc-quant", table(["Chance de ficar abaixo de", "Retorno"],
+    Object.entries(q).map(([k, v]) => [`${Number(k.slice(1))}%`, fmtPctS(v, 1)]), [0, 1]));
+  const c = d.calibracao;
+  if (!c || c.insuficiente) {
+    setChildren("fc-cal-read", el("li", {}, (c && c.nota) || "Calibração indisponível para este ativo."));
+    ["fc-cal-kpis", "fc-rel-legend", "fc-rel", "fc-pit", "fc-regime", "fc-origins"].forEach((id) => setChildren(id));
+    $("fc-cal-note").textContent = (c && c.nota_horizonte) || "";
+  } else {
+    setChildren("fc-cal-read", ...c.leitura.map((t) => el("li", {}, t)));
+    const up = c.evento_alta, rf = c.evento_superar_rf;
+    const skill = (x) => (x === null || x === undefined) ? "" : `habilidade de ${fmtPctS(x, 0)} contra a frequência do passado`;
+    setChildren("fc-cal-kpis",
+      kpi("Previsões testadas", String(c.n), `≈ ${fmtNum(c.n_efetivo, 0)} períodos independentes`),
+      kpi("Faixa de 80% acertou", fmtPct(c.cobertura_10_90, 0), `acima dela: ${fmtPct(c.acima_da_faixa, 0)} · abaixo: ${fmtPct(c.abaixo_da_faixa, 0)}`),
+      kpi("Brier: subir", fmtNum(up.brier, 3), skill(up.habilidade_brier)),
+      ...(rf ? [kpi(`Brier: superar o ${d.nome_taxa}`, fmtNum(rf.brier, 3), skill(rf.habilidade_brier))] : []));
+    const evs = [{ name: "subir", color: "var(--s1)", bins: up.confiabilidade }];
+    if (rf) evs.push({ name: `superar o ${d.nome_taxa}`, color: "var(--s2)", bins: rf.confiabilidade });
+    setChildren("fc-rel-legend", ...evs.map((e) => el("span", {}, el("i", { style: "background:" + e.color }), e.name)),
+      el("span", {}, el("i", { style: "background:transparent;border:1px dashed var(--axis)" }), "previsto = aconteceu"));
+    chartReliability("fc-rel", evs);
+    chartPit("fc-pit", c.pit_histograma);
+    const regName = { alta: "volatilidade alta na data", baixa: "volatilidade baixa na data" };
+    setChildren("fc-regime", table(["Regime", "Previsões", "Faixa de 80% acertou", `Brier: superar o ${d.nome_taxa}`],
+      Object.entries(c.por_regime).map(([k, v]) => [regName[k] || k, String(v.n), fmtPct(v.cobertura_10_90, 0),
+        v.brier_superar_rf === undefined ? "—" : fmtNum(v.brier_superar_rf, 3)]), [1, 2, 3]));
+    setChildren("fc-origins", table(["Data", "Chance de subir", `Chance de superar o ${d.nome_taxa}`, "Faixa de 80%", "Aconteceu"],
+      c.origens.slice(-12).reverse().map((o) => [fmtDateBR(o.data), fmtPct(o.p_alta, 0), fmtPct(o.p_superar_rf, 0),
+        `${fmtPctS(o.q10, 0)} a ${fmtPctS(o.q90, 0)}`, `${fmtPctS(o.realizado, 1)} até ${fmtDateBR(o.fim)}`]), [1, 2, 4]));
+    $("fc-cal-note").textContent = c.nota + "." + (c.nota_horizonte ? " " + c.nota_horizonte + "." : "");
+  }
+  setChildren("fc-sens", table(["Premissa", "Retorno esperado (a.a.)", "Mediana no prazo", `Chance de superar o ${d.nome_taxa}`, "Chance de prejuízo"],
+    d.sensibilidade.map((r) => [r.premissa, fmtPct(r.retorno_esperado, 1), fmtPctS(r.mediana, 1), fmtPct(r.p_superar_rf, 0), fmtPct(r.p_prejuizo, 0)]), [1, 2, 3, 4]));
+  $("fc-hyp").textContent = "Hipótese registrada: " + d.registro.hipotese + ".";
+  setChildren("fc-inval", ...d.registro.invalidacao.map((t) => el("li", {}, t)));
+  const done = fcEntries().some((e) => e.registro && e.registro.gerado_em === d.registro.gerado_em && e.registro.ativo.ticker === d.ticker
+    && e.registro.horizonte_dias === d.registro.horizonte_dias);
+  $("fc-register").disabled = done;
+  $("fc-reg-status").textContent = done ? "Esta previsão já está no registro." : "";
+  const f = d.fatos_H, est = d.estimativas_E;
+  setChildren("fc-notes", ...d.avisos.map((w) => el("li", {}, w)),
+    el("li", {}, `Fatos [H] (${fmtDateBR(f.periodo[0])} a ${fmtDateBR(f.periodo[1])}): retorno médio de ${fmtPct(f.retorno_medio_anual, 1)} ao ano e volatilidade de ${fmtPct(f.volatilidade, 1)}` + (f.beta === null ? "." : `; beta de ${fmtNum(f.beta, 2)} contra o índice de referência.`)),
+    el("li", {}, `Estimativa [E]: retorno esperado de ${fmtPct(est.retorno_esperado, 1)} ao ano. A média do passado pesa ${fmtPct(est.peso_do_historico, 0)} (ela é incerta: erro padrão de ${fmtPct(est.erro_padrao_media, 1)}, intervalo de 95% de ${fmtPct(est.ic95_media_historica[0], 0)} a ${fmtPct(est.ic95_media_historica[1], 0)}) e o retorno exigido pelo risco, ${fmtPct(est.prior, 1)}, pesa o resto.`),
+    el("li", {}, `Renda fixa: ${d.nome_taxa} de ${fmtPct(d.taxa_livre_de_risco, 2)} ao ano (${d.fonte_taxa}).`),
+    el("li", { class: "muted" }, `Modelo ${d.registro.premissas.modelo}: probabilidades exatas da distribuição lognormal, sem sorteio.`),
+    ...d.fontes.map((x) => el("li", { class: "muted" }, `${x.dado}: ${x.fonte}` + (x.data ? ` (até ${fmtDateBR(x.data)})` : ""))),
+    el("li", { class: "muted" }, d.aviso));
+}
+async function runFc() {
+  const f = new FormData($("fc-form"));
+  const body = { ativo: String(f.get("ativo") || "").trim(), horizonte_anos: Number(f.get("horizonte_anos")), premio_risco: Number(f.get("premio")) / 100 };
+  const st = $("fc-status");
+  if (!body.ativo) { st.textContent = "Informe o código ou o nome do ativo."; return; }
+  if (!(body.premio_risco >= 0 && body.premio_risco <= 0.1)) { st.textContent = "O prêmio de risco deve ficar entre 0% e 10% ao ano."; return; }
+  $("fc-results").classList.add("hidden");
+  const btn = $("fc-run"); btn.disabled = true;
+  const live = liveStatus(st, "Buscando 10 anos de cotações…");
+  try {
+    const d = await postStream("/api/previsoes/prever", body, live.update);
+    live.stop();
+    renderFc(d);
+    st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s.` + (d.do_cache ? " (reaproveitado: mesmo pedido há menos de 15 min)" : "");
+    addHistory({ tipo: "previsao", titulo: `Previsão: ${shortTk(d.ticker)} em ${horizonLabel(d.horizonte_anos)}`, ticker: d.ticker, logo: d.logo,
+      resumo: `chance de superar o ${d.nome_taxa}: ${fmtPct(d.probabilidades.p_superar_rf, 0)} · mediana ${fmtPctS(d.quantis.p50, 0)}`, link: "#/previsoes/prever" });
+  } catch (e) {
+    live.stop();
+    st.textContent = (e.status === 400 || e.status === 422 ? "Atenção: " : "Erro: ") + e.message;
+  } finally { btn.disabled = false; }
+}
+$("fc-form").addEventListener("submit", (ev) => { ev.preventDefault(); runFc(); });
+function forecastTicker(t) {
+  if (!t) return;
+  location.hash = "#/previsoes/prever";
+  $("fc-form").elements["ativo"].value = t;
+  runFc();
+}
+$("fc-register").addEventListener("click", async () => {
+  if (!fcData) return;
+  const st = $("fc-reg-status"), btn = $("fc-register"), list = fcEntries();
+  btn.disabled = true;
+  try {
+    const r = await post("/api/previsoes/registrar", { registro: fcData.registro, hash_anterior: list.length ? list[list.length - 1].hash : GENESIS });
+    list.push(r.entrada);
+    if (!store.set(FC_KEY, list)) throw new Error("não foi possível guardar neste aparelho (armazenamento indisponível ou cheio)");
+    rgData = null;
+    st.textContent = r.retroativa
+      ? `Registrada, mas marcada como retroativa: os dados terminam em ${fmtDateBR(fcData.data_referencia)}, mais de 3 dias úteis antes de hoje, e ela fica fora das notas.`
+      : `Registrada. A avaliação fica disponível a partir de ${fmtDateBR(nextDay(fcData.registro.data_fim))}, na aba "Registro e acertos".`;
+    toast("Previsão registrada neste aparelho.", "save");
+    renderRgList();
+  } catch (e) {
+    btn.disabled = false;
+    st.textContent = (e.status === 400 || e.status === 422 ? "Atenção: " : "Erro: ") + e.message;
+  }
+});
+function rgSituation(r, ev, today) {
+  if (!ev) return String(r.data_fim) >= today ? `pendente até ${fmtDateBR(r.data_fim)}` : "pronta para avaliar";
+  if (ev.estado === "avaliada") return `avaliada: ${fmtPctS(ev.realizado, 1)}` + (ev.rf_realizado === null ? "" : ` (renda fixa ${fmtPctS(ev.rf_realizado, 1)})`)
+    + (ev.dentro_10_90 ? " · dentro da faixa de 80%" : " · fora da faixa de 80%");
+  if (ev.estado === "pendente") return `pendente até ${fmtDateBR(r.data_fim)} · até agora ${fmtPctS(ev.retorno_ate_agora, 1)}`
+    + (ev.invalidacao && ev.invalidacao.length ? " · invalidada: " + ev.invalidacao.join("; ") : "");
+  return `${ev.estado}: ${ev.motivo}`;
+}
+function renderRgList() {
+  const list = fcEntries();
+  if (!list.length) {
+    setChildren("rg-list", emptyState("list-checks", "Nenhuma previsão registrada", "Faça uma previsão na aba Prever e toque em \u201cRegistrar esta previsão\u201d. Quando o prazo terminar, a avaliação mostra se o modelo acertou.", "#/previsoes/prever", "Fazer uma previsão"));
+    $("rg-form").classList.add("hidden");
+    return;
+  }
+  $("rg-form").classList.remove("hidden");
+  const byIdx = new Map((rgData ? rgData.entradas : []).map((x) => [x.indice, x]));
+  const today = new Date().toISOString().slice(0, 10);
+  setChildren("rg-list", el("ul", { class: "list" }, ...list.map((e, i) => {
+    const r = e.registro || {}, a = r.ativo || {}, p = r.probabilidades || {};
+    const h = horizonLabel(Math.round((Number(r.horizonte_dias) || 0) / 365.25 * 4) / 4);
+    return el("li", {}, el("div", { class: "item" }, logoEl(a.ticker || "?", a.logo || null, 36),
+      el("span", {}, el("span", { class: "t" }, `${shortTk(a.ticker)} · ${h}`),
+        el("span", { class: "s" }, `dados de ${fmtDateBR(r.data_referencia)} · chance de subir ${fmtPct(p.p_alta, 0)} · de superar a renda fixa ${fmtPct(p.p_superar_rf, 0)}`),
+        el("span", { class: "s" }, rgSituation(r, byIdx.get(i), today))),
+      el("span", { class: "when" }, "até " + fmtDateBR(r.data_fim))));
+  })));
+}
+const RG_EVENTS = [["alta", "Subir"], ["superou_rf", "Superar a renda fixa"], ["superou_rf_apos_custos", "Superar a renda fixa, após custos"],
+  ["queda_20", "Cair mais de 20%"], ["superou_referencia", "Superar o índice de referência"]];
+function renderRg(d) {
+  rgData = d;
+  renderRgList();
+  $("rg-results").classList.remove("hidden");
+  const n = d.contagem || {}, m = d.metricas;
+  setChildren("rg-kpis",
+    kpi("Avaliadas", String(n["avaliada"] || 0), `${n["pendente"] || 0} pendentes · ${n["retroativa"] || 0} retroativas · ${(n["inválida"] || 0) + (n["sem dados"] || 0)} inválidas ou sem dados`),
+    ...(m ? [kpi("Brier: subir", m.alta ? fmtNum(m.alta.brier, 3) : "n/d", m.alta ? `habilidade de ${fmtPctS(m.alta.habilidade_vs_50, 0)} contra sempre dizer 50%` : ""),
+      kpi("Faixa de 80% acertou", fmtPct(m.cobertura_10_90, 0), "o esperado é perto de 80%"),
+      kpi("Retorno médio realizado", fmtPctS(m.realizado_medio, 1), `previsto (mediana média): ${fmtPctS(m.mediana_prevista_media, 1)} · após custos: ${fmtPctS(m.realizado_liquido_medio, 1)}`)]
+      : [kpi("Notas", "—", "aparecem quando o prazo da primeira previsão terminar")]));
+  if (m) {
+    setChildren("rg-metrics", table(["Evento", "Previsões", "Chance prevista (média)", "Aconteceu", "Brier", "Habilidade vs. 50%"],
+      RG_EVENTS.filter(([k]) => m[k]).map(([k, lab]) => { const x = m[k]; return [lab, String(x.n), fmtPct(x.previsto_medio, 0), fmtPct(x.frequencia_observada, 0), fmtNum(x.brier, 3), fmtPctS(x.habilidade_vs_50, 0)]; }), [1, 2, 3, 4, 5]));
+    const grp = (title, g) => el("div", {}, el("h3", {}, title), table(["Grupo", "Avaliadas", "Faixa de 80% acertou", "Brier: subir", "Brier: superar a renda fixa"],
+      Object.entries(g).map(([k, v]) => [k, String(v.n), fmtPct(v.cobertura_10_90, 0), v.brier_alta === undefined ? "—" : fmtNum(v.brier_alta, 3), v.brier_superou_rf === undefined ? "—" : fmtNum(v.brier_superou_rf, 3)]), [1, 2, 3, 4]));
+    setChildren("rg-groups", grp("Por classe", m.por_classe), grp("Por prazo", m.por_horizonte), grp("Por regime de volatilidade na data", m.por_regime));
+  }
+  $("rg-metrics-card").classList.toggle("hidden", !m);
+  $("rg-groups-card").classList.toggle("hidden", !m);
+  const bad = (d.integridade || []).filter((x) => !x.ok);
+  setChildren("rg-notes",
+    el("li", {}, bad.length ? `Integridade: ${bad.length} entrada(s) com problema — ` + bad.map((x) => `nº ${x.indice + 1}: ${x.problemas.join("; ")}`).join(" | ")
+      : `Integridade: as ${(d.integridade || []).length} entradas conferem (hashes encadeados${d.assinado_pelo_servidor ? " e selos do servidor" : ""}).`),
+    ...Object.entries(d.fontes_indisponiveis || {}).map(([k, v]) => el("li", {}, `${k}: ${v}`)),
+    ...d.notas.map((t) => el("li", { class: "muted" }, t)),
+    el("li", { class: "muted" }, `Avaliação de ${fmtDateBR(d.data_avaliacao)}, custo de ${fmtNum(d.custo_bps / 100, 2)}% por operação.`));
+}
+$("rg-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const list = fcEntries(), st = $("rg-status");
+  if (!list.length) { st.textContent = "Nenhuma previsão registrada ainda."; return; }
+  const custo = Number(new FormData($("rg-form")).get("custo"));
+  if (!(custo >= 0 && custo <= 5)) { st.textContent = "O custo deve ficar entre 0% e 5%."; return; }
+  const btn = $("rg-run"); btn.disabled = true;
+  const live = liveStatus(st, "Conferindo o registro…");
+  try {
+    const d = await postStream("/api/previsoes/avaliar", { entradas: list, custo_bps: Math.round(custo * 100) }, live.update);
+    live.stop();
+    renderRg(d);
+    st.textContent = `Avaliado em ${live.secs().toFixed(1).replace(".", ",")} s com as cotações disponíveis hoje.`;
+  } catch (e) {
+    live.stop();
+    st.textContent = (e.status === 400 || e.status === 422 ? "Atenção: " : "Erro: ") + e.message;
+  } finally { btn.disabled = false; }
+});
+renderRgList();
+
 // ---------- navigation: one view at a time; "#/view" routes, "#id" opens the view that holds the element
-const VIEW_NAMES = ["painel", "acoes", "oportunidades", "carteira", "laboratorio", "perfil"];
+const VIEW_NAMES = ["painel", "acoes", "oportunidades", "previsoes", "carteira", "laboratorio", "perfil"];
 let currentView = null;
 function onViewShown(name) {
   if (name === "laboratorio" && lastData) render(lastData);
   if (name === "acoes" && stockData) renderStock(stockData);
   if (name === "painel") { renderHistory(); renderLastPortfolio(); renderProfileChip(); renderMine(); }
   if (name === "carteira") { if (mcData) renderMc(mcData); if (rkData) renderRk(rkData); }
+  if (name === "previsoes") { if (fcData) renderFc(fcData); if (rgData) renderRg(rgData); else renderRgList(); }
   if (name === "perfil") renderDataSummary();
 }
 function showView(name, target, tab) {
@@ -2729,6 +3084,7 @@ function initLocal() {
   fillProfileForm(p); applyProfile(p);
   renderProfileChip(); renderHistory(); renderLastPortfolio(); renderDataSummary();
   pf = loadPf(); renderPosEditor(); renderMovEditor(); renderMine();
+  rgData = null; renderRgList();
 }
 initLocal();
 route();

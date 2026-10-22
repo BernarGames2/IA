@@ -216,6 +216,17 @@
     piores; VaR de 10 dias por retornos sobrepostos (histórico) e raiz do tempo (normal); choques hipotéticos =
     beta medido × choque (relação passada que pode mudar; o efeito combinado não é a soma). As posições ficam no
     navegador do investidor: trocar de aparelho exige exportar e importar.
+53. **Previsões probabilísticas**: o modelo é o do "Vale a pena?" (encolhimento para renda fixa + beta × prêmio de
+    4%, tau 10%, volatilidade dos últimos 5 anos, retorno log-normal com retornos independentes); sem caudas
+    gordas, sem mudança de volatilidade no prazo, sem notícias ou fundamentos. Renda fixa: a taxa ao vivo (Selic do
+    BCB ou `^IRX`), senão a do último dia do índice histórico (CDI ou `^IRX` acumulado), senão o valor de
+    demonstração rotulado; nunca zero. Calibração: origens a cada 21 pregões, janela de até 5 anos (mínimo 2), só
+    com dados até a origem; origem sem taxa de juros conhecida é descartada; prazos acima de 12 meses são avaliados
+    pelo mesmo modelo em 12 meses (10 anos de dados não têm janelas independentes suficientes para prazos longos).
+    Registro: no aparelho do investidor; retroativa = mais de 3 dias úteis entre a data dos dados e o registro;
+    pendente até o dia seguinte ao fim do prazo; resultado medido com a série ajustada atual; custo informado
+    aplicado na compra e na venda. Sem a chave `QPI_AUDIT_KEY` no servidor, a cadeia de hashes só detecta edições
+    acidentais. Registrar só algumas previsões (as de que se gostou) distorce as notas.
 
 ## Itens pendentes / próximos passos
 
