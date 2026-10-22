@@ -8,11 +8,11 @@ matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-476 passed, 1 skipped (477 testes)
+484 passed, 1 skipped (485 testes)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
 
-(Registros anteriores: 464 passed, 1 skipped antes da correção de valores pequenos — seção 15; 452 passed, 1 skipped
+(Registros anteriores: 476 passed, 1 skipped antes de "Minha carteira" e do risco — seção 17; 464 passed, 1 skipped antes da correção de valores pequenos — seção 15; 452 passed, 1 skipped
 antes da "Ação do dia" — seção 14; 414 passed, 1 skipped antes dos
 logos — seção 13; 361 passed, 1 skipped antes das correções
 da revisão adversarial — seção 12; 328 passed, 1 skipped antes do motor dinâmico.)
@@ -390,3 +390,25 @@ por todas as telas pelo menu lateral, pela barra inferior e pela folha "Mais"; b
 em 0,8 s); Ação do dia (0,5 s); laboratório sintético (17 s); perfil salvo e aplicado aos formulários (perfil
 arrojado; horizonte 8 anos → opção mais próxima, 10 anos); tema claro e escuro; link antigo `#d-title` abre a tela
 Oportunidades. Sem erros de JavaScript e sem rolagem horizontal em nenhum dos tamanhos.
+
+## 17. Minha carteira e risco
+
+`tests/test_portfolio_analytics.py` (8 testes, dublês de mercado e do BCB):
+
+| O que se verifica | Resultado |
+|---|---|
+| método das cotas e TIR em casos feitos à mão (aporte no meio do período; 10% em um ano) | passa |
+| movimentações viram quantidades e fluxos; venda sem preço usa o fechamento do dia; venda maior que a posição é recusada | passa |
+| patrimônio = Σ quantidade × preço (dólar × USDBRL=X do dia) + caixa; pesos e distribuições somam 100%; índices na mesma janela da carteira; alerta do limite por ativo do perfil | passa |
+| com uma compra: rentabilidade = preço final / preço da compra − 1; resultado e TIR conferidos | passa |
+| ativo sem dados listado e fora do patrimônio; com data de referência anterior, nenhum preço posterior é usado | passa |
+| risco: contribuições somam 100%; VaR ≤ CVaR; crise da COVID só com dados de 2020 (10 anos) e "sem dados suficientes" com 5 anos; choques = beta × choque; texto sem linguagem de garantia | passa |
+| liquidez = valor / (20% do volume médio em reais); sem volume → "não medido" | passa |
+| rotas `/api/carteira/painel` e `/api/carteira/risco`: 200, cache de 15 min, 422 sem posições, 400 para venda maior que a posição | passa |
+
+Navegador (servidor local com dublês, 1440 e 390 px): lista colada ("PETR4 100 28,50", "CAIXA_CDI 2.000"…), painel em
+0,2 s (patrimônio, rentabilidade contra CDI/Ibovespa/S&P, evolução em base 100, distribuição, alertas), risco em 3,2 s
+(VaR/CVaR em reais, contribuição para o risco, correlação normal × estresse, liquidez, sensibilidades, crises), resumo
+no Painel; o link antigo `#p-title` abre a aba "Montar carteira"; sem erros de JavaScript e sem rolagem horizontal.
+Cotações reais não puderam ser consultadas aqui (Yahoo e BCB bloqueados pela rede). Suíte completa depois desta etapa: 484 aprovados, 1 pulado (o teste online).
+

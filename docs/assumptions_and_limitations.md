@@ -205,6 +205,17 @@
     tentadas (até 5 por etapa), a carteira-alvo fica como referência e o aviso diz que as posições pequenas ficam
     fora da compra (ou entram pelos aportes, quando há aportes). Turnover máximo também não entra (não é usado no
     motor de propósito). O mínimo depende dos preços do dia: pode mudar de um dia para o outro.
+52. **Minha carteira e risco**: preços ajustados por proventos (o retorno já inclui dividendos; proventos digitados
+    viram renda recebida e não entram de novo no retorno); dólar convertido pelo `USDBRL=X` do mesmo dia (o último
+    até 5 pregões antes, nunca um posterior); preço carregado só por feriados (até 5 pregões); nenhum preço depois
+    da data de referência. Caixa (`CAIXA_CDI`) sem movimentações: valor de hoje, para trás descontado pelo CDI pago
+    (hipótese). Método das cotas com fluxos no início do dia, `r_t = V_t / (V_{t−1} + F_t) − 1` (o primeiro dia
+    avaliado é a base 100); TIR pelos fluxos do investidor. Sem movimentações, evolução hipotética das quantidades
+    de hoje. Risco: ativos com menos de 252 pregões ficam fora das estatísticas (com o peso informado); dias de
+    estresse pela volatilidade de 20 pregões do Ibovespa conhecida no dia (quintil superior) ou retorno entre os 5%
+    piores; VaR de 10 dias por retornos sobrepostos (histórico) e raiz do tempo (normal); choques hipotéticos =
+    beta medido × choque (relação passada que pode mudar; o efeito combinado não é a soma). As posições ficam no
+    navegador do investidor: trocar de aparelho exige exportar e importar.
 
 ## Itens pendentes / próximos passos
 

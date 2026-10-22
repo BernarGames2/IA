@@ -293,6 +293,23 @@ svg text { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe U
   white-space: nowrap; vertical-align: 1px; }
 .buy { font-size: 1.08rem; font-weight: 700; margin: 12px 0 4px; }
 
+/* ===================================================================== editors, matrices */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+table.edit td { padding: 6px 8px; vertical-align: middle; }
+table.edit input, table.edit select { min-height: 36px; padding: 6px 9px; font-size: 0.88rem; }
+table.edit td.num input { text-align: right; font-variant-numeric: tabular-nums; }
+table.edit .icon-btn { width: 36px; height: 36px; min-height: 36px; border-color: transparent; }
+table.edit tbody tr:hover td { background: transparent; }
+table.corr { font-size: 0.78rem; }
+table.corr td, table.corr th { padding: 6px 7px; text-align: center; }
+table.corr td { font-variant-numeric: tabular-nums; }
+.alert-item { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; margin: 6px 0;
+  background: var(--surface-2); border: 1px solid var(--line); font-size: 0.88rem; }
+.alert-item .icon { margin-top: 2px; }
+.alert-item.alta .icon { color: var(--neg); } .alert-item.media .icon { color: var(--amber); } .alert-item.info .icon { color: var(--info); }
+.alert-item small { display: block; color: var(--ink-3); font-size: 0.74rem; margin-top: 2px; }
+.mine { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); gap: 12px; }
+
 /* ===================================================================== dashboard */
 .actions-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); gap: 12px; margin: 0 0 16px; }
 .action { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 16px;
@@ -520,6 +537,12 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
             <span><strong>Laboratório quantitativo</strong><span class="d">Fronteira eficiente, Monte Carlo, VaR e backtest</span></span>
             <svg class="icon"><use href="#i-chevron-right"/></svg></a>
         </div>
+        <section class="card" aria-labelledby="mine-h">
+          <div class="card-head"><div><h2 id="mine-h">Minha carteira</h2>
+            <p class="muted">Resumo da última atualização do painel da sua carteira neste aparelho.</p></div>
+            <a class="btn ghost sm" href="#/carteira/minha"><svg class="icon"><use href="#i-wallet"/></svg>Abrir</a></div>
+          <div id="painel-mine"></div>
+        </section>
         <div class="grid2">
           <section class="card" aria-labelledby="last-h">
             <div class="card-head"><div><h2 id="last-h">Sua última carteira montada</h2>
@@ -646,7 +669,112 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
       </section>
 
       <!-- ============================================================ CARTEIRA -->
-      <section class="view" data-view="carteira" data-title="Carteira" data-eyebrow="Investir" aria-labelledby="p-title" hidden>
+      <section class="view" data-view="carteira" data-title="Carteira" data-eyebrow="Investir" aria-label="Carteira" hidden>
+        <div class="tabs" role="tablist" aria-label="Carteira" data-tabs="carteira">
+          <button type="button" role="tab" data-tab="minha" aria-selected="true"><svg class="icon"><use href="#i-wallet"/></svg>Minha carteira</button>
+          <button type="button" role="tab" data-tab="risco" aria-selected="false"><svg class="icon"><use href="#i-shield"/></svg>Risco</button>
+          <button type="button" role="tab" data-tab="montar" aria-selected="false"><svg class="icon"><use href="#i-briefcase-business"/></svg>Montar carteira</button>
+        </div>
+
+        <div role="tabpanel" data-panel="minha">
+          <section class="card">
+            <div class="card-head"><div>
+              <h2 id="mc-title">Minha carteira</h2>
+              <p class="lead">Cadastre o que você tem: código e quantidade (o preço médio é opcional). O painel calcula o
+                patrimônio com cotações reais, a evolução, a rentabilidade comparada ao CDI, ao Ibovespa e ao S&amp;P 500, a
+                distribuição e os alertas do seu perfil. Para caixa (CDB, Tesouro Selic, conta remunerada) use
+                <code>CAIXA_CDI</code> com o valor em reais na quantidade.</p></div>
+              <span class="badge local"><svg class="icon"><use href="#i-lock"/></svg>Só neste aparelho</span></div>
+            <div class="tbl"><table class="edit" id="mc-pos"><thead><tr><th>Ativo</th><th class="num">Quantidade</th>
+              <th class="num">Preço médio (opcional)</th><th><span class="sr-only">Remover</span></th></tr></thead><tbody></tbody></table></div>
+            <div class="row" style="margin-top:10px">
+              <button class="secondary sm" type="button" id="mc-add"><svg class="icon"><use href="#i-plus"/></svg>Adicionar ativo</button>
+            </div>
+            <details class="more" style="margin-top:12px"><summary>Colar uma lista (um ativo por linha: código, quantidade e, se quiser, preço médio)</summary>
+              <div class="subform"><label class="span-all">Lista<textarea id="mc-paste" maxlength="6000" placeholder="PETR4 100 28,50&#10;AAPL 10&#10;CAIXA_CDI 2000"></textarea></label>
+                <button class="secondary sm" type="button" id="mc-paste-go">Adicionar à carteira</button></div>
+            </details>
+            <details class="more" style="margin-top:12px"><summary>Movimentações (opcional): compras, vendas e proventos — com elas o painel mostra o seu histórico real e a rentabilidade do seu dinheiro</summary>
+              <div class="tbl" style="margin-top:10px"><table class="edit" id="mc-mov"><thead><tr><th>Data</th><th>Ativo</th><th>Tipo</th>
+                <th class="num">Quantidade</th><th class="num">Preço</th><th class="num">Provento (R$)</th><th><span class="sr-only">Remover</span></th></tr></thead><tbody></tbody></table></div>
+              <div class="row" style="margin-top:10px"><button class="secondary sm" type="button" id="mc-mov-add"><svg class="icon"><use href="#i-plus"/></svg>Adicionar movimentação</button>
+                <span class="hint">Preço em branco: usa o fechamento do dia. Proventos entram como renda recebida (as cotações já são ajustadas por eles).</span></div>
+            </details>
+            <form id="mc-form" style="margin-top:16px">
+              <label>Período
+                <select name="periodo"><option value="1m">1 mês</option><option value="3m">3 meses</option><option value="6m">6 meses</option>
+                  <option value="ytd">No ano</option><option value="1a" selected>12 meses</option><option value="3a">3 anos</option><option value="inicio">Desde o início</option></select>
+              </label>
+              <label>Perfil (para os alertas)
+                <select name="perfil"><option value="">Não informado</option><option value="conservador">Conservador</option>
+                  <option value="moderado">Moderado</option><option value="arrojado">Arrojado</option></select>
+              </label>
+              <button id="mc-run" type="submit"><svg class="icon"><use href="#i-refresh-cw"/></svg>Atualizar painel</button>
+            </form>
+            <div class="status" id="mc-status" role="status" aria-live="polite"></div>
+          </section>
+          <div id="mc-results" class="hidden">
+            <div class="kpis" id="mc-kpis"></div>
+            <section class="card"><div class="card-head"><div><h2>Evolução</h2><p class="muted" id="mc-ev-note"></p></div></div>
+              <div class="legend" id="mc-ev-legend"></div><div class="chart" id="mc-ev"></div></section>
+            <div class="grid2">
+              <section class="card"><h2>Rentabilidade por período</h2><p class="muted" id="mc-rets-note"></p><div class="tbl" id="mc-rets"></div></section>
+              <section class="card"><h2>Distribuição</h2><div class="tabs" role="tablist" aria-label="Distribuição" data-tabs="mc-alloc">
+                <button type="button" role="tab" data-tab="ativo" aria-selected="true">Ativo</button><button type="button" role="tab" data-tab="classe" aria-selected="false">Classe</button>
+                <button type="button" role="tab" data-tab="setor" aria-selected="false">Setor</button><button type="button" role="tab" data-tab="moeda" aria-selected="false">Moeda</button></div>
+                <div id="mc-alloc"></div></section>
+            </div>
+            <section class="card"><h2>Alertas</h2><ul class="clean plain" id="mc-alerts"></ul></section>
+            <section class="card"><h2>Posições</h2><div class="tbl" id="mc-positions"></div></section>
+            <section class="card" id="mc-moves-card"><h2>Movimentações registradas</h2><div class="tbl" id="mc-moves"></div></section>
+            <section class="card"><h2>Fontes e avisos</h2><ul class="clean" id="mc-notes"></ul></section>
+          </div>
+        </div>
+
+        <div role="tabpanel" data-panel="risco" hidden>
+          <section class="card">
+            <div class="card-head"><div>
+              <h2 id="rk-title">Risco da sua carteira</h2>
+              <p class="lead">Mede o risco da carteira de hoje com até 5 anos de cotações reais (e 10 anos para os testes de
+                estresse): quanto ela oscila, quanto pode perder em dias ruins (VaR e CVaR), as maiores quedas, se os ativos
+                passam a cair juntos em crises, quem mais pesa no risco, quanto tempo levaria para vender, a sensibilidade ao
+                mercado, ao dólar e aos juros, e como ela teria passado por crises reais. Usa as posições de "Minha carteira".
+                Estimativas do passado, não limites de perda.</p></div>
+              <span class="badge real"><svg class="icon"><use href="#i-database"/></svg>Cotações reais</span></div>
+            <form id="rk-form">
+              <label>Confiança
+                <select name="confianca"><option value="0.95" selected>95% (1 dia ruim em 20)</option><option value="0.99">99% (1 em 100)</option></select>
+              </label>
+              <label>Horizonte do VaR
+                <select name="horizonte"><option value="1" selected>1 dia</option><option value="10">10 dias</option></select>
+              </label>
+              <button id="rk-run" type="submit"><svg class="icon"><use href="#i-shield"/></svg>Analisar risco</button>
+            </form>
+            <div class="status" id="rk-status" role="status" aria-live="polite"></div>
+          </section>
+          <div id="rk-results" class="hidden">
+            <div class="kpis" id="rk-kpis"></div>
+            <section class="card"><h2>O que explica o risco</h2><p id="rk-explain" class="lead"></p>
+              <div class="legend"><span><i style="background:var(--s1)"></i>Peso no dinheiro</span><span><i style="background:var(--s2)"></i>Participação no risco</span></div>
+              <div class="chart" id="rk-contrib"></div></section>
+            <div class="grid2">
+              <section class="card"><h2>Perdas em dias ruins (VaR e CVaR)</h2><p class="muted">VaR: perda que só foi superada em 5% (ou 1%) dos dias; CVaR: a perda média nesses piores dias.</p><div class="tbl" id="rk-var"></div></section>
+              <section class="card"><h2>Testes de estresse</h2><p class="muted">Crises reais com os pesos de hoje, e choques hipotéticos pelas sensibilidades medidas.</p>
+                <div class="tbl" id="rk-stress-h"></div><h3>Choques hipotéticos</h3><div class="tbl" id="rk-stress-x"></div></section>
+            </div>
+            <section class="card"><h2>Correlação em tempos normais e em crises</h2><p id="rk-corr-sum"></p>
+              <div class="grid2"><div><h3>Dias normais</h3><div class="tbl" id="rk-corr-n"></div></div><div><h3>Dias de estresse</h3><div class="tbl" id="rk-corr-s"></div></div></div>
+              <p class="kind" id="rk-corr-rule"></p></section>
+            <div class="grid2">
+              <section class="card"><h2>Sensibilidades</h2><p class="muted">Correlação medida no histórico, não prova de causa.</p><div class="tbl" id="rk-sens"></div></section>
+              <section class="card"><h2>Liquidez</h2><p class="muted">Dias para vender negociando até 20% do volume médio diário.</p><div class="tbl" id="rk-liq"></div></section>
+            </div>
+            <section class="card"><h2>Concentração</h2><div id="rk-conc"></div></section>
+            <section class="card"><h2>Fontes e avisos</h2><ul class="clean" id="rk-notes"></ul></section>
+          </div>
+        </div>
+
+        <div role="tabpanel" data-panel="montar" hidden>
         <section class="card">
           <div class="card-head"><div>
             <h2 id="p-title">Montar carteira com propósito</h2>
@@ -755,6 +883,7 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
           <section class="card"><h2>Alertas de validação</h2><ul class="clean" id="p-alerts"></ul>
             <p><a class="btn ghost sm" id="p-download" href="#" download="carteira_proposito.md"><svg class="icon"><use href="#i-download"/></svg>Baixar relatório completo (Markdown)</a></p></section>
           <section class="card"><h2>Fontes dos dados</h2><ul class="clean" id="p-sources"></ul><p class="kind" id="p-repro"></p></section>
+        </div>
         </div>
       </section>
 
@@ -2121,6 +2250,7 @@ function applyProfile(p) {
   setField("p-form", "necessidade_liquidez", pct(p.necessidade_liquidez)); setField("p-form", "mercados", p.mercados);
   setField("p-form", "valor_minimo_posicao", p.valor_minimo_posicao); setField("p-form", "fracionario_eua", p.fracionario_eua);
   setField("form", "profile", p.perfil_risco); setField("form", "horizon_years", p.horizonte_anos);
+  setField("mc-form", "perfil", p.perfil_risco);
 }
 function fillProfileForm(p) {
   if (!p) return;
@@ -2155,7 +2285,8 @@ $("pf-form").addEventListener("submit", (ev) => {
 function renderDataSummary() {
   const keys = store.keys();
   const label = { "qpi-perfil": "perfil", "qpi-historico": "histórico de análises", "qpi-ultima-carteira-real": "última carteira (real)",
-    "qpi-ultima-carteira-sintetico": "última carteira (demonstração)", "qpi-theme": "tema" };
+    "qpi-ultima-carteira-sintetico": "última carteira (demonstração)", "qpi-theme": "tema", "qpi-carteira": "minha carteira (posições e movimentações)",
+    "qpi-carteira-resumo": "resumo do painel da carteira" };
   $("data-summary").textContent = keys.length ? "Guardado neste aparelho: " + keys.map((k) => label[k] || k.replace(/^qpi-/, "")).join(", ") + "."
     : "Nada guardado neste aparelho ainda.";
 }
@@ -2190,17 +2321,355 @@ $("data-clear").addEventListener("click", () => {
   initLocal();
 });
 
+// ---------- tabs: [role=tablist][data-tabs] buttons [data-tab] switch the sibling panels [data-panel]
+function selectTab(list, name, focus = false) {
+  const tabs = [...list.querySelectorAll('[role="tab"]')];
+  if (!tabs.some((t) => t.dataset.tab === name)) return;
+  tabs.forEach((t) => { const on = t.dataset.tab === name; t.setAttribute("aria-selected", on ? "true" : "false"); t.tabIndex = on ? 0 : -1; if (on && focus) t.focus(); });
+  list.parentElement.querySelectorAll(':scope > [role="tabpanel"][data-panel]').forEach((p) => { p.hidden = p.dataset.panel !== name; });
+  list.dispatchEvent(new CustomEvent("tabchange", { detail: name }));
+}
+document.querySelectorAll('[role="tablist"][data-tabs]').forEach((list) => {
+  list.querySelectorAll('[role="tab"]').forEach((t) => { t.tabIndex = t.getAttribute("aria-selected") === "true" ? 0 : -1; });
+  list.addEventListener("click", (ev) => { const t = ev.target.closest('[role="tab"]'); if (t) selectTab(list, t.dataset.tab); });
+  list.addEventListener("keydown", (ev) => {
+    if (ev.key !== "ArrowRight" && ev.key !== "ArrowLeft") return;
+    const tabs = [...list.querySelectorAll('[role="tab"]')], i = tabs.findIndex((t) => t.getAttribute("aria-selected") === "true");
+    selectTab(list, tabs[(i + (ev.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length].dataset.tab, true);
+    ev.preventDefault();
+  });
+});
+function openTabOf(node) {
+  const panel = node && node.closest('[role="tabpanel"][data-panel]');
+  if (!panel) return;
+  const list = panel.parentElement.querySelector(':scope > [role="tablist"][data-tabs]');
+  if (list) selectTab(list, panel.dataset.panel);
+}
+
+// ---------- small formatters and charts shared by the newer tools
+const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const fmtPctS = (x, d = 1) => (x === null || x === undefined || !isFinite(x)) ? "n/d" : (x > 0 ? "+" : "") + fmtPct(x, d);
+const fmtDateShort = (iso) => { const [y, m] = String(iso).split("-"); return `${MONTHS[Number(m) - 1] || "?"}/${String(y).slice(2)}`; };
+const fmtDateBR = (iso) => { const [y, m, d] = String(iso).split("-"); return d ? `${d}/${m}/${y}` : String(iso); };
+function lineChart(id, dates, series, opts = {}) {
+  const pts = series.flatMap((se) => se.values.filter((v) => v !== null && isFinite(v)));
+  if (!dates.length || !pts.length) { setChildren(id, el("p", { class: "muted" }, "Sem dados para o gráfico.")); return; }
+  const W = widthOf(id, 1100), H = opts.height || (W < 500 ? 240 : 300), L = 52, R = 12, T = 12, B = 30;
+  let lo = Math.min(...pts), hi = Math.max(...pts);
+  const pad = (hi - lo) * 0.08 || 1; lo -= pad; hi += pad;
+  const n = dates.length, x = lin(0, Math.max(1, n - 1), L, W - R), y = lin(lo, hi, H - B, T);
+  const svg = frame(W, H);
+  gridY(svg, y, ticks(lo, hi, 5), L, W - R, opts.fmtY || ((v) => fmtNum(v, 0)));
+  const every = Math.max(1, Math.floor(n / (W < 600 ? 3 : 6)));
+  for (let i = 0; i < n; i += every) svg.append(s("text", { x: x(i), y: H - B + 17, "text-anchor": "middle", "font-size": 11, fill: "var(--muted)" }, fmtDateShort(dates[i])));
+  if (opts.base !== undefined && opts.base >= lo && opts.base <= hi) svg.append(s("line", { x1: L, x2: W - R, y1: y(opts.base), y2: y(opts.base), stroke: "var(--axis)", "stroke-dasharray": "3 3" }));
+  for (const se of series.slice().reverse()) {
+    let d = "", pen = false;
+    se.values.forEach((v, i) => { if (v === null || !isFinite(v)) { pen = false; return; } d += (pen ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1); pen = true; });
+    svg.append(s("path", { d, fill: "none", stroke: se.color, "stroke-width": se.width || 1.6, "stroke-dasharray": se.dash || "", "stroke-linejoin": "round", "stroke-linecap": "round" }));
+  }
+  const fmtTip = opts.fmtTip || ((v) => fmtNum(v, 1));
+  crosshair(svg, [...Array(n).keys()], x, T, H - B, (i) => fmtDateBR(dates[i]) + "\n" + series.map((se) => `${se.name}: ${se.values[i] === null || se.values[i] === undefined ? "n/d" : fmtTip(se.values[i])}`).join("\n"));
+  setChildren(id, svg);
+}
+function chartPairs(id, rows, aKey, bKey, aName, bName) {
+  const W = widthOf(id, 900), rowH = 30, top = 6, left = W < 480 ? 92 : 140, right = 56, H = top + rows.length * rowH + 30;
+  const svg = frame(W, H);
+  const maxV = Math.max(0.05, ...rows.map((r) => Math.max(r[aKey], r[bKey], 0)));
+  const x = lin(0, maxV, left, W - right);
+  gridX(svg, x, ticks(0, maxV, 4), top, H - 26, (v) => fmtPct(v, 0));
+  rows.forEach((r, i) => {
+    const y0 = top + i * rowH + 4, bh = 10, label = String(r.ticker).replace(/\.SA$/, "");
+    const tipTxt = `${r.ticker}${r.nome ? " — " + r.nome : ""}\n${aName}: ${fmtPct(r[aKey], 1)}\n${bName}: ${fmtPct(r[bKey], 1)}`;
+    svg.append(s("text", { x: left - 8, y: y0 + 13, "text-anchor": "end", "font-size": 11, fill: "var(--ink2)" }, label));
+    svg.append(s("rect", { x: x(0), y: y0, width: Math.max(0, x(Math.max(0, r[aKey])) - x(0)), height: bh, rx: 2, fill: "var(--s1)" }));
+    svg.append(s("rect", { x: x(0), y: y0 + bh + 2, width: Math.max(0, x(Math.max(0, r[bKey])) - x(0)), height: bh, rx: 2, fill: "var(--s2)" }));
+    svg.append(s("text", { x: x(Math.max(0, r[bKey], r[aKey])) + 6, y: y0 + 16, "font-size": 10.5, fill: "var(--ink2)" }, fmtPct(r[bKey], 0)));
+    svg.append(s("rect", { x: 0, y: y0 - 3, width: W, height: rowH - 2, fill: "transparent", "data-tip": tipTxt }));
+  });
+  setChildren(id, svg);
+}
+function barsList(entries, fmt = (v) => fmtPct(v, 1)) {
+  return el("div", { class: "bars" }, ...entries.map(([label, v, sub]) => el("div", { class: "bar-row" },
+    el("span", {}, label, sub ? el("span", { class: "kind" }, " · " + sub) : ""), el("span", { class: "num" }, fmt(v)),
+    el("div", { class: "track" }, el("div", { class: "fill", style: `width:${Math.max(1, Math.min(100, v * 100))}%` })))));
+}
+function corrTable(names, m) {
+  const short = (t) => String(t).replace(/\.SA$/, "");
+  const head = el("tr", {}, el("th", {}, ""), ...names.map((n) => el("th", {}, short(n))));
+  const body = el("tbody", {}, ...m.map((row, i) => el("tr", {}, el("th", {}, short(names[i])), ...row.map((v, j) => {
+    const a = i === j ? 0 : Math.min(1, Math.abs(v)) * 0.6;
+    const bg = v >= 0 ? `rgba(76,157,255,${a.toFixed(2)})` : `rgba(245,165,36,${a.toFixed(2)})`;
+    return el("td", { style: `background:${bg}` }, i === j ? "—" : fmtNum(v, 2));
+  }))));
+  return el("table", { class: "corr" }, el("thead", {}, head), body);
+}
+function alertItems(list) {
+  const ico = { alta: "triangle-alert", media: "circle-help", info: "info" };
+  return list.map((a) => el("li", { class: "alert-item " + (a.nivel || "info") }, icon(ico[a.nivel] || "info"),
+    el("span", {}, a.texto, a.regra ? el("small", {}, "Regra: " + a.regra) : "")));
+}
+
+// ---------- my portfolio (positions and movements kept on this device)
+const PF_KEY = "qpi-carteira", PF_SUM_KEY = "qpi-carteira-resumo";
+function loadPf() {
+  const v = store.get(PF_KEY, null);
+  return { posicoes: Array.isArray(v && v.posicoes) ? v.posicoes : [], movimentos: Array.isArray(v && v.movimentos) ? v.movimentos : [] };
+}
+let pf = loadPf();
+function savePf() { store.set(PF_KEY, pf); }
+const numText = (x) => (x === null || x === undefined) ? "" : String(x);
+function readNum(v) { const t = String(v === null || v === undefined ? "" : v).trim(); if (!t) return null; const x = parseAmount(t); return isFinite(x) ? x : NaN; }
+function renderPosEditor() {
+  if (!pf.posicoes.length) pf.posicoes.push({ ticker: "", quantidade: "", preco_medio: "" });
+  setChildren("mc-pos-body", ...pf.posicoes.map((p, i) => {
+    const t = el("input", { value: p.ticker || "", maxlength: "20", placeholder: "PETR4", "aria-label": "Código do ativo", autocapitalize: "characters", autocomplete: "off" });
+    const q = el("input", { value: numText(p.quantidade), inputmode: "decimal", placeholder: "100", "aria-label": "Quantidade", autocomplete: "off" });
+    const m = el("input", { value: numText(p.preco_medio), inputmode: "decimal", placeholder: "opcional", "aria-label": "Preço médio", autocomplete: "off" });
+    t.addEventListener("input", () => { pf.posicoes[i].ticker = t.value.trim().toUpperCase(); savePf(); });
+    q.addEventListener("input", () => { pf.posicoes[i].quantidade = q.value.trim(); savePf(); });
+    m.addEventListener("input", () => { pf.posicoes[i].preco_medio = m.value.trim(); savePf(); });
+    const rm = el("button", { class: "icon-btn", type: "button", "aria-label": "Remover " + (p.ticker || "linha") }, icon("trash-2"));
+    rm.addEventListener("click", () => { pf.posicoes.splice(i, 1); savePf(); renderPosEditor(); });
+    return el("tr", {}, el("td", {}, t), el("td", { class: "num" }, q), el("td", { class: "num" }, m), el("td", {}, rm));
+  }));
+}
+function renderMovEditor() {
+  setChildren("mc-mov-body", ...pf.movimentos.map((mv, i) => {
+    const d = el("input", { type: "date", value: mv.data || "", "aria-label": "Data" });
+    const t = el("input", { value: mv.ticker || "", maxlength: "20", placeholder: "PETR4", "aria-label": "Código do ativo", autocapitalize: "characters", autocomplete: "off" });
+    const k = el("select", { "aria-label": "Tipo" }, ...[["compra", "Compra"], ["venda", "Venda"], ["dividendo", "Provento"]].map(([v, lab]) => el("option", { value: v }, lab)));
+    k.value = mv.tipo || "compra";
+    const q = el("input", { value: numText(mv.quantidade), inputmode: "decimal", placeholder: "100", "aria-label": "Quantidade", autocomplete: "off" });
+    const pr = el("input", { value: numText(mv.preco), inputmode: "decimal", placeholder: "fechamento", "aria-label": "Preço", autocomplete: "off" });
+    const v = el("input", { value: numText(mv.valor), inputmode: "decimal", placeholder: "só provento", "aria-label": "Valor do provento", autocomplete: "off" });
+    const bind = (node, key, f = (x) => x) => node.addEventListener("input", () => { pf.movimentos[i][key] = f(node.value.trim()); savePf(); });
+    bind(d, "data"); bind(t, "ticker", (x) => x.toUpperCase()); bind(q, "quantidade"); bind(pr, "preco"); bind(v, "valor");
+    k.addEventListener("change", () => { pf.movimentos[i].tipo = k.value; savePf(); });
+    const rm = el("button", { class: "icon-btn", type: "button", "aria-label": "Remover movimentação" }, icon("trash-2"));
+    rm.addEventListener("click", () => { pf.movimentos.splice(i, 1); savePf(); renderMovEditor(); });
+    return el("tr", {}, el("td", {}, d), el("td", {}, t), el("td", {}, k), el("td", { class: "num" }, q), el("td", { class: "num" }, pr), el("td", { class: "num" }, v), el("td", {}, rm));
+  }));
+}
+$("mc-pos").tBodies[0].id = "mc-pos-body";
+$("mc-mov").tBodies[0].id = "mc-mov-body";
+$("mc-add").addEventListener("click", () => { pf.posicoes.push({ ticker: "", quantidade: "", preco_medio: "" }); savePf(); renderPosEditor();
+  const rows = $("mc-pos-body").rows; rows[rows.length - 1].querySelector("input").focus(); });
+$("mc-mov-add").addEventListener("click", () => { pf.movimentos.push({ data: "", ticker: "", tipo: "compra", quantidade: "", preco: "", valor: "" }); savePf(); renderMovEditor(); });
+$("mc-paste-go").addEventListener("click", () => {
+  const bad = [];
+  pf.posicoes = pf.posicoes.filter((p) => p.ticker || p.quantidade);
+  for (const raw of $("mc-paste").value.split(/\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    const m = line.match(/^([A-Za-z0-9_.\-]+)[\s;:]+([\d.,]+)(?:[\s;]+R?\$?\s*([\d.,]+))?$/);
+    if (!m || !(parseAmount(m[2]) > 0)) { bad.push(line); continue; }
+    pf.posicoes.push({ ticker: m[1].toUpperCase(), quantidade: m[2], preco_medio: m[3] || "" });
+  }
+  savePf(); renderPosEditor();
+  $("mc-status").textContent = bad.length ? "Linhas não entendidas: " + bad.join(" | ") + ". Use: código, quantidade e, se quiser, preço médio." : "Lista adicionada.";
+  if (!bad.length) $("mc-paste").value = "";
+});
+function pfBody() {
+  const bad = [], posicoes = [], movimentos = [];
+  for (const p of pf.posicoes) {
+    const t = String(p.ticker || "").trim().toUpperCase();
+    if (!t && !String(p.quantidade || "").trim()) continue;
+    const q = readNum(p.quantidade), m = readNum(p.preco_medio);
+    if (!t || !(q > 0) || Number.isNaN(m)) { bad.push(t || "(linha sem código)"); continue; }
+    if (["CAIXA_CDI", "CAIXA", "CDI"].includes(t)) posicoes.push({ ticker: "CAIXA_CDI", valor: q });
+    else posicoes.push({ ticker: t, quantidade: q, ...(m > 0 ? { preco_medio: m } : {}) });
+  }
+  for (const mv of pf.movimentos) {
+    const t = String(mv.ticker || "").trim().toUpperCase();
+    if (!t && !mv.data) continue;
+    const q = readNum(mv.quantidade), pr = readNum(mv.preco), v = readNum(mv.valor);
+    if (!t || !mv.data || [q, pr, v].some((x) => Number.isNaN(x))) { bad.push(`${t || "?"} ${mv.data || "(sem data)"}`); continue; }
+    const o = { data: mv.data, ticker: t, tipo: mv.tipo || "compra" };
+    if (q > 0) o.quantidade = q;
+    if (pr > 0) o.preco = pr;
+    if (v > 0) o.valor = v;
+    movimentos.push(o);
+  }
+  return { posicoes, movimentos, bad };
+}
+let mcData = null, mcAllocDim = "ativo";
+function renderAlloc() {
+  if (!mcData) return;
+  const a = mcData.alocacao[mcAllocDim] || {};
+  setChildren("mc-alloc", barsList(Object.entries(a).map(([k, v]) => [k.replace(/\.SA$/, ""), v])));
+}
+document.querySelector('[data-tabs="mc-alloc"]').addEventListener("tabchange", (ev) => { mcAllocDim = ev.detail; renderAlloc(); });
+const BENCH_COLOR = ["var(--s2)", "var(--s3)", "var(--s4)", "var(--s5)"];
+function renderMc(d) {
+  mcData = d;
+  $("mc-results").classList.remove("hidden");
+  const per = d.periodo, b = Object.fromEntries(per.benchmarks.map((x) => [x.nome, x]));
+  const cdi = b["CDI"], ibov = b["Ibovespa (BOVA11)"];
+  const kp = [kpi("Patrimônio", fmtMoney(d.patrimonio), `cotações até ${fmtDateBR(d.data_referencia)}`),
+    kpi(`Rentabilidade (${per.rotulo})`, fmtPctS(per.retorno_twr), d.modo === "hipotetico" ? "hipótese: carteira de hoje no período" : "método das cotas (TWR)")];
+  if (cdi) kp.push(kpi("Contra o CDI", fmtPctS(cdi.excesso), `CDI no período: ${fmtPct(cdi.retorno, 1)}`));
+  if (ibov) kp.push(kpi("Contra o Ibovespa", fmtPctS(ibov.excesso), `Ibovespa no período: ${fmtPct(ibov.retorno, 1)}`));
+  if (d.resultado) kp.push(kpi("Resultado", fmtMoney(d.resultado.resultado), d.resultado.resultado_pct === null ? "" : fmtPctS(d.resultado.resultado_pct) + " sobre o investido"));
+  if (per.retorno_mwr_anual !== null && per.retorno_mwr_anual !== undefined) kp.push(kpi("Rentabilidade do seu dinheiro", fmtPctS(per.retorno_mwr_anual) + " a.a.", "taxa interna de retorno (TIR)"));
+  kp.push(kpi("Distância do pico", fmtPct(d.drawdown.atual, 1), `maior queda no histórico: ${fmtPct(d.drawdown.maximo, 1)}`));
+  setChildren("mc-kpis", ...kp);
+  const ev = d.evolucao;
+  const series = [{ name: "Sua carteira", values: ev.carteira, color: "var(--s1)", width: 2.4 },
+    ...Object.entries(ev.benchmarks).map(([k, v], i) => ({ name: k, values: v, color: BENCH_COLOR[i % BENCH_COLOR.length], width: 1.4 }))];
+  setChildren("mc-ev-legend", ...series.map((se) => el("span", {}, el("i", { style: "background:" + se.color }), se.name)));
+  lineChart("mc-ev", ev.datas, series, { base: 100, fmtTip: (v) => `${fmtNum(v, 1)} (${fmtPctS(v / 100 - 1)})` });
+  $("mc-ev-note").textContent = (ev.hipotese ? "Hipótese: as quantidades de hoje mantidas no período (sem movimentações registradas). " : "Seu histórico real, a partir das movimentações. ")
+    + `Base 100 em ${fmtDateBR(per.inicio)}.`;
+  setChildren("mc-rets", table(["Período", "Sua carteira"], Object.entries(d.retornos).map(([k, v]) => [d.rotulos_periodos[k] || k, v === null ? "sem dados suficientes" : fmtPctS(v)]), [1]),
+    el("div", {}, el("h3", {}, `Comparação (${per.rotulo})`), table(["Índice", "Retorno", "Sua carteira menos o índice"],
+      per.benchmarks.map((x) => [x.nome, fmtPctS(x.retorno), fmtPctS(x.excesso)]), [1, 2])));
+  $("mc-rets-note").textContent = d.modo === "hipotetico" ? "Hipótese: a carteira de hoje mantida em cada período." : "Método das cotas: mede os investimentos, sem o efeito dos seus aportes.";
+  renderAlloc();
+  setChildren("mc-alerts", ...(d.alertas.length ? alertItems(d.alertas) : [el("li", { class: "muted" }, "Nenhum alerta pelas regras.")]));
+  const ccy = (c) => CCY[c] || c || "";
+  setChildren("mc-positions", table(["Ativo", "Quantidade", "Preço", "Valor", "Peso", "vs preço médio"],
+    d.posicoes.map((p) => [withLogo(p.ticker, p.logo, p.ticker.replace(/\.SA$/, "") + " — " + p.nome, 24),
+      p.quantidade === null ? "—" : fmtQty(p.quantidade), p.preco === null ? "—" : `${ccy(p.preco_moeda)} ${fmtNum(p.preco)}`,
+      fmtMoneyAuto(p.valor), fmtPct(p.peso, 1), p.resultado_preco === null || p.resultado_preco === undefined ? "—" : fmtPctS(p.resultado_preco)]), [1, 2, 3, 4, 5]));
+  const moves = d.movimentacoes || [];
+  $("mc-moves-card").classList.toggle("hidden", !moves.length);
+  setChildren("mc-moves", ...(moves.length ? [table(["Data", "Ativo", "Tipo", "Quantidade", "Preço", "Valor (R$)"],
+    moves.map((m) => [fmtDateBR(m.data), m.ticker.replace(/\.SA$/, ""), m.tipo, m.quantidade === null ? "—" : fmtQty(m.quantidade),
+      m.preco === null ? "—" : fmtNum(m.preco), m.valor_reais === null ? "—" : fmtMoney2(m.valor_reais)]), [3, 4, 5])] : []));
+  setChildren("mc-notes", ...d.avisos.map((w) => el("li", {}, w)),
+    ...d.fontes.map((f) => el("li", { class: "muted" }, `${f.dado}: ${f.fonte}` + (f.data ? ` (até ${fmtDateBR(f.data)})` : ""))),
+    el("li", { class: "muted" }, d.aviso));
+}
+$("mc-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const { posicoes, movimentos, bad } = pfBody();
+  const st = $("mc-status");
+  if (bad.length) { st.textContent = "Confira: " + bad.join(", ") + " (código e quantidade maior que zero; números como 1.500,50)."; return; }
+  if (!posicoes.length && !movimentos.length) { st.textContent = "Cadastre ao menos um ativo com a quantidade."; return; }
+  const f = new FormData($("mc-form"));
+  const body = { posicoes, movimentos, periodo: f.get("periodo") };
+  if (f.get("perfil")) body.perfil = f.get("perfil");
+  $("mc-results").classList.add("hidden");
+  const btn = $("mc-run"); btn.disabled = true;
+  const live = liveStatus(st, "Buscando as cotações da carteira…");
+  try {
+    const d = await postStream("/api/carteira/painel", body, live.update);
+    live.stop();
+    renderMc(d);
+    st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s.` + (d.do_cache ? " (reaproveitado: mesmo pedido há menos de 15 min)" : "");
+    const cdi = d.periodo.benchmarks.find((x) => x.nome === "CDI");
+    store.set(PF_SUM_KEY, { patrimonio: d.patrimonio, retorno: d.periodo.retorno_twr, rotulo: d.periodo.rotulo, cdi: cdi ? cdi.retorno : null,
+      hipotese: d.modo === "hipotetico", data: d.data_referencia, n: d.posicoes.length, alertas: d.alertas.slice(0, 3).map((a) => ({ nivel: a.nivel, texto: a.texto })),
+      quando: new Date().toISOString() });
+    renderMine();
+  } catch (e) {
+    live.stop();
+    st.textContent = (e.status === 400 || e.status === 422 ? "Atenção: " : "Erro: ") + e.message;
+  } finally { btn.disabled = false; }
+});
+
+// ---------- risk of my portfolio
+let rkData = null;
+function renderRk(d) {
+  rkData = d;
+  $("rk-results").classList.remove("hidden");
+  const main = d.var.find((r) => r.metodo === "histórico" && Math.abs(r.confianca - Number(new FormData($("rk-form")).get("confianca"))) < 1e-9) || d.var[0];
+  setChildren("rk-kpis",
+    kpi("Oscilação anual", fmtPct(d.volatilidade.historica, 1), `hoje (EWMA): ${fmtPct(d.volatilidade.ewma, 1)}`),
+    kpi(`VaR ${fmtPct(main.confianca, 0)} (${main.horizonte_dias} ${main.horizonte_dias === 1 ? "dia" : "dias"})`, fmtMoney(main.var_reais), `${fmtPct(main.var, 2)} do patrimônio · histórico`),
+    kpi("CVaR (perda média nos piores dias)", fmtMoney(main.cvar_reais), fmtPct(main.cvar, 2) + " do patrimônio"),
+    kpi("Maior queda no histórico", fmtPct(d.drawdown.maximo, 1), `de ${fmtDateBR(d.drawdown.pico)} a ${fmtDateBR(d.drawdown.fundo)}`),
+    kpi("Apostas independentes", fmtNum(d.concentracao.apostas_independentes, 1), `${Object.keys(d.pesos).length} posições · N efetivo ${fmtNum(d.concentracao.n_efetivo, 1)}`));
+  $("rk-explain").textContent = d.o_que_explica.texto;
+  chartPairs("rk-contrib", d.contribuicao_risco, "peso", "contribuicao", "Peso no dinheiro", "Participação no risco");
+  setChildren("rk-var", table(["Método", "Confiança", "Horizonte", "VaR", "CVaR", "Observação"],
+    d.var.map((r) => [r.metodo, fmtPct(r.confianca, 0), `${r.horizonte_dias} d`, r.var === null ? "recusado" : `${fmtPct(r.var, 2)} · ${fmtMoney(r.var_reais)}`,
+      r.cvar === null ? "—" : `${fmtPct(r.cvar, 2)} · ${fmtMoney(r.cvar_reais)}`, r.nota]), [1, 3, 4]));
+  setChildren("rk-stress-h", table(["Período", "Datas", "Carteira de hoje", "Em reais"],
+    d.estresse_historico.map((x) => [x.nome, `${fmtDateBR(x.inicio)} a ${fmtDateBR(x.fim)}`, x.retorno === null ? x.nota : fmtPctS(x.retorno), x.perda_reais === null ? "—" : fmtMoney(x.perda_reais)]), [2, 3]));
+  setChildren("rk-stress-x", ...(d.estresse_hipotetico.length ? [table(["Choque (hipótese)", "Impacto estimado", "Em reais"],
+    d.estresse_hipotetico.map((x) => [x.nome, fmtPctS(x.impacto, 2), fmtMoney(x.impacto_reais)]), [1, 2])] : [el("p", { class: "muted" }, "Sem sensibilidades medidas para montar choques.")]));
+  const c = d.correlacao;
+  if (c) {
+    $("rk-corr-sum").textContent = `Correlação média entre os ativos: ${fmtNum(c.media_normal, 2)} em dias normais e ${fmtNum(c.media_estresse, 2)} em dias de estresse (${c.dias_estresse} dias). `
+      + (c.media_estresse > c.media_normal + 0.05 ? "Nas crises os ativos passaram a andar mais juntos: a diversificação diminui justamente quando mais importa." : "A correlação não subiu de forma relevante nos dias de estresse.");
+    setChildren("rk-corr-n", corrTable(c.ativos, c.normal)); setChildren("rk-corr-s", corrTable(c.ativos, c.estresse));
+    $("rk-corr-rule").textContent = c.regra + ".";
+  } else {
+    $("rk-corr-sum").textContent = "Correlação em estresse indisponível (menos de dois ativos com dados ou sem o índice de referência).";
+    setChildren("rk-corr-n"); setChildren("rk-corr-s"); $("rk-corr-rule").textContent = "";
+  }
+  setChildren("rk-sens", table(["Fator", "Beta", "t (HAC)", "R²", "Leitura"],
+    d.sensibilidades.map((x) => [x.fator, fmtNum(x.beta, 2), x.t === null ? "n/d" : fmtNum(x.t, 1), fmtPct(x.r2, 1), `${x.leitura} — ${x.forca}`]), [1, 2, 3]));
+  setChildren("rk-liq", table(["Ativo", "Valor", "Volume médio/dia", "Dias para vender"],
+    d.liquidez.map((x) => [x.ticker.replace(/\.SA$/, ""), fmtMoney(x.valor), x.volume_medio_reais === null ? "—" : fmtMoneyShort(x.volume_medio_reais),
+      x.dias_para_vender === null ? x.nota : (x.dias_para_vender < 0.1 ? "< 0,1" : fmtNum(x.dias_para_vender, 1))]), [1, 2, 3]));
+  const g = d.concentracao.grupos;
+  setChildren("rk-conc", el("p", {}, `Maior posição: ${d.concentracao.maior_posicao.ticker} (${fmtPct(d.concentracao.maior_posicao.peso, 1)}). HHI ${fmtNum(d.concentracao.hhi, 3)}.`),
+    ...["setor", "classe", "moeda"].map((dim) => el("div", {}, el("h3", {}, "Por " + dim),
+      table(["", "do dinheiro", "do risco"], Object.entries(g[dim]).map(([k, v]) => [k, fmtPct(v.peso, 0), fmtPct(v.risco, 0)]), [1, 2]))));
+  const out = Object.entries(d.fora_da_analise || {});
+  setChildren("rk-notes", ...d.avisos.map((w) => el("li", {}, w)),
+    el("li", { class: "muted" }, `Dados: ${fmtDateBR(d.periodo_dados[0])} a ${fmtDateBR(d.periodo_dados[1])} (${d.n_obs} pregões em comum)` + (out.length ? `; fora das estatísticas: ${fmtPct(d.peso_fora, 0)} da carteira.` : ".")),
+    ...d.fontes.map((f) => el("li", { class: "muted" }, `${f.dado}: ${f.fonte}` + (f.data ? ` (até ${fmtDateBR(f.data)})` : ""))),
+    el("li", { class: "muted" }, d.aviso));
+}
+$("rk-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const { posicoes, movimentos, bad } = pfBody();
+  const st = $("rk-status");
+  if (bad.length) { st.textContent = "Confira as posições em Minha carteira: " + bad.join(", ") + "."; return; }
+  if (!posicoes.length && !movimentos.length) { st.textContent = "Cadastre as suas posições na aba Minha carteira primeiro."; return; }
+  const f = new FormData($("rk-form"));
+  const body = { posicoes, movimentos, confianca: Number(f.get("confianca")), horizonte_var_dias: Number(f.get("horizonte")) };
+  $("rk-results").classList.add("hidden");
+  const btn = $("rk-run"); btn.disabled = true;
+  const live = liveStatus(st, "Buscando 10 anos de cotações…");
+  try {
+    const d = await postStream("/api/carteira/risco", body, live.update);
+    live.stop();
+    renderRk(d);
+    st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s.` + (d.do_cache ? " (reaproveitado: mesmo pedido há menos de 15 min)" : "");
+  } catch (e) {
+    live.stop();
+    st.textContent = (e.status === 400 || e.status === 422 ? "Atenção: " : "Erro: ") + e.message;
+  } finally { btn.disabled = false; }
+});
+
+// ---------- dashboard card: my portfolio summary
+function renderMine() {
+  const sm = store.get(PF_SUM_KEY, null);
+  const n = pf.posicoes.filter((p) => p.ticker).length;
+  if (!sm || typeof sm !== "object") {
+    setChildren("painel-mine", n ? emptyState("wallet", `Carteira cadastrada com ${n} ativo(s)`, "Atualize o painel para ver patrimônio, evolução e alertas com cotações reais.", "#/carteira/minha", "Atualizar painel")
+      : emptyState("wallet", "Cadastre a sua carteira", "Informe o que você tem (código e quantidade): o painel mostra patrimônio, evolução, comparação com CDI e Ibovespa, distribuição, risco e alertas.", "#/carteira/minha", "Cadastrar carteira"));
+    return;
+  }
+  const tiles = el("div", { class: "kpis" }, kpi("Patrimônio", fmtMoney(sm.patrimonio), `cotações até ${fmtDateBR(sm.data)}`),
+    kpi(`Rentabilidade (${sm.rotulo})`, fmtPctS(sm.retorno), sm.hipotese ? "hipótese: carteira de hoje no período" : "método das cotas"),
+    kpi("CDI no mesmo período", fmtPct(sm.cdi, 1), sm.cdi === null || sm.retorno === null ? "" : "diferença " + fmtPctS(sm.retorno - sm.cdi)));
+  const al = (sm.alertas || []);
+  setChildren("painel-mine", tiles, ...(al.length ? [el("ul", { class: "clean plain" }, ...alertItems(al))] : []),
+    el("p", { class: "kind" }, `${sm.n} posição(ões) · atualizado ${fmtWhen(sm.quando)}`));
+}
+renderPosEditor(); renderMovEditor();
+
 // ---------- navigation: one view at a time; "#/view" routes, "#id" opens the view that holds the element
 const VIEW_NAMES = ["painel", "acoes", "oportunidades", "carteira", "laboratorio", "perfil"];
 let currentView = null;
 function onViewShown(name) {
   if (name === "laboratorio" && lastData) render(lastData);
   if (name === "acoes" && stockData) renderStock(stockData);
-  if (name === "painel") { renderHistory(); renderLastPortfolio(); renderProfileChip(); }
+  if (name === "painel") { renderHistory(); renderLastPortfolio(); renderProfileChip(); renderMine(); }
+  if (name === "carteira") { if (mcData) renderMc(mcData); if (rkData) renderRk(rkData); }
   if (name === "perfil") renderDataSummary();
 }
-function showView(name, target) {
+function showView(name, target, tab) {
   if (!VIEW_NAMES.includes(name)) name = "painel";
+  const list = document.querySelector(`.view[data-view="${name}"] > [role="tablist"][data-tabs]`);
+  if (list && tab) selectTab(list, tab);
+  if (target) openTabOf(target);
   let view = null;
   document.querySelectorAll(".view").forEach((v) => { const on = v.dataset.view === name; v.hidden = !on; if (on) view = v; });
   document.querySelectorAll("[data-nav]").forEach((a) => { if (a.dataset.nav === name) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
@@ -2216,7 +2685,7 @@ function showView(name, target) {
 }
 function route() {
   const h = decodeURIComponent(location.hash || "");
-  if (!h || h === "#" || h.startsWith("#/")) { showView(h.slice(2).split("/")[0] || "painel"); return; }
+  if (!h || h === "#" || h.startsWith("#/")) { const [v, tab] = h.slice(2).split("/"); showView(v || "painel", null, tab); return; }
   const target = document.getElementById(h.slice(1));
   const view = target && target.closest(".view");
   showView(view ? view.dataset.view : "painel", target || null);
@@ -2236,6 +2705,7 @@ window.addEventListener("resize", () => {
   resizeTimer = setTimeout(() => {
     if (lastData && currentView === "laboratorio") render(lastData);
     if (stockData && currentView === "acoes") renderStock(stockData);
+    if (currentView === "carteira") { if (mcData) renderMc(mcData); if (rkData) renderRk(rkData); }
   }, 200);
 });
 
@@ -2258,6 +2728,7 @@ function initLocal() {
   const p = readProfile();
   fillProfileForm(p); applyProfile(p);
   renderProfileChip(); renderHistory(); renderLastPortfolio(); renderDataSummary();
+  pf = loadPf(); renderPosEditor(); renderMovEditor(); renderMine();
 }
 initLocal();
 route();

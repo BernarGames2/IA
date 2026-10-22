@@ -38,6 +38,8 @@ from core.ai_analyst.analyst import ResearchAnalyst
 from core.ai_analyst.tools import AnalysisContext
 from core.market_data.base import DataUnavailableError
 from core.market_data.logos import clean_domain, domain_for, fetch_logo
+from core.portfolio_analytics.api import handle_dashboard, handle_risk
+from core.portfolio_analytics.data import PortfolioRequest
 from core.portfolio_engine import AnalysisResult, run_analysis
 from core.profiler import demo_profile
 from core.purpose.engine import (
@@ -452,6 +454,54 @@ def acao_do_dia(p: DailyPickRequest, stream: bool = False) -> Response:
         return payload
 
     return _respond(compute, stream)
+
+
+def _engine(k: str, run: Callable[[Callable[[str], None]], dict[str, object]], stream: bool, real: bool = True,
+            unavailable: str = "tente de novo em alguns minutos") -> Response:
+    """Shared flow of the newer engines: cache (15 min for real data), one of the limited computation slots,
+    input errors as 400, missing real data as 503 (nothing estimated in its place), defects as 500."""
+    def compute(progress: Callable[[str], None]) -> dict[str, object]:
+        hit = _cached(k, real)
+        if hit is not None:
+            return hit
+        if not _slots.acquire(timeout=120):
+            raise HTTPException(503, "servidor ocupado; tente novamente em instantes")
+        try:
+            t0 = time.perf_counter()
+            payload = run(progress)
+            payload["elapsed_s"] = round(time.perf_counter() - t0, 2)
+            payload["calculado_em_utc"] = datetime.now(UTC).isoformat(timespec="seconds")
+            payload["do_cache"] = False
+        except DataUnavailableError as e:
+            raise HTTPException(503, f"dados indisponíveis agora ({_short(e)}). Nada foi estimado no lugar: "
+                                     f"{unavailable}.") from e
+        except (ValueError, ArithmeticError) as e:
+            if _raised_in_library(e) and not isinstance(e, ValidationError):
+                raise _analysis_error(e) from e
+            raise HTTPException(400, str(e)) from e
+        finally:
+            _slots.release()
+        _store(k, payload)
+        return payload
+
+    return _respond(compute, stream)
+
+
+@app.post("/api/carteira/painel")
+def carteira_painel(p: PortfolioRequest, stream: bool = False) -> Response:
+    """The investor's portfolio: value, evolution, returns against CDI/Ibovespa/S&P 500, allocation, alerts."""
+    return _engine(p.key() + "|painel", lambda progress: handle_dashboard(
+        p, provider=_market_provider(), fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache", progress=progress,
+        budget_s=_DOWNLOAD_BUDGET_S), stream, unavailable="confira os códigos ou tente de novo em alguns minutos")
+
+
+@app.post("/api/carteira/risco")
+def carteira_risco(p: PortfolioRequest, stream: bool = False) -> Response:
+    """Advanced risk of today's portfolio: VaR/CVaR, drawdown, correlations in stress, contributions, liquidity,
+    sensitivities, historical and hypothetical stress."""
+    return _engine(p.key() + "|risco", lambda progress: handle_risk(
+        p, provider=_market_provider(), fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache", progress=progress,
+        budget_s=_DOWNLOAD_BUDGET_S), stream, unavailable="confira os códigos ou tente de novo em alguns minutos")
 
 
 _OWN_PACKAGES = {"core", "webapp", "models", "utils", "config", "main", "tests", "__main__"}

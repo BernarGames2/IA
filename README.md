@@ -351,6 +351,25 @@ alternativas que também cabem nas regras, o que ficou de fora e por quê, fonte
 escolha é a mesma (pode repetir em dias seguidos). Usa só o histórico: não prevê o preço de amanhã e não é
 recomendação; para quem está começando, distribuir os aportes numa carteira costuma reduzir o risco.
 
+## 10c. Minha carteira e risco (`POST /api/carteira/painel`, `POST /api/carteira/risco`)
+
+O investidor cadastra o que tem (código e quantidade; preço médio e movimentações opcionais). Não há conta nem
+banco de dados: as posições ficam no navegador (`localStorage`, com exportar/importar) e vão no pedido.
+
+* **Painel**: patrimônio com cotações reais (dólar convertido pelo `USDBRL=X` do mesmo dia), posições, distribuição
+  por ativo/classe/setor/moeda, evolução em base 100 contra CDI (BCB SGS 12), Ibovespa (BOVA11) e S&P 500 em reais
+  (IVVB11), rentabilidade por período pelo **método das cotas** (TWR, fluxos no início do dia) e, com movimentações,
+  a **rentabilidade do seu dinheiro** (TIR) e o resultado (patrimônio − compras + vendas + proventos). Sem
+  movimentações, a evolução é uma **hipótese** rotulada (quantidades de hoje mantidas no período). Alertas por regras
+  com os números: limite por ativo do perfil, setor acima de 35%, moeda estrangeira acima de 50%, queda além da
+  referência do perfil, cotação velha, ativo sem dados.
+* **Risco** (pesos de hoje, até 5 anos de cotações; 10 anos para crises): volatilidade histórica e EWMA; VaR e CVaR a
+  95% e 99% (histórico, normal e teoria de valores extremos) em 1 ou 10 dias; maior queda; correlação em dias normais
+  e de estresse; contribuição de cada ativo para o risco (Euler) por ativo, setor, classe e moeda; liquidez (dias para
+  vender a 20% do volume médio); sensibilidade ao Ibovespa, ao S&P 500 em reais, ao dólar e aos juros (IRFM11; IEF
+  com ativos em dólar), com t de Newey–West; crises reais (COVID-19, pior mês e pior trimestre do Ibovespa nos dados)
+  e choques hipotéticos pelos betas medidos. Estimativas do passado, não limites de perda.
+
 ## 11. "Vale a pena?" — análise de uma ação (`--acao`, `POST /api/acao`)
 
 Você digita o código ou o nome de **qualquer ação da B3 ou dos EUA** (PETR4, VALE3, WEGE3, AAPL, "Petrobras",

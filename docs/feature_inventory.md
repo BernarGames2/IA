@@ -28,13 +28,13 @@ A coluna "Mudança" registra o que foi feito e a verificação; a regra é não 
 | Assistente de IA | Parcial: só sobre o laboratório sintético; regras determinísticas, sem LLM | `core/ai_analyst/*`, `/api/perguntar` | mantido dentro do Laboratório |
 | Logos das empresas | Funcional (mecanismo) | `core/market_data/logos.py` | mantido |
 | Fundamentos da empresa (indicadores) | Parcial: um retrato atual (quoteSummary); sem séries de demonstrações, pares ou revisões | `core/stock_check/company.py` | — |
-| Dashboard (patrimônio, evolução, benchmarks, distribuição, alertas, movimentações) | Ausente: não há cadastro de carteira | — | painel novo com o que existe de fato neste aparelho (última carteira montada, histórico de análises, perfil) |
+| Dashboard (patrimônio, evolução, benchmarks, distribuição, alertas, movimentações) | Ausente: não há cadastro de carteira | — | implementado: "Minha carteira" (posições e movimentações no aparelho) + `/api/carteira/painel` (cotações reais, TWR, TIR, CDI/Ibovespa/S&P, alertas) e resumo no Painel; `tests/test_portfolio_analytics.py` |
 | Radar de oportunidades com evidências | Parcial: a Ação do dia ordena ações por histórico de preços; sem fundamentos, contra-evidências ou invalidação | `daily_pick.py`, `core/universe/scoring.py` | — |
 | Previsões probabilísticas | Parcial: projeção com percentis, P(superar a renda fixa) e sensibilidade; sem calibração histórica | `analyzer.py`, `core/simulation` | — |
 | Auditoria das próprias previsões | Ausente | — | — |
 | Simulador de futuros empresariais (cenários, valuation) | Ausente | — | — |
 | Efeitos econômicos em cadeia | Ausente (o setor tem motivos gerais de crescimento, sem medição) | `core/stock_check/sectors.py` | — |
-| Risco avançado da carteira do investidor (dados reais) | Parcial: os motores existem (VaR, CVaR, EVT, estresse, cauda, regimes, concentração) mas só rodam no laboratório sintético; a carteira com propósito mede concentração | `core/extreme_risk`, `core/purpose/concentration.py` | — |
+| Risco avançado da carteira do investidor (dados reais) | Parcial: os motores existem (VaR, CVaR, EVT, estresse, cauda, regimes, concentração) mas só rodam no laboratório sintético; a carteira com propósito mede concentração | `core/extreme_risk`, `core/purpose/concentration.py` | implementado: aba Risco + `/api/carteira/risco` reutilizando os motores (VaR/CVaR/EVT, correlação em estresse, Euler, liquidez, betas HAC, crises reais, choques); testes no mesmo arquivo |
 | Detector de armadilhas de valor | Ausente (só regras soltas no "Vale a pena?", ex.: P/L baixo com ressalva) | `company.growth_case` | — |
 | Tese de investimento estruturada | Parcial: motivos a favor/contra e teses duplas da carteira; sem invalidação, catalisadores datados ou refutação | `company.py`, `core/purpose/report.py` | — |
 | Descoberta e validação de estratégias | Parcial: walk-forward com custos, PSR/DSR e correção de testes múltiplos existem para carteiras do laboratório; sem laboratório de hipóteses | `core/backtesting/*` | — |
