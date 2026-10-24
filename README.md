@@ -185,7 +185,8 @@ A versão web fica em `webapp/`: API FastAPI (`webapp/server.py`) + página úni
 etapa de build). Identidade visual própria: fundo azul-marinho/grafite, fonte Inter servida pelo próprio app
 (`/static/fonts/`, SIL OFL), ícones Lucide (ISC) embutidos, tokens de cor/espaçamento/raio, tema escuro (padrão) e
 claro, `prefers-reduced-motion` respeitado. Navegação por telas (`#/painel`, `#/acoes`, `#/oportunidades`,
-`#/carteira`, `#/laboratorio`, `#/perfil`): menu lateral no computador, trilho de ícones no tablet e barra inferior
+`#/previsoes`, `#/cenarios`, `#/carteira`, `#/laboratorio`, `#/perfil`, com abas como `#/acoes/tese` ou
+`#/oportunidades/radar`): menu lateral no computador, trilho de ícones no tablet e barra inferior
 no celular; links antigos por âncora (`#d-title`, `#p-title`…) abrem a tela certa. O **Painel** mostra o que existe
 de fato neste aparelho (última carteira montada, histórico de análises, perfil); o **Perfil** guarda as respostas do
 investidor no navegador (`localStorage`, com exportar/importar/apagar) e preenche os formulários de todas as
@@ -193,7 +194,8 @@ ferramentas. Nada do investidor vai para o servidor fora dos pedidos de análise
 fundos da B3 e dos EUA baixados na hora do endpoint de gráficos do Yahoo Finance (biblioteca padrão, sem
 `yfinance`; cache em `/tmp`), Selic do Banco Central (SGS 432) e T-bill (`^IRX`) como taxas livres de risco. O
 site mostra só métricas derivadas (não republica cotações) e, se o provedor não responder, mostra o erro — nunca
-troca por dados sintéticos. A análise geral (`/api/analisar`) continua sobre o mercado sintético.
+troca por dados sintéticos. O laboratório (`/api/analisar`) roda sobre o mercado sintético de demonstração ou,
+com `fonte_dados: "real"`, sobre as cotações dos ativos escolhidos (seção 10g).
 
 | Endpoint | Função |
 |---|---|
@@ -202,6 +204,14 @@ troca por dados sintéticos. A análise geral (`/api/analisar`) continua sobre o
 | `POST /api/perguntar` | pergunta ao analista de IA (mesmas recusas e verificação de números da CLI) |
 | `POST /api/proposito` | carteira com propósito (seção 10): `fonte_dados="real"` (padrão, Yahoo Finance) ou `"sintetico"` |
 | `POST /api/acao` | "vale a pena?" de uma ação digitada (seção 11): veredito por regras + projeção |
+| `POST /api/acao-do-dia` | uma ação para o valor de hoje, por regras fixas (seção 10b) |
+| `POST /api/carteira/painel`, `/api/carteira/risco` | painel e risco da carteira do investidor (seção 10c) |
+| `POST /api/previsoes/prever`, `/registrar`, `/avaliar` | previsões, calibração e registro auditável (seção 10d) |
+| `POST /api/tese`, `/api/radar` | tese e fundamentos, armadilhas de valor, radar (seção 10e) |
+| `POST /api/cenarios`, `/api/cadeia` | futuros da empresa e efeitos em cadeia (seção 10f) |
+| `POST /api/estrategias` | laboratório de estratégias (seção 10g) |
+| `POST /api/monitorar` | acompanhamento sob demanda das teses marcadas (seção 10h) |
+| `GET /api/logo/...` | logos das empresas pelo próprio app |
 | `GET /api/health`, `GET /api/docs` | saúde e documentação OpenAPI |
 
 Entradas são validadas e limitadas (≤ 20.000 simulações, horizonte ≤ 30 anos, pergunta ≤ 500 caracteres).
@@ -451,6 +461,16 @@ volatilidade ±25%, só o histórico, sem prêmio).
   custos (+5 pb de derrapagem), escolha da variante só na validação (60% iniciais), teste final nos 40% restantes,
   Sharpe deflacionado considerando todas as variantes, consistência por terços e conferência de que as decisões não
   olham o futuro. Veredito estrito: "há evidência", "evidência fraca" ou "sem evidência".
+
+## 10h. Acompanhamento sob demanda (`POST /api/monitorar`)
+
+O site roda como função sem servidor (sem banco nem agendador): **não existe monitoramento contínuo, e nada é
+simulado como se existisse**. Na tese, "Acompanhar esta tese" guarda no aparelho as condições de invalidação com os
+seus limites numéricos; no Painel, "Conferir agora" busca os dados naquele momento e confere cada condição
+(`core/fundamentals/monitor.py`): as do balanço anual (receita, margem, dívida, dividendos) ficam "aguardando o
+próximo balanço" até a fonte publicar um ano fiscal posterior ao da tese; a estimativa de analistas é comparada a
+qualquer momento; a condição de preço usa o menor fechamento desde a tese (ou "aguardando novas cotações"). As
+previsões registradas são avaliadas junto. O resultado diz quando foi conferido.
 
 ## 11. "Vale a pena?" — análise de uma ação (`--acao`, `POST /api/acao`)
 

@@ -176,25 +176,33 @@ def build_thesis(p: CompanyProfile, a: Annual | None, an: Analysts | None, fc: d
     if a is not None and a.get("receita", -1) is not None:
         lim = a.get("receita", -1) * 0.95  # type: ignore[operator]
         invalid.append({"condicao": "receita do próximo ano fiscal mais de 5% abaixo da última",
-                        "atual": money(a.get("receita", -1)), "limite": money(lim), "como_conferir": "próximo balanço anual"})
+                        "atual": money(a.get("receita", -1)), "limite": money(lim), "como_conferir": "próximo balanço anual",
+                        "chave": "receita", "valor_limite": lim, "direcao": "abaixo", "ano_fiscal": a.anos[-1]})
     if mo is not None and not fin:
         invalid.append({"condicao": "margem operacional 3 pontos percentuais abaixo da atual", "atual": pct(mo),
-                        "limite": pct(mo - 0.03), "como_conferir": "próximo balanço anual"})
+                        "limite": pct(mo - 0.03), "como_conferir": "próximo balanço anual",
+                        "chave": "margem_operacional", "valor_limite": mo - 0.03, "direcao": "abaixo",
+                        "ano_fiscal": a.anos[-1] if a is not None else None})
     if nde is not None and not fin and nde <= 3.5:
         invalid.append({"condicao": "dívida líquida acima de 3,5× o EBITDA", "atual": f"{num(nde)}×", "limite": "3,5×",
-                        "como_conferir": "próximo balanço anual"})
+                        "como_conferir": "próximo balanço anual", "chave": "divida_ebitda", "valor_limite": 3.5,
+                        "direcao": "acima", "ano_fiscal": a.anos[-1] if a is not None else None})
     if an is not None and an.eps_ano.get("current") is not None:
         invalid.append({"condicao": "estimativa de lucro por ação do ano cair 10% ou mais (analistas)",
                         "atual": num(an.eps_ano["current"], 2), "limite": num(an.eps_ano["current"] * 0.9, 2),  # type: ignore[operator]
-                        "como_conferir": "nova consulta da tese"})
+                        "como_conferir": "nova consulta da tese", "chave": "lpa_estimado",
+                        "valor_limite": an.eps_ano["current"] * 0.9, "direcao": "abaixo", "ano_fiscal": None})  # type: ignore[operator]
     if fc is not None:
         q05 = fc["quantis"]["p05"]  # type: ignore[index]
         invalid.append({"condicao": "fechamento abaixo do cenário dos 5% piores do modelo antes do fim do prazo",
                         "atual": num(fc["preco_referencia"], 2), "limite": num(fc["preco_referencia"] * (1 + q05), 2),  # type: ignore[operator]
-                        "como_conferir": f"cotação até {fc['registro']['data_fim']}"})  # type: ignore[index]
+                        "como_conferir": f"cotação até {fc['registro']['data_fim']}", "chave": "preco",  # type: ignore[index]
+                        "valor_limite": fc["preco_referencia"] * (1 + q05), "direcao": "abaixo",  # type: ignore[operator]
+                        "ate": fc["registro"]["data_fim"]})  # type: ignore[index]
     if dp and not fin:
         invalid.append({"condicao": "dividendos pagos no próximo ano abaixo da metade dos do último", "atual": money(dp),
-                        "limite": money(dp / 2), "como_conferir": "próximo balanço anual"})
+                        "limite": money(dp / 2), "como_conferir": "próximo balanço anual", "chave": "dividendos",
+                        "valor_limite": dp / 2, "direcao": "abaixo", "ano_fiscal": a.anos[-1] if a is not None else None})
     # ---- counter-thesis and quality of the data behind it
     hits = [s for s in trap.get("sinais", []) if s.get("acionado")]  # type: ignore[union-attr]
     if trap.get("parece_barata") and trap.get("nivel") == "alto":

@@ -8,11 +8,11 @@ matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-514 passed, 1 skipped (515 testes)
+518 passed, 1 skipped (519 testes)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
 
-(Registros anteriores: 509 passed, 1 skipped antes dos laboratórios com dados reais — seção 21; 493 passed, 1 skipped antes de fundamentos e cenários — seções 19 e 20; 484 passed, 1 skipped antes das previsões — seção 18; 476 passed, 1 skipped antes de "Minha carteira" e do risco — seção 17; 464 passed, 1 skipped antes da correção de valores pequenos — seção 15; 452 passed, 1 skipped
+(Registros anteriores: 514 passed, 1 skipped antes do acompanhamento sob demanda — seção 22; 509 passed, 1 skipped antes dos laboratórios com dados reais — seção 21; 493 passed, 1 skipped antes de fundamentos e cenários — seções 19 e 20; 484 passed, 1 skipped antes das previsões — seção 18; 476 passed, 1 skipped antes de "Minha carteira" e do risco — seção 17; 464 passed, 1 skipped antes da correção de valores pequenos — seção 15; 452 passed, 1 skipped
 antes da "Ação do dia" — seção 14; 414 passed, 1 skipped antes dos
 logos — seção 13; 361 passed, 1 skipped antes das correções
 da revisão adversarial — seção 12; 328 passed, 1 skipped antes do motor dinâmico.)
@@ -500,4 +500,21 @@ inviáveis do perfil moderado sem renda fixa; o gráfico da fronteira, que quebr
 para mostrar os ativos e a explicação); estratégia de momento em 1,9 s com veredito, curva fora da amostra marcando o
 teste final, critérios, terços e variantes; sem erros de JavaScript e sem rolagem horizontal. Suíte completa
 depois desta etapa: 514 aprovados, 1 pulado (o teste online).
+
+## 22. Acompanhamento sob demanda
+
+`tests/test_monitor.py` (4 testes):
+
+| O que se verifica | Resultado |
+|---|---|
+| condições do balanço ficam "aguardando o próximo balanço" enquanto a fonte não publica um ano fiscal posterior; com o ano novo (receita 10% menor), a condição de receita é medida e acionada (378 bi < 400 bi) | passa |
+| estimativa de analistas comparada a qualquer momento; preço pelo menor fechamento desde a tese (acionada e dentro do limite conferidas à mão); tese recém-criada → "aguardando novas cotações"; aviso de que nada roda em segundo plano | passa |
+| fonte fora → "sem dados" e o motivo, nada preenchido | passa |
+| rota `/api/monitorar`: 200; lista vazia ou condição desconhecida → 422 | passa |
+
+Navegador (servidor local com dublês, 1440 e 390 px): Painel sem nada acompanhado mostra o convite e o botão
+desativado; tese de PETR4 marcada (5 condições) e uma previsão registrada; "Conferir agora" em 1,2 s mostra cada
+condição com situação, valor de hoje e limite, e a avaliação das previsões; "Última conferência" guardada; parar de
+acompanhar remove a tese; sem erros de JavaScript e sem rolagem horizontal. Suíte completa depois desta
+etapa: 518 aprovados, 1 pulado (o teste online).
 

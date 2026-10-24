@@ -250,6 +250,9 @@
     impostos nem limite de liquidez; ações sem o histórico completo da janela ficam de fora (listadas); a janela é de
     10 anos quando há ao menos 8 ações completas, senão 5; sem a taxa de juros histórica a hipótese de tendência é
     recusada e o Sharpe das demais é medido contra zero (dito no resultado).
+57. **Acompanhamento**: só sob demanda (sem processo em segundo plano, sem notificações); até 10 teses por aparelho;
+    as condições do balanço comparam o primeiro ano fiscal publicado depois do usado na tese; a condição de preço
+    usa fechamentos ajustados, que podem ser reajustados depois por proventos.
 
 ## Itens pendentes / próximos passos
 

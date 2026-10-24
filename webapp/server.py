@@ -52,6 +52,8 @@ from core.fundamentals.api import (
     handle_radar,
     handle_thesis,
 )
+from core.fundamentals.monitor import MonitorRequest
+from core.fundamentals.monitor import check as monitor_check
 from core.market_data.base import DataUnavailableError
 from core.market_data.logos import clean_domain, domain_for, fetch_logo
 from core.market_data.quality import QualitySettings
@@ -645,6 +647,14 @@ def estrategias(p: StrategyRequest, stream: bool = False) -> Response:
     """Strategy lab: a published hypothesis tested walk-forward on real prices, with costs, validation/test split,
     deflated Sharpe over every variant tried and a look-ahead check; the verdict can be 'sem evidência'."""
     return _engine(p.key(), lambda progress: handle_strategy(
+        p, provider=_market_provider(), fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache", progress=progress,
+        budget_s=_DOWNLOAD_BUDGET_S), stream, unavailable="tente de novo em alguns minutos")
+
+
+@app.post("/api/monitorar")
+def monitorar(p: MonitorRequest, stream: bool = False) -> Response:
+    """On-demand check of saved theses against their invalidation limits (nothing runs in the background)."""
+    return _engine(p.key(), lambda progress: monitor_check(
         p, provider=_market_provider(), fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache", progress=progress,
         budget_s=_DOWNLOAD_BUDGET_S), stream, unavailable="tente de novo em alguns minutos")
 

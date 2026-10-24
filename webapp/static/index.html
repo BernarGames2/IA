@@ -556,9 +556,27 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
             <span><strong>Montar carteira</strong><span class="d">Personalizada, com quanto comprar de cada ativo</span></span>
             <svg class="icon"><use href="#i-chevron-right"/></svg></a>
           <a class="action" href="#f-title"><span class="ico"><svg class="icon"><use href="#i-flask-conical"/></svg></span>
-            <span><strong>Laboratório quantitativo</strong><span class="d">Fronteira eficiente, Monte Carlo, VaR e backtest</span></span>
+            <span><strong>Laboratório quantitativo</strong><span class="d">Otimização e teste de estratégias com cotações reais</span></span>
+            <svg class="icon"><use href="#i-chevron-right"/></svg></a>
+          <a class="action" href="#/oportunidades/radar"><span class="ico"><svg class="icon"><use href="#i-radar"/></svg></span>
+            <span><strong>Radar de oportunidades</strong><span class="d">Ações ordenadas por fatores, com evidências e o que pesa contra</span></span>
+            <svg class="icon"><use href="#i-chevron-right"/></svg></a>
+          <a class="action" href="#/previsoes"><span class="ico"><svg class="icon"><use href="#i-compass"/></svg></span>
+            <span><strong>Previsões e acertos</strong><span class="d">Faixas de resultado e a nota do próprio modelo</span></span>
+            <svg class="icon"><use href="#i-chevron-right"/></svg></a>
+          <a class="action" href="#/cenarios"><span class="ico"><svg class="icon"><use href="#i-calculator"/></svg></span>
+            <span><strong>Cenários</strong><span class="d">Valor da empresa em cada futuro e efeitos em cadeia</span></span>
             <svg class="icon"><use href="#i-chevron-right"/></svg></a>
         </div>
+        <section class="card" aria-labelledby="watch-h">
+          <div class="card-head"><div><h2 id="watch-h">Acompanhamento sob demanda</h2>
+            <p class="muted">Teses que você marcou e previsões registradas. Nada é conferido em segundo plano: os dados são
+              buscados quando você toca em "Conferir agora".</p></div>
+            <button id="watch-run" type="button"><svg class="icon"><use href="#i-refresh-cw"/></svg>Conferir agora</button></div>
+          <div id="painel-watch"></div>
+          <div class="status" id="watch-status" role="status" aria-live="polite"></div>
+          <div id="watch-results"></div>
+        </section>
         <section class="card" aria-labelledby="mine-h">
           <div class="card-head"><div><h2 id="mine-h">Minha carteira</h2>
             <p class="muted">Resumo da última atualização do painel da sua carteira neste aparelho.</p></div>
@@ -685,7 +703,10 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
               <section class="card"><h2>O que precisa ser verdade</h2><ul class="clean" id="th-premises"></ul></section>
               <section class="card"><h2>Datas a acompanhar</h2><ul class="clean" id="th-cat"></ul></section>
             </div>
-            <section class="card"><h2>A tese deixa de valer se</h2><p class="muted">Condições medíveis: confira de novo quando sair o próximo balanço ou quando quiser — nada é acompanhado em segundo plano.</p><div class="tbl" id="th-inval"></div></section>
+            <section class="card"><h2>A tese deixa de valer se</h2><p class="muted">Condições medíveis: confira de novo quando sair o próximo balanço ou quando quiser — nada é acompanhado em segundo plano.</p><div class="tbl" id="th-inval"></div>
+              <div class="row" style="margin-top:12px"><button class="secondary" id="th-watch" type="button"><svg class="icon"><use href="#i-save"/></svg>Acompanhar esta tese</button>
+                <span class="hint">Guarda as condições neste aparelho; o Painel confere todas quando você pedir.</span></div>
+              <div class="status" id="th-watch-status" role="status" aria-live="polite"></div></section>
             <section class="card"><h2>Fontes e avisos</h2><ul class="clean" id="th-notes"></ul></section>
           </div>
         </div>
@@ -2638,7 +2659,8 @@ function renderDataSummary() {
   const keys = store.keys();
   const label = { "qpi-perfil": "perfil", "qpi-historico": "histórico de análises", "qpi-ultima-carteira-real": "última carteira (real)",
     "qpi-ultima-carteira-sintetico": "última carteira (demonstração)", "qpi-theme": "tema", "qpi-carteira": "minha carteira (posições e movimentações)",
-    "qpi-carteira-resumo": "resumo do painel da carteira", "qpi-previsoes": "registro de previsões" };
+    "qpi-carteira-resumo": "resumo do painel da carteira", "qpi-previsoes": "registro de previsões",
+    "qpi-teses": "teses acompanhadas", "qpi-acompanhamento": "última conferência do acompanhamento" };
   $("data-summary").textContent = keys.length ? "Guardado neste aparelho: " + keys.map((k) => label[k] || k.replace(/^qpi-/, "")).join(", ") + "."
     : "Nada guardado neste aparelho ainda.";
 }
@@ -3697,6 +3719,80 @@ $("st-form").addEventListener("submit", async (ev) => {
   } finally { btn.disabled = false; }
 });
 
+// ---------- on-demand follow-up (Painel): saved theses and registered forecasts; nothing runs in the background
+const WATCH_KEY = "qpi-teses", WATCH_LAST = "qpi-acompanhamento";
+const watched = () => { const v = store.get(WATCH_KEY, []); return Array.isArray(v) ? v : []; };
+$("th-watch").addEventListener("click", () => {
+  if (!thData) return;
+  const conds = thData.tese.invalidacao.filter((c) => c.chave).map((c) => ({ chave: c.chave, valor_limite: c.valor_limite, direcao: c.direcao,
+    condicao: c.condicao, ano_fiscal: c.ano_fiscal || null, ate: c.ate || null }));
+  const item = { ticker: thData.ticker, nome: thData.nome, logo: thData.logo, criada_em: new Date().toISOString().slice(0, 10), condicoes: conds };
+  const list = [item, ...watched().filter((x) => x.ticker !== item.ticker)];
+  if (!store.set(WATCH_KEY, list.slice(0, 10))) { $("th-watch-status").textContent = "Não foi possível guardar neste aparelho."; return; }
+  $("th-watch-status").textContent = `Acompanhando ${shortTk(item.ticker)} com ${conds.length} condições. Confira no Painel quando quiser.`
+    + (list.length > 10 ? " (limite de 10 teses: a mais antiga saiu)" : "");
+  toast("Tese guardada para acompanhamento.", "save");
+  renderWatch();
+});
+function renderWatch() {
+  const list = watched(), regs = fcEntries(), last = store.get(WATCH_LAST, null);
+  if (!list.length && !regs.length) {
+    setChildren("painel-watch", emptyState("list-checks", "Nada acompanhado ainda", "Em Análise de ações → Tese e fundamentos, toque em “Acompanhar esta tese”; em Previsões, registre uma previsão. Aqui você confere tudo de uma vez, quando quiser.", "#/acoes/tese", "Montar uma tese"));
+    $("watch-run").disabled = true;
+    return;
+  }
+  $("watch-run").disabled = false;
+  setChildren("painel-watch", el("ul", { class: "list" }, ...list.map((t) => {
+    const rm = el("button", { class: "ghost sm", type: "button", "aria-label": `Parar de acompanhar ${shortTk(t.ticker)}` }, icon("trash-2"));
+    rm.addEventListener("click", () => { store.set(WATCH_KEY, watched().filter((x) => x.ticker !== t.ticker)); renderWatch(); });
+    return el("li", {}, el("div", { class: "item" }, logoEl(t.ticker, t.logo || null, 36),
+      el("span", {}, el("span", { class: "t" }, `${shortTk(t.ticker)} · tese de ${fmtDateBR(t.criada_em)}`),
+        el("span", { class: "s" }, `${t.condicoes.length} condições de invalidação`)), rm));
+  })), ...(regs.length ? [el("p", { class: "muted" }, `${regs.length} previsão(ões) registrada(s) também serão conferidas.`)] : []),
+    ...(last && last.quando ? [el("p", { class: "kind" }, `Última conferência: ${fmtWhen(last.quando)} — ${last.resumo}.`)] : []));
+}
+$("watch-run").addEventListener("click", async () => {
+  const list = watched(), regs = fcEntries(), st = $("watch-status"), btn = $("watch-run");
+  btn.disabled = true;
+  const live = liveStatus(st, "Conferindo…");
+  const parts = [];
+  let hits = 0;
+  try {
+    if (list.length) {
+      const d = await postStream("/api/monitorar", { teses: list.map((t) => ({ ticker: t.ticker, criada_em: t.criada_em, condicoes: t.condicoes })) }, live.update);
+      for (const t of d.teses) {
+        hits += t.acionadas || 0;
+        parts.push(el("section", { class: "card" }, el("h3", {}, `${shortTk(t.ticker)} — ${t.erro ? "não conferida: " + t.erro : t.leitura}`),
+          ...(t.preco_atual !== undefined ? [el("p", { class: "muted" }, `Cotação de ${fmtDateBR(t.data_preco)}: ${fmtNum(t.preco_atual, 2)}`
+            + (t.variacao_desde_criacao !== undefined ? ` (${fmtPctS(t.variacao_desde_criacao, 1)} desde a tese)` : ""))] : []),
+          el("div", { class: "tbl" }, table(["Condição", "Situação", "Hoje", "Limite", "Nota"], t.condicoes.map((c) => [c.condicao, c.estado, c.atual, c.limite, c.nota || "—"]))),
+          ...(t.avisos && t.avisos.length ? [el("p", { class: "kind" }, t.avisos.join("; "))] : [])));
+      }
+    }
+    if (regs.length) {
+      live.update("Conferindo as previsões registradas…");
+      const ev = await postStream("/api/previsoes/avaliar", { entradas: regs, custo_bps: 10 }, live.update);
+      rgData = ev;
+      const inval = ev.entradas.filter((x) => x.estado === "pendente" && x.invalidacao && x.invalidacao.length);
+      hits += inval.length;
+      parts.push(el("section", { class: "card" }, el("h3", {}, "Previsões registradas"),
+        el("p", {}, `${ev.contagem["avaliada"] || 0} avaliada(s), ${ev.contagem["pendente"] || 0} pendente(s)` + (inval.length ? `; ${inval.length} com condição de invalidação acionada` : "") + "."),
+        ...inval.map((x) => el("p", { class: "kind" }, `${shortTk(x.ticker)}: ${x.invalidacao.join("; ")}`)),
+        el("a", { class: "btn ghost sm", href: "#/previsoes/registro" }, "Ver o registro")));
+    }
+    live.stop();
+    setChildren("watch-results", ...parts);
+    const resumo = hits ? `${hits} alerta(s) acionado(s)` : "nenhum alerta acionado";
+    store.set(WATCH_LAST, { quando: new Date().toISOString(), resumo });
+    st.textContent = `Conferido agora: ${resumo}. Nada é acompanhado em segundo plano.`;
+    renderWatch();
+  } catch (e) {
+    live.stop();
+    st.textContent = (e.status === 400 || e.status === 422 ? "Atenção: " : "Erro: ") + e.message;
+  } finally { btn.disabled = false; }
+});
+renderWatch();
+
 // ---------- navigation: one view at a time; "#/view" routes, "#id" opens the view that holds the element
 const VIEW_NAMES = ["painel", "acoes", "oportunidades", "previsoes", "cenarios", "carteira", "laboratorio", "perfil"];
 let currentView = null;
@@ -3704,7 +3800,7 @@ function onViewShown(name) {
   if (name === "laboratorio") { if (lastData) render(lastData); if (stData) renderSt(stData); }
   if (name === "acoes") { if (stockData) renderStock(stockData); if (thData) renderTh(thData); }
   if (name === "oportunidades" && rdData) renderRd(rdData);
-  if (name === "painel") { renderHistory(); renderLastPortfolio(); renderProfileChip(); renderMine(); }
+  if (name === "painel") { renderHistory(); renderLastPortfolio(); renderProfileChip(); renderMine(); renderWatch(); }
   if (name === "carteira") { if (mcData) renderMc(mcData); if (rkData) renderRk(rkData); }
   if (name === "previsoes") { if (fcData) renderFc(fcData); if (rgData) renderRg(rgData); else renderRgList(); }
   if (name === "cenarios") { if (scData) renderSc(scData); if (chData) renderCh(chData); }
@@ -3774,7 +3870,7 @@ function initLocal() {
   fillProfileForm(p); applyProfile(p);
   renderProfileChip(); renderHistory(); renderLastPortfolio(); renderDataSummary();
   pf = loadPf(); renderPosEditor(); renderMovEditor(); renderMine();
-  rgData = null; renderRgList();
+  rgData = null; renderRgList(); renderWatch();
 }
 initLocal();
 route();
