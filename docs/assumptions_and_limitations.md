@@ -227,6 +227,22 @@
     pendente até o dia seguinte ao fim do prazo; resultado medido com a série ajustada atual; custo informado
     aplicado na compra e na venda. Sem a chave `QPI_AUDIT_KEY` no servidor, a cadeia de hashes só detecta edições
     acidentais. Registrar só algumas previsões (as de que se gostou) distorce as notas.
+54. **Fundamentos, armadilhas, tese e radar**: única fonte de demonstrações sem custo é o Yahoo Finance (formato não
+    oficial; pode mudar ou falhar, e então a falha é mostrada e nada é estimado no lugar); a cobertura de estimativas
+    de analistas para ações brasileiras é pequena. Ano fiscal = data de fechamento publicada; valores reapresentados a
+    até 20 dias de distância contam como o mesmo ano. Limiares do detector e do radar são regras fixas documentadas
+    (não otimizadas nos dados), e "parece barata" não usa comparação com o setor (sem base setorial confiável). O
+    F-score usa dívida total quando a fonte não separa a de longo prazo. Datas da agenda são as publicadas pela fonte e
+    podem mudar. O radar cobre só as ações do catálogo curado (165), não a bolsa inteira, e pontua em relação às
+    ações analisadas na mesma varredura.
+55. **Cenários**: o caixa livre publicado (caixa operacional − investimentos) é tratado como caixa ao acionista e
+    descontado pelo custo de capital próprio; 5 anos explícitos e perpetuidade de Gordon; a margem converge em linha
+    reta; sorteios independentes (os cenários extremos combinam todos os extremos e por isso ficam fora da faixa
+    sorteada — dito no resultado); custo de capital com a taxa de curto prazo (Selic/T-bill) e prêmio de 4%; nada de
+    impostos, recompras, mudanças de dívida ou diluição futura explícitos. Efeitos em cadeia: betas de retornos
+    semanais em 5 anos (mínimo 104 semanas) sobre o indicador do choque; a conversão de juros em retorno dos ETFs de
+    títulos usa durações aproximadas (2 e 7,5); a cadeia por setor é conhecimento econômico geral (hipótese); um beta
+    passado mistura tudo o que aconteceu nas mesmas semanas e pode mudar; choques simultâneos não se somam.
 
 ## Itens pendentes / próximos passos
 

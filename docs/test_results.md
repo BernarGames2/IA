@@ -8,11 +8,11 @@ matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-493 passed, 1 skipped (494 testes)
+509 passed, 1 skipped (510 testes)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
 
-(Registros anteriores: 484 passed, 1 skipped antes das previsões — seção 18; 476 passed, 1 skipped antes de "Minha carteira" e do risco — seção 17; 464 passed, 1 skipped antes da correção de valores pequenos — seção 15; 452 passed, 1 skipped
+(Registros anteriores: 493 passed, 1 skipped antes de fundamentos e cenários — seções 19 e 20; 484 passed, 1 skipped antes das previsões — seção 18; 476 passed, 1 skipped antes de "Minha carteira" e do risco — seção 17; 464 passed, 1 skipped antes da correção de valores pequenos — seção 15; 452 passed, 1 skipped
 antes da "Ação do dia" — seção 14; 414 passed, 1 skipped antes dos
 logos — seção 13; 361 passed, 1 skipped antes das correções
 da revisão adversarial — seção 12; 328 passed, 1 skipped antes do motor dinâmico.)
@@ -435,4 +435,47 @@ como pendente; avaliação sob pedido; entrada alterada no aparelho → "conteú
 4ª entrada → "cadeia quebrada" na entrada seguinte; botão no "Vale a pena?" (VALE3) abre a previsão do mesmo ativo;
 sem erros de JavaScript e sem rolagem horizontal. Cotações reais não puderam ser consultadas aqui. Suíte
 completa depois desta etapa: 493 aprovados, 1 pulado (o teste online).
+
+## 19. Fundamentos, armadilhas de valor, tese e radar
+
+`tests/test_fundamentals.py` (9 testes, dublês de Yahoo — demonstrações, indicadores, estimativas e agenda —, B3, BCB
+e cotações):
+
+| O que se verifica | Resultado |
+|---|---|
+| leitura das demonstrações: ano sem valor fica vazio; valor reapresentado 2 dias depois conta como o mesmo ano; moeda | passa |
+| razões conferidas à mão: margem, ROE pelo patrimônio médio, caixa livre = caixa operacional + capex, dívida líquida/EBITDA, cobertura dos dividendos, crescimento em 3 anos, diluição, P/VP, EV/EBITDA; múltiplos não misturam moedas | passa |
+| Piotroski: 9 de 9 na empresa que melhora; 2 de 9 (com os testes certos) na que piora; poucos dados → não calculado | passa |
+| estimativas e agenda: tendência do LPA, revisões, número de analistas, datas | passa |
+| armadilha: barata e piorando → risco alto com os sinais certos; barata e saudável → baixo; cara → não se aplica; banco → indeterminado; texto sem linguagem de garantia | passa |
+| tese: contra-tese da armadilha, só datas futuras na agenda, limite de invalidação da receita (95% da última), bases rotuladas, sem fato repetido | passa |
+| rota `/api/tese`: empresa completa (4 anos, F-score 9, analistas, a favor/contra, previsão); B3 fora → informado; Yahoo fora → nada inventado (sem anos nem analistas) e a tese segue só com preços; cripto e SINT_* → 400 | passa |
+| radar: ordem pela nota, pesos somam 1, evidências com números, fonte lenta → "tempo esgotado" sem travar, mesma entrada → mesma ordem, ação barata e piorando paga a penalidade; rota `/api/radar` 200 e 422 para mercado ou estilo inválido | passa |
+| cache das fontes por 24 h (segunda consulta não acessa a rede; vencido → consulta de novo) | passa |
+
+Navegador (servidor local com os mesmos dublês, 1440 e 390 px): tese de PETR4 em 2,6 s (a favor/contra com fontes,
+armadilha com risco alto, gráfico e tabela de 4 anos, F-score 2 de 9, múltiplos, datas futuras, 5 condições de
+invalidação); radar do Brasil com 86 ações e 10 candidatos com barras por fator, evidências, contra e o que desfaz;
+botão "Tese" de um candidato abre a tese dele; o link antigo `#d-title` abre a aba "Ação do dia"; sem erros de
+JavaScript e sem rolagem horizontal. A fonte real (Yahoo) não pôde ser consultada aqui.
+
+## 20. Cenários: futuros da empresa e efeitos em cadeia
+
+`tests/test_scenarios.py` (7 testes):
+
+| O que se verifica | Resultado |
+|---|---|
+| valor à mão: caixa constante (10 por ação), perpetuidade crescente (5 anos + valor terminal = fluxo / (k − g)), margem em linha reta, banco (lucro × parcela distribuída) | passa |
+| DCF reverso devolve o preço; pessimista < base < otimista; base = fórmula; percentis em ordem; tornado do maior para o menor; custo de capital maior → valor menor; mesma semente → mesmos sorteios | passa |
+| premissas inválidas recusadas (perpetuidade a menos de 1 p.p. do custo de capital, fora dos limites, pessimista maior que a base, banco sem payout) | passa |
+| premissas iniciais vêm dos balanços (crescimento de 3 anos, mediana da margem de caixa livre, renda fixa + beta × 4%) com a origem escrita | passa |
+| rota `/api/cenarios`: 200; premissas do investidor marcadas como "informada por você" e mudam o valor; inválidas → 400; premissa desconhecida → 422; cripto → 400 | passa |
+| efeitos em cadeia: betas plantados (+0,8, −0,8, 0) recuperados; efeito = beta × choque dentro da faixa de 95%; mineração e consumo "dados confirmam", sinal invertido "dados contrariam", setor ambíguo dito; juros +1 p.p. → IRFM11 −2% | passa |
+| rota `/api/cadeia`: 200 (petróleo), choque desconhecido → 422, indicador indisponível → 503 | passa |
+
+Navegador (servidor local com dublês, 1440 e 390 px): cenários de WEGE3 em 0,6 s (premissas com origem, histograma,
+tornado, cenários, projeção); premissas editadas (crescimento −5/2/6%) recalculadas e marcadas; perpetuidade de 30%
+recusada com a explicação; efeitos do dólar +10% e dos juros −1,5 p.p. com cadeia, setores e ações; sem erros de
+JavaScript e sem rolagem horizontal. Fonte real não consultada aqui (dublês: o preço de demonstração não corresponde
+aos balanços de teste). Suíte completa depois das seções 19 e 20: 509 aprovados, 1 pulado (o teste online).
 

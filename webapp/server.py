@@ -45,6 +45,12 @@ from core.forecasting.api import (
     handle_forecast,
     handle_register,
 )
+from core.fundamentals.api import (
+    RadarRequest,
+    ThesisRequest,
+    handle_radar,
+    handle_thesis,
+)
 from core.market_data.base import DataUnavailableError
 from core.market_data.logos import clean_domain, domain_for, fetch_logo
 from core.portfolio_analytics.api import handle_dashboard, handle_risk
@@ -59,6 +65,12 @@ from core.purpose.engine import (
 )
 from core.purpose.report import render_markdown
 from core.purpose.report import to_dict as purpose_to_dict
+from core.scenarios.api import (
+    ChainRequest,
+    ScenarioRequest,
+    handle_chain,
+    handle_scenarios,
+)
 from core.stock_check.analyzer import analyze_stock
 from core.stock_check.analyzer import to_dict as stock_to_dict
 from core.stock_check.daily_pick import daily_pick
@@ -536,6 +548,39 @@ def previsoes_avaliar(p: EvaluateRequest, stream: bool = False) -> Response:
     """Integrity of the registry and how each forecast turned out (pending until its horizon ends)."""
     k = "avaliar|" + hashlib.sha256(json.dumps(p.model_dump(), sort_keys=True, default=str).encode()).hexdigest()
     return _engine(k, lambda progress: handle_evaluate(
+        p, provider=_market_provider(), fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache", progress=progress,
+        budget_s=_DOWNLOAD_BUDGET_S), stream, unavailable="tente de novo em alguns minutos")
+
+
+@app.post("/api/tese")
+def tese(p: ThesisRequest, stream: bool = False) -> Response:
+    """Structured thesis of one company: statements over time, value-trap check, analysts (third party), forecast,
+    what has to be true, dated catalysts and invalidation conditions."""
+    return _engine(p.key(), lambda progress: handle_thesis(
+        p, provider=_market_provider(), fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache", progress=progress,
+        budget_s=_DOWNLOAD_BUDGET_S), stream, unavailable="confira o código ou tente de novo em alguns minutos")
+
+
+@app.post("/api/radar")
+def radar(p: RadarRequest, stream: bool = False) -> Response:
+    """Opportunity radar over the catalogue's stocks: explainable factor score, evidence against, trap check."""
+    return _engine(p.key(), lambda progress: handle_radar(
+        p, provider=_market_provider(), fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache", progress=progress,
+        budget_s=_DOWNLOAD_BUDGET_S), stream, unavailable="tente de novo em alguns minutos")
+
+
+@app.post("/api/cenarios")
+def cenarios(p: ScenarioRequest, stream: bool = False) -> Response:
+    """Business futures: discounted cash flow under explicit, editable hypotheses; scenarios, Monte Carlo, reverse DCF."""
+    return _engine(p.key(), lambda progress: handle_scenarios(
+        p, provider=_market_provider(), fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache", progress=progress,
+        budget_s=_DOWNLOAD_BUDGET_S), stream, unavailable="confira o código ou tente de novo em alguns minutos")
+
+
+@app.post("/api/cadeia")
+def cadeia(p: ChainRequest, stream: bool = False) -> Response:
+    """Economic chain effects of a macro shock: editorial chain next to the measured sensitivity of each stock."""
+    return _engine(p.key(), lambda progress: handle_chain(
         p, provider=_market_provider(), fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache", progress=progress,
         budget_s=_DOWNLOAD_BUDGET_S), stream, unavailable="tente de novo em alguns minutos")
 

@@ -258,6 +258,26 @@ ol { padding-left: 20px; } ol li { margin: 4px 0; }
 .spinner { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--accent);
   display: inline-block; animation: spin .9s linear infinite; flex: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.chain { list-style: none; counter-reset: step; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+.chain li { counter-increment: step; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; font-size: 0.88rem; }
+.chain li::before { content: counter(step); width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 0.78rem; }
+.chain li span { color: var(--ink-2); }
+table.edit input.pct { max-width: 90px; text-align: right; }
+.radar-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.cand { border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px 16px; background: var(--surface-2); display: grid; gap: 12px; }
+.cand-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.cand-head .rank { font-weight: 700; color: var(--ink-3); min-width: 2ch; font-variant-numeric: tabular-nums; }
+.cand-head .score { margin-left: auto; text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cand-head .score small { display: block; font-weight: 500; color: var(--ink-3); font-size: 0.72rem; }
+.zbars { display: grid; grid-template-columns: minmax(84px, max-content) minmax(80px, 1fr) 4.5ch; gap: 6px 10px; align-items: center; font-size: 0.8rem; color: var(--ink-2); }
+.zbar { position: relative; height: 8px; background: var(--surface-3); border-radius: 999px; }
+.zbar::before { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--axis); }
+.zbar i { position: absolute; top: 0; bottom: 0; border-radius: 999px; }
+.zbars .num { text-align: right; font-variant-numeric: tabular-nums; }
+.cand .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: 10px 18px; }
+.cand h4 { margin: 0 0 4px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3); font-weight: 650; }
+.cand ul { margin: 0; padding-left: 18px; font-size: 0.84rem; color: var(--ink-2); }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 0.78rem; color: var(--ink-2); margin: 6px 0 8px; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
 .chart { width: 100%; overflow: hidden; }
@@ -487,6 +507,7 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
       <a href="#/acoes" data-nav="acoes"><svg class="icon"><use href="#i-chart-candlestick"/></svg><span>Análise de ações</span></a>
       <a href="#/oportunidades" data-nav="oportunidades"><svg class="icon"><use href="#i-radar"/></svg><span>Oportunidades</span></a>
       <a href="#/previsoes" data-nav="previsoes"><svg class="icon"><use href="#i-compass"/></svg><span>Previsões</span></a>
+      <a href="#/cenarios" data-nav="cenarios"><svg class="icon"><use href="#i-calculator"/></svg><span>Cenários</span></a>
       <span class="nav-label">Investir</span>
       <a href="#/carteira" data-nav="carteira"><svg class="icon"><use href="#i-wallet"/></svg><span>Carteira</span></a>
       <a href="#/laboratorio" data-nav="laboratorio"><svg class="icon"><use href="#i-flask-conical"/></svg><span>Laboratório</span></a>
@@ -569,7 +590,12 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
       </section>
 
       <!-- ============================================================ AÇÕES -->
-      <section class="view" data-view="acoes" data-title="Análise de ações" data-eyebrow="Pesquisar" aria-labelledby="s-title" hidden>
+      <section class="view" data-view="acoes" data-title="Análise de ações" data-eyebrow="Pesquisar" aria-label="Análise de ações" hidden>
+        <div class="tabs" role="tablist" aria-label="Análise de ações" data-tabs="acoes">
+          <button type="button" role="tab" data-tab="vale" aria-selected="true"><svg class="icon"><use href="#i-chart-candlestick"/></svg>Vale a pena?</button>
+          <button type="button" role="tab" data-tab="tese" aria-selected="false"><svg class="icon"><use href="#i-file-text"/></svg>Tese e fundamentos</button>
+        </div>
+        <div role="tabpanel" data-panel="vale">
         <section class="card">
           <div class="card-head"><div>
             <h2 id="s-title">Vale a pena? Analise uma ação</h2>
@@ -622,10 +648,87 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
           <section class="card"><h2>Como foi calculado e avisos</h2><ul class="clean" id="s-notes"></ul>
             <p><a class="btn ghost sm" id="s-download" href="#" download="analise_acao.md"><svg class="icon"><use href="#i-download"/></svg>Baixar análise (Markdown)</a></p></section>
         </div>
+              </div>
+        <div role="tabpanel" data-panel="tese" hidden>
+          <section class="card">
+            <div class="card-head"><div>
+              <h2 id="th-title">Tese e fundamentos de uma empresa</h2>
+              <p class="lead">Junta, para uma empresa, o que está medido nos balanços dos últimos anos (receita, lucro,
+                margens, caixa livre, dívida, F-score de Piotroski), as estimativas de analistas (rotuladas como de
+                terceiros), a previsão em faixas e o detector de armadilhas de valor — e monta uma tese em teste: pontos a
+                favor e contra com a fonte de cada um, o que precisa ser verdade, as datas a acompanhar e as condições que a
+                invalidam. Regras fixas; não é recomendação.</p></div>
+              <span class="badge real"><svg class="icon"><use href="#i-database"/></svg>Balanços e cotações reais</span></div>
+            <form id="th-form">
+              <label class="span-all">Ação<input name="ativo" maxlength="60" required placeholder="Ex.: WEGE3, PETR4, AAPL ou Itaú"></label>
+              <label>Prazo da tese
+                <select name="horizonte_anos"><option value="1">1 ano</option><option value="3" selected>3 anos</option><option value="5">5 anos</option></select>
+              </label>
+              <button id="th-run" type="submit"><svg class="icon"><use href="#i-file-text"/></svg>Montar tese</button>
+            </form>
+            <div class="status" id="th-status" role="status" aria-live="polite"></div>
+          </section>
+          <div id="th-results" class="hidden">
+            <section class="card"><div id="th-head"></div><p class="lead" id="th-statement"></p><div class="row" id="th-strength"></div></section>
+            <div class="grid2">
+              <section class="card reasons up"><h2>A favor</h2><ul class="clean" id="th-favor"></ul></section>
+              <section class="card reasons down"><h2>Contra</h2><ul class="clean" id="th-against"></ul><p class="kind" id="th-counter"></p></section>
+            </div>
+            <section class="card"><h2>Armadilha de valor?</h2><p class="lead" id="th-trap-read"></p><div class="tbl" id="th-trap"></div><p class="muted" id="th-trap-rules"></p></section>
+            <section class="card"><h2>Fundamentos ano a ano</h2><p class="muted" id="th-fund-src"></p>
+              <div class="legend" id="th-fund-legend"></div><div class="chart" id="th-fund-chart"></div><div class="tbl" id="th-fund"></div></section>
+            <div class="grid2">
+              <section class="card"><h2>Piotroski F-score</h2><p class="muted" id="th-fs-note"></p><div class="tbl" id="th-fs"></div></section>
+              <section class="card"><h2>Múltiplos e estimativas</h2><div class="tbl" id="th-mult"></div><ul class="clean" id="th-est"></ul></section>
+            </div>
+            <div class="grid2">
+              <section class="card"><h2>O que precisa ser verdade</h2><ul class="clean" id="th-premises"></ul></section>
+              <section class="card"><h2>Datas a acompanhar</h2><ul class="clean" id="th-cat"></ul></section>
+            </div>
+            <section class="card"><h2>A tese deixa de valer se</h2><p class="muted">Condições medíveis: confira de novo quando sair o próximo balanço ou quando quiser — nada é acompanhado em segundo plano.</p><div class="tbl" id="th-inval"></div></section>
+            <section class="card"><h2>Fontes e avisos</h2><ul class="clean" id="th-notes"></ul></section>
+          </div>
+        </div>
       </section>
 
       <!-- ============================================================ OPORTUNIDADES -->
-      <section class="view" data-view="oportunidades" data-title="Oportunidades" data-eyebrow="Pesquisar" aria-labelledby="d-title" hidden>
+      <section class="view" data-view="oportunidades" data-title="Oportunidades" data-eyebrow="Pesquisar" aria-label="Oportunidades" hidden>
+        <div class="tabs" role="tablist" aria-label="Oportunidades" data-tabs="oportunidades">
+          <button type="button" role="tab" data-tab="radar" aria-selected="true"><svg class="icon"><use href="#i-radar"/></svg>Radar</button>
+          <button type="button" role="tab" data-tab="dia" aria-selected="false"><svg class="icon"><use href="#i-zap"/></svg>Ação do dia</button>
+        </div>
+        <div role="tabpanel" data-panel="radar">
+          <section class="card">
+            <div class="card-head"><div>
+              <h2 id="rd-title">Radar de oportunidades</h2>
+              <p class="lead">Varre as ações do catálogo (grandes empresas da B3 e dos EUA) e ordena por uma nota que você
+                pode conferir: valor (preço baixo pelo lucro, caixa e dividendos), qualidade (ROE, margem, dívida,
+                F-score), crescimento, momento do preço e risco — com pesos do estilo escolhido. Cada candidato traz as
+                evidências com números, o que pesa contra, o teste de armadilha de valor e o que desfaria a sua posição. A
+                primeira varredura pode levar cerca de 1 minuto; as seguintes usam os dados já baixados.</p></div>
+              <span class="badge real"><svg class="icon"><use href="#i-database"/></svg>Balanços e cotações reais</span></div>
+            <form id="rd-form">
+              <label>Mercados
+                <select name="mercados"><option value="BR" selected>Só Brasil</option><option value="US">Só EUA</option><option value="BR,US">Brasil e EUA</option></select>
+              </label>
+              <label>Estilo
+                <select name="estilo"><option value="equilibrado" selected>Equilibrado</option><option value="valor">Valor (preço baixo)</option>
+                  <option value="qualidade">Qualidade</option><option value="crescimento">Crescimento</option><option value="dividendos">Dividendos</option>
+                  <option value="momento">Momento do preço</option></select>
+              </label>
+              <label>Quantos mostrar
+                <select name="quantidade"><option value="5">5</option><option value="10" selected>10</option><option value="20">20</option></select>
+              </label>
+              <button id="rd-run" type="submit"><svg class="icon"><use href="#i-radar"/></svg>Varrer o mercado</button>
+            </form>
+            <div class="status" id="rd-status" role="status" aria-live="polite"></div>
+          </section>
+          <div id="rd-results" class="hidden">
+            <section class="card"><h2>Candidatos</h2><p class="muted" id="rd-sum"></p><ol class="radar-list" id="rd-list"></ol></section>
+            <section class="card"><h2>Como foi calculado</h2><ul class="clean" id="rd-rules"></ul></section>
+          </div>
+        </div>
+        <div role="tabpanel" data-panel="dia" hidden>
         <section class="card">
           <div class="card-head"><div>
             <h2 id="d-title">Ação do dia: quanto você tem hoje?</h2>
@@ -667,6 +770,7 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
           </div>
           <section class="card"><h2>Avisos</h2><ul class="clean" id="d-warn"></ul><p class="kind" id="d-src"></p></section>
         </div>
+              </div>
       </section>
 
       <!-- ============================================================ PREVISÕES -->
@@ -751,6 +855,84 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
             <section class="card" id="rg-metrics-card"><h2>Acertos por evento</h2><p class="muted">Brier: erro quadrático médio das probabilidades (0 é perfeito; sempre dizer 50% dá 0,25). Habilidade: quanto o modelo foi melhor (+) ou pior (−) que sempre dizer 50%.</p><div class="tbl" id="rg-metrics"></div></section>
             <section class="card" id="rg-groups-card"><h2>Por classe, prazo e regime de volatilidade</h2><div id="rg-groups"></div></section>
             <section class="card"><h2>Integridade e avisos</h2><ul class="clean" id="rg-notes"></ul></section>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ CENÁRIOS -->
+      <section class="view" data-view="cenarios" data-title="Cenários" data-eyebrow="Pesquisar" aria-label="Cenários" hidden>
+        <div class="tabs" role="tablist" aria-label="Cenários" data-tabs="cenarios">
+          <button type="button" role="tab" data-tab="empresa" aria-selected="true"><svg class="icon"><use href="#i-calculator"/></svg>Futuros da empresa</button>
+          <button type="button" role="tab" data-tab="cadeia" aria-selected="false"><svg class="icon"><use href="#i-network"/></svg>Efeitos em cadeia</button>
+        </div>
+
+        <div role="tabpanel" data-panel="empresa">
+          <section class="card">
+            <div class="card-head"><div>
+              <h2 id="sc-title">Quanto a empresa vale em cada futuro?</h2>
+              <p class="lead">Simula o valor por ação a partir do caixa que a empresa pode gerar: crescimento da receita, margem
+                de caixa livre, retorno exigido e crescimento de longo prazo. As premissas iniciais vêm dos balanços da própria
+                empresa (com a origem de cada uma) e você pode mudá-las. Mostra três cenários, 20 mil sorteios, o que mais pesa
+                no valor e o crescimento que o preço de hoje já embute. É uma conta sob premissas, não um preço-alvo.</p></div>
+              <span class="badge real"><svg class="icon"><use href="#i-database"/></svg>Balanços e cotações reais</span></div>
+            <form id="sc-form">
+              <label class="span-all">Ação<input name="ativo" maxlength="60" required placeholder="Ex.: WEGE3, VALE3, AAPL"></label>
+              <button id="sc-run" type="submit"><svg class="icon"><use href="#i-calculator"/></svg>Simular</button>
+            </form>
+            <div class="status" id="sc-status" role="status" aria-live="polite"></div>
+          </section>
+          <div id="sc-results" class="hidden">
+            <section class="card"><div id="sc-head"></div></section>
+            <div class="kpis" id="sc-kpis"></div>
+            <section class="card"><h2>Premissas</h2>
+              <p class="muted">Valores em % ao ano. O cenário pessimista usa o crescimento e a margem menores e o custo de capital MAIOR.</p>
+              <div class="tbl"><table class="edit" id="sc-prem"><thead><tr><th>Premissa</th><th class="num">Pessimista</th><th class="num">Base</th>
+                <th class="num">Otimista</th><th>De onde vem</th></tr></thead><tbody></tbody></table></div>
+              <div class="row" style="margin-top:10px"><button id="sc-recalc" type="button"><svg class="icon"><use href="#i-refresh-cw"/></svg>Recalcular com estas premissas</button>
+                <button class="ghost sm" id="sc-reset" type="button">Voltar às premissas dos dados</button></div>
+              <div class="status" id="sc-prem-status" role="status" aria-live="polite"></div>
+            </section>
+            <div class="grid2">
+              <section class="card"><h2>Valor por ação nos sorteios</h2><p class="muted" id="sc-hist-note"></p><div class="chart" id="sc-hist"></div></section>
+              <section class="card"><h2>O que mais pesa no valor</h2><p class="muted">Valor por ação com cada premissa no extremo pessimista e no otimista, as demais na base.</p><div class="chart" id="sc-tornado"></div></section>
+            </div>
+            <div class="grid2">
+              <section class="card"><h2>Cenários</h2><div class="tbl" id="sc-scen"></div></section>
+              <section class="card"><h2>Projeção do cenário base</h2><div class="tbl" id="sc-proj"></div></section>
+            </div>
+            <section class="card"><h2>Como foi calculado e avisos</h2><ul class="clean" id="sc-notes"></ul></section>
+          </div>
+        </div>
+
+        <div role="tabpanel" data-panel="cadeia" hidden>
+          <section class="card">
+            <div class="card-head"><div>
+              <h2 id="ch-title">E se os juros, o dólar ou o petróleo mudarem?</h2>
+              <p class="lead">Mostra a cadeia de efeitos que a economia costuma descrever para cada choque (hipótese) e, ao lado,
+                como cada ação e cada setor realmente se moveram com o indicador do choque nos últimos 5 anos (dados), dizendo
+                onde os dados confirmam a teoria, onde a contrariam e onde não dá para dizer. Relações passadas podem mudar.</p></div>
+              <span class="badge real"><svg class="icon"><use href="#i-database"/></svg>Cotações reais</span></div>
+            <form id="ch-form">
+              <label>Choque
+                <select name="choque"><option value="juros_br" selected>Juros no Brasil</option><option value="dolar">Dólar frente ao real</option>
+                  <option value="petroleo">Petróleo (Brent)</option><option value="bolsa_eua">Bolsa americana (S&amp;P 500)</option>
+                  <option value="juros_eua">Juros nos EUA</option></select>
+              </label>
+              <label>Tamanho <span class="hint" id="ch-unit">(pontos percentuais; negativo = queda)</span><input name="tamanho" type="number" step="any" value="1" required></label>
+              <label>Ações
+                <select name="mercado"><option value="BR" selected>Brasil (catálogo)</option><option value="US">EUA (catálogo)</option>
+                  <option value="minha">As da minha carteira</option></select>
+              </label>
+              <button id="ch-run" type="submit"><svg class="icon"><use href="#i-network"/></svg>Ver efeitos</button>
+            </form>
+            <div class="status" id="ch-status" role="status" aria-live="polite"></div>
+          </section>
+          <div id="ch-results" class="hidden">
+            <section class="card"><h2 id="ch-res-title">Cadeia de efeitos</h2><ol class="chain" id="ch-chain"></ol><ul class="clean" id="ch-read"></ul></section>
+            <section class="card"><h2>Por setor: teoria × dados</h2><p class="muted">Barra: efeito estimado mediano das ações do setor (traço: metade central). Tabela: o que a teoria espera e o que os dados mostram.</p>
+              <div class="chart" id="ch-sectors"></div><div class="tbl" id="ch-table"></div></section>
+            <section class="card"><h2>Por ação</h2><div class="tbl" id="ch-stocks"></div></section>
+            <section class="card"><h2>Método e avisos</h2><ul class="clean" id="ch-notes"></ul></section>
           </div>
         </div>
       </section>
@@ -1186,6 +1368,7 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
   <div class="sheet" id="more-sheet" role="dialog" aria-modal="true" aria-label="Mais seções">
     <div class="grip"></div>
     <a href="#/previsoes" data-nav="previsoes"><svg class="icon"><use href="#i-compass"/></svg>Previsões</a>
+    <a href="#/cenarios" data-nav="cenarios"><svg class="icon"><use href="#i-calculator"/></svg>Cenários</a>
     <a href="#/laboratorio" data-nav="laboratorio"><svg class="icon"><use href="#i-flask-conical"/></svg>Laboratório quantitativo</a>
     <a href="#/perfil" data-nav="perfil"><svg class="icon"><use href="#i-user-round"/></svg>Perfil e dados</a>
     <button type="button" id="theme-mobile"><svg class="icon"><use href="#i-moon"/></svg>Alternar tema</button>
@@ -2090,7 +2273,11 @@ function renderStock(d) {
   if (d.origem === "real") {
     const go = el("button", { class: "secondary sm", type: "button" }, icon("compass"), "Previsão em faixas e acertos do modelo neste ativo");
     go.addEventListener("click", () => forecastTicker(shortTk(d.ticker)));
-    box.append(el("p", {}, go));
+    const th = el("button", { class: "secondary sm", type: "button" }, icon("file-text"), "Tese e fundamentos");
+    th.addEventListener("click", () => thesisTicker(shortTk(d.ticker)));
+    const sc = el("button", { class: "secondary sm", type: "button" }, icon("calculator"), "Cenários do negócio");
+    sc.addEventListener("click", () => scenarioTicker(shortTk(d.ticker)));
+    box.append(el("p", { class: "row" }, go, th, sc));
   }
   renderCompany(d);
   const p50 = pj.cenarios.find((c) => c.cenario.startsWith("base")), p10 = pj.cenarios.find((c) => c.cenario.startsWith("pess")),
@@ -2264,7 +2451,7 @@ $("ask-form").addEventListener("submit", async (ev) => {
 
 // ---------- history of analyses (this device)
 const HIST_KEY = "qpi-historico";
-const HIST_ICON = { acao: "chart-candlestick", dia: "zap", carteira: "briefcase-business", lab: "flask-conical", previsao: "compass" };
+const HIST_ICON = { acao: "chart-candlestick", dia: "zap", carteira: "briefcase-business", lab: "flask-conical", previsao: "compass", tese: "file-text", radar: "radar", cenarios: "calculator", cadeia: "network" };
 function addHistory(item) {
   const prev = store.get(HIST_KEY, []);
   const list = Array.isArray(prev) ? prev : [];
@@ -2291,6 +2478,8 @@ function renderHistory() {
     item.addEventListener("click", () => {
       if (h.tipo === "acao" && h.ticker) analyzeTicker(h.ticker.replace(/\.SA$/, ""));
       else if (h.tipo === "previsao" && h.ticker) forecastTicker(h.ticker.replace(/\.SA$/, ""));
+      else if (h.tipo === "tese" && h.ticker) thesisTicker(h.ticker.replace(/\.SA$/, ""));
+      else if (h.tipo === "cenarios" && h.ticker) scenarioTicker(h.ticker.replace(/\.SA$/, ""));
       else location.hash = h.link || "#/painel";
     });
     return el("li", {}, item);
@@ -2514,6 +2703,8 @@ let pf = loadPf();
 function savePf() { store.set(PF_KEY, pf); }
 const numText = (x) => (x === null || x === undefined) ? "" : String(x);
 function readNum(v) { const t = String(v === null || v === undefined ? "" : v).trim(); if (!t) return null; const x = parseAmount(t); return isFinite(x) ? x : NaN; }
+// signed numbers typed by the investor ("-5", "−2,5"): premises and shock sizes can be negative
+function readSigned(v) { const t = String(v === null || v === undefined ? "" : v).trim(); if (!t) return null; const neg = /^[-−]/.test(t); const x = readNum(t.replace(/^[-−]\s*/, "")); return x === null ? null : (neg ? -x : x); }
 function renderPosEditor() {
   if (!pf.posicoes.length) pf.posicoes.push({ ticker: "", quantidade: "", preco_medio: "" });
   setChildren("mc-pos-body", ...pf.posicoes.map((p, i) => {
@@ -3009,15 +3200,387 @@ $("rg-form").addEventListener("submit", async (ev) => {
 });
 renderRgList();
 
+// ---------- thesis and fundamentals of one company; opportunity radar
+let thData = null, rdData = null;
+function fmtBig(x, ccy) {
+  if (x === null || x === undefined || !isFinite(x)) return "n/d";
+  const sym = CCY[ccy] || ccy || "", a = Math.abs(x);
+  const v = a >= 1e9 ? (x / 1e9).toFixed(1).replace(".", ",") + " bi" : a >= 1e6 ? Math.round(x / 1e6).toLocaleString("pt-BR") + " mi"
+    : Math.round(x).toLocaleString("pt-BR");
+  return (sym + " " + v).trim();
+}
+function chartYears(id, years, series, fmt) {
+  const all = series.flatMap((se) => se.values.filter((v) => v !== null && v !== undefined && isFinite(v)));
+  if (!all.length) { setChildren(id, el("p", { class: "muted" }, "Sem dados para o gráfico.")); return; }
+  const W = widthOf(id, 900), H = 260, L = 72, R = 12, T = 12, B = 30;
+  let lo = Math.min(0, ...all), hi = Math.max(0, ...all);
+  const pad = (hi - lo) * 0.08 || 1; hi += pad; if (lo < 0) lo -= pad;
+  const y = lin(lo, hi, H - B, T), svg = frame(W, H);
+  gridY(svg, y, ticks(lo, hi, 4), L, W - R, fmt);
+  const n = years.length, gw = (W - L - R) / n, bw = Math.max(4, Math.min(26, (gw - 16) / series.length - 2));
+  years.forEach((yr, i) => {
+    const x0 = L + i * gw + (gw - (bw + 2) * series.length + 2) / 2;
+    series.forEach((se, k) => {
+      const v = se.values[i];
+      if (v === null || v === undefined || !isFinite(v)) return;
+      const top = y(Math.max(0, v)), bot = y(Math.min(0, v));
+      svg.append(s("rect", { x: x0 + k * (bw + 2), y: top, width: bw, height: Math.max(1, bot - top), rx: 2, fill: se.color,
+        "data-tip": `${se.name} (${yr}): ${fmt(v)}` }));
+    });
+    svg.append(s("text", { x: L + i * gw + gw / 2, y: H - B + 17, "text-anchor": "middle", "font-size": 11, fill: "var(--muted)" }, yr));
+  });
+  svg.append(s("line", { x1: L, x2: W - R, y1: y(0), y2: y(0), stroke: "var(--axis)", "stroke-width": 1 }));
+  setChildren(id, svg);
+}
+const BASE_PT = { medido: "medido", modelo: "modelo [E]", terceiros: "terceiros", setor: "setor" };
+const evidenceLi = (x) => el("li", {}, x.texto, el("span", { class: "kind" }, ` — ${BASE_PT[x.base] || x.base}${x.fonte ? " · " + x.fonte : ""}`));
+function renderTh(d) {
+  thData = d;
+  $("th-results").classList.remove("hidden");
+  const t = d.tese, f = d.fundamentos, e = d.empresa, ccy = f.moeda || d.moeda;
+  setChildren("th-head", el("div", { class: "with-logo" }, logoEl(d.ticker, d.logo, 40),
+    el("div", {}, el("strong", {}, `${d.nome} (${shortTk(d.ticker)})`),
+      el("div", { class: "muted" }, [e.segmento, e.classificacao].filter(Boolean).join(" · ")),
+      el("div", { class: "kind" }, e.descricao ? `${e.descricao} — fonte: ${e.descricao_fonte}` : ""))));
+  $("th-statement").textContent = t.afirmacao;
+  const fe = t.qualidade_dos_dados, tone = { boa: "var(--good)", "média": "var(--warn)", fraca: "var(--crit)" };
+  setChildren("th-strength", el("span", { class: "st", style: "--c:" + (tone[fe.nivel] || "var(--muted)") }, `Qualidade dos dados: ${fe.nivel} (${fe.pontos} de ${fe.de})`),
+    el("span", { class: "kind" }, fe.motivos.length ? fe.motivos.join(" · ") : "poucos dados medidos"));
+  setChildren("th-favor", ...(t.a_favor.length ? t.a_favor.map(evidenceLi) : [el("li", { class: "muted" }, "Nenhum ponto a favor medido.")]));
+  setChildren("th-against", ...(t.contra.length ? t.contra.map(evidenceLi) : [el("li", { class: "muted" }, "Nenhum ponto contra medido.")]));
+  $("th-counter").textContent = "Contra-tese: " + t.contra_tese;
+  const tr = d.armadilha;
+  $("th-trap-read").textContent = tr.leitura + (tr.criterios_barata.length ? " Critérios de preço baixo atendidos: " + tr.criterios_barata.join("; ") + "." : "");
+  setChildren("th-trap", table(["Sinal", "Acionado?", "Medida", "Regra"],
+    tr.sinais.map((x) => [x.sinal, x.acionado === null ? "não medido" : x.acionado ? "sim" : "não", x.valor, x.regra])));
+  $("th-trap-rules").textContent = "Regras: " + tr.regras + ".";
+  $("th-fund-src").textContent = f.fonte ? `${f.fonte}; valores na moeda do balanço (${ccy || "n/d"}).`
+    : "Demonstrações indisponíveis nas fontes consultadas: nada foi estimado no lugar.";
+  if (f.anos.length) {
+    const yrs = f.anos.map((r) => String(r.ano).slice(0, 4));
+    const ser = [{ name: "Receita", color: "var(--s1)", values: f.anos.map((r) => r.receita) },
+      { name: "Lucro líquido", color: "var(--s2)", values: f.anos.map((r) => r.lucro_liquido) },
+      { name: "Caixa livre", color: "var(--s3)", values: f.anos.map((r) => r.fcl) }];
+    setChildren("th-fund-legend", ...ser.map((se) => el("span", {}, el("i", { style: "background:" + se.color }), se.name)));
+    chartYears("th-fund-chart", yrs, ser, (v) => fmtBig(v, ccy));
+    setChildren("th-fund", table(["Ano", "Receita", "Lucro líquido", "Margem operacional", "ROE", "Caixa livre", "Dívida líq./EBITDA", "Dividendos pagos"],
+      f.anos.map((r) => [String(r.ano).slice(0, 4), fmtBig(r.receita, ccy), fmtBig(r.lucro_liquido, ccy), fmtPct(r.margem_operacional, 1),
+        fmtPct(r.roe, 1), fmtBig(r.fcl, ccy), r.divida_liquida_ebitda === null ? "n/d" : fmtNum(r.divida_liquida_ebitda, 1) + "×",
+        fmtBig(r.dividendos_pagos, ccy)]), [1, 2, 3, 4, 5, 6, 7]));
+  } else { setChildren("th-fund-legend"); setChildren("th-fund-chart"); setChildren("th-fund"); }
+  const fs = f.piotroski;
+  if (fs && fs.testes && fs.testes.length) {
+    $("th-fs-note").textContent = `${fs.pontos === null ? "n/d" : fs.pontos} de ${fs.medidos} testes medidos (ano fiscal de ${String(fs.ano).slice(0, 4)} contra ${String(fs.ano_anterior).slice(0, 4)}). De 0 a 3: fraco; de 7 a 9: forte (Piotroski, 2000).`;
+    setChildren("th-fs", table(["Teste", "Ponto", "Medida"], fs.testes.map((x) => [x.teste, x.ponto === null ? "n/d" : String(x.ponto), x.detalhe]), [1]));
+  } else {
+    $("th-fs-note").textContent = e.financeira ? "Não se aplica a bancos e seguradoras (como no estudo original)." : (fs && fs.nota) || "Demonstrações insuficientes para o cálculo.";
+    setChildren("th-fs");
+  }
+  const m = f.multiplos;
+  setChildren("th-mult", table(["Múltiplo", "Valor"], [["P/L", fmtNum(m.pl, 1)], ["P/VP", fmtNum(m.p_vp, 2)], ["EV/EBITDA", fmtNum(m.ev_ebitda, 1)],
+    ["Caixa livre sobre o valor de mercado", fmtPct(m.fcl_yield, 1)], ["Dividendos (12 meses)", fmtPct(m.dividend_yield, 1)]], [1]));
+  setChildren("th-est", ...(t.estimativas.length ? t.estimativas.map(evidenceLi) : [el("li", { class: "muted" }, "Sem estimativas disponíveis.")]));
+  setChildren("th-premises", ...t.precisa_ser_verdade.map((x) => el("li", {}, x)));
+  setChildren("th-cat", ...(t.catalisadores.length ? t.catalisadores.map((c) => el("li", {}, el("strong", {}, fmtDateBR(c.data)), " — " + c.evento, el("span", { class: "kind" }, " · " + c.fonte)))
+    : [el("li", { class: "muted" }, "Nenhuma data futura publicada pelas fontes.")]));
+  setChildren("th-inval", table(["Condição", "Hoje", "Limite", "Como conferir"], t.invalidacao.map((x) => [x.condicao, x.atual, x.limite, x.como_conferir])));
+  setChildren("th-notes", ...d.indisponivel.map((x) => el("li", {}, x)), ...d.avisos.map((x) => el("li", {}, x)),
+    ...d.fontes.map((x) => el("li", { class: "muted" }, x)), el("li", { class: "muted" }, t.aviso));
+}
+async function runTh() {
+  const f = new FormData($("th-form"));
+  const body = { ativo: String(f.get("ativo") || "").trim(), horizonte_anos: Number(f.get("horizonte_anos")) };
+  const st = $("th-status");
+  if (!body.ativo) { st.textContent = "Informe o código ou o nome da ação."; return; }
+  $("th-results").classList.add("hidden");
+  const btn = $("th-run"); btn.disabled = true;
+  const live = liveStatus(st, "Buscando balanços, estimativas e cotações…");
+  try {
+    const d = await postStream("/api/tese", body, live.update);
+    live.stop();
+    renderTh(d);
+    st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s.` + (d.do_cache ? " (reaproveitado: mesmo pedido há menos de 15 min)" : "");
+    addHistory({ tipo: "tese", titulo: `Tese: ${shortTk(d.ticker)}`, ticker: d.ticker, logo: d.logo,
+      resumo: `${d.tese.a_favor.length} a favor · ${d.tese.contra.length} contra · dados: ${d.tese.qualidade_dos_dados.nivel}`, link: "#/acoes/tese" });
+  } catch (e) {
+    live.stop();
+    st.textContent = (e.status === 400 || e.status === 422 ? "Atenção: " : "Erro: ") + e.message;
+  } finally { btn.disabled = false; }
+}
+$("th-form").addEventListener("submit", (ev) => { ev.preventDefault(); runTh(); });
+function thesisTicker(t) {
+  if (!t) return;
+  location.hash = "#/acoes/tese";
+  $("th-form").elements["ativo"].value = t;
+  runTh();
+}
+const FACTOR_LABEL = { valor: "Valor", qualidade: "Qualidade", crescimento: "Crescimento", momento: "Momento", risco: "Risco baixo" };
+const TRAP_TONE = { alto: "var(--crit)", moderado: "var(--warn)", baixo: "var(--good)" };
+function zbars(f) {
+  return el("div", { class: "zbars", role: "img", "aria-label": "Notas por fator: " + Object.entries(f).map(([k, v]) => `${FACTOR_LABEL[k] || k} ${v.z === null ? "não medido" : fmtNum(v.z, 1)}`).join(", ") },
+    ...Object.entries(f).flatMap(([k, v]) => {
+      const z = v.z === null ? null : Math.max(-3, Math.min(3, v.z));
+      const bar = el("div", { class: "zbar", "data-tip": `${FACTOR_LABEL[k] || k}: nota z ${z === null ? "n/d" : fmtNum(z, 2)}` + (v.contribuicao === null ? "" : `\ncontribuição à nota: ${fmtNum(v.contribuicao, 2)}`) });
+      if (z !== null) {
+        const w = Math.abs(z) / 3 * 50;
+        bar.append(el("i", { style: `left:${z >= 0 ? 50 : 50 - w}%;width:${Math.max(w, 1)}%;background:${z >= 0 ? "var(--s1)" : "var(--s2)"}` }));
+      }
+      return [el("span", {}, FACTOR_LABEL[k] || k), bar, el("span", { class: "num" }, z === null ? "n/d" : (z > 0 ? "+" : "") + fmtNum(z, 1))];
+    }));
+}
+function renderRd(d) {
+  rdData = d;
+  $("rd-results").classList.remove("hidden");
+  const mk = { BR: "Brasil", US: "EUA" };
+  $("rd-sum").textContent = `${d.analisados} ações analisadas (${d.com_fundamentos} com balanços) — ${d.mercados.map((x) => mk[x] || x).join(" e ")}, estilo ${d.estilo}, dados de ${fmtDateBR(d.data)}.`
+    + (d.tempo_esgotado.length ? ` A fonte de balanços não respondeu a tempo para ${d.tempo_esgotado.length}: avaliadas só pelo preço.` : "")
+    + (d.dados_insuficientes.length ? ` Fora da lista por dados insuficientes: ${d.dados_insuficientes.length}.` : "");
+  setChildren("rd-list", ...d.candidatos.map((c) => {
+    const trap = c.armadilha;
+    const trapTxt = trap.parece_barata ? `parece barata · risco de armadilha ${trap.nivel} (${trap.acionados} de ${trap.medidos} sinais)`
+      : `${trap.acionados} de ${trap.medidos} sinais de deterioração`;
+    const bTh = el("button", { class: "secondary sm", type: "button" }, icon("file-text"), "Tese");
+    bTh.addEventListener("click", () => thesisTicker(shortTk(c.ticker)));
+    const bFc = el("button", { class: "secondary sm", type: "button" }, icon("compass"), "Previsão");
+    bFc.addEventListener("click", () => forecastTicker(shortTk(c.ticker)));
+    const list = (title, items) => el("div", {}, el("h4", {}, title), el("ul", {}, ...items.map((x) => el("li", {}, x))));
+    return el("li", { class: "cand" },
+      el("div", { class: "cand-head" }, el("span", { class: "rank" }, String(c.posicao)), logoEl(c.ticker, c.logo, 32),
+        el("div", {}, el("strong", {}, `${shortTk(c.ticker)} · ${c.nome}`), el("div", { class: "kind" }, `${c.setor} · fatores medidos: ${fmtPct(c.cobertura, 0)}`)),
+        el("div", { class: "score" }, fmtNum(c.pontuacao, 2), el("small", {}, c.penalidade_armadilha > 0 ? `nota (−${fmtNum(c.penalidade_armadilha, 2)} por armadilha)` : "nota"))),
+      zbars(c.fatores),
+      el("div", { class: "cols" }, list("Evidências", c.evidencias), list("Contra", c.contra.length ? c.contra : ["nada relevante medido"]),
+        list("Desfaz a posição se", c.desfaz_se)),
+      el("div", { class: "row" }, el("span", { class: "st", style: "--c:" + (trap.parece_barata ? (TRAP_TONE[trap.nivel] || "var(--muted)") : "var(--muted)") }, trapTxt), bTh, bFc));
+  }));
+  setChildren("rd-rules", ...d.regras.map((x) => el("li", {}, x)), ...d.fontes.map((x) => el("li", { class: "muted" }, x)), el("li", { class: "muted" }, d.aviso));
+}
+$("rd-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const f = new FormData($("rd-form"));
+  const body = { mercados: String(f.get("mercados")).split(","), estilo: String(f.get("estilo")), quantidade: Number(f.get("quantidade")) };
+  const st = $("rd-status");
+  $("rd-results").classList.add("hidden");
+  const btn = $("rd-run"); btn.disabled = true;
+  const live = liveStatus(st, "Varrendo o mercado…");
+  try {
+    const d = await postStream("/api/radar", body, live.update);
+    live.stop();
+    renderRd(d);
+    st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s.` + (d.do_cache ? " (reaproveitado: mesmo pedido há menos de 15 min)" : "");
+    const top = d.candidatos[0];
+    addHistory({ tipo: "radar", titulo: `Radar (${d.estilo})`, resumo: top ? `1º: ${shortTk(top.ticker)} · ${d.analisados} ações analisadas` : `${d.analisados} ações analisadas`, link: "#/oportunidades/radar" });
+  } catch (e) {
+    live.stop();
+    st.textContent = (e.status === 400 || e.status === 422 ? "Atenção: " : "Erro: ") + e.message;
+  } finally { btn.disabled = false; }
+});
+
+// ---------- scenarios: business futures (discounted cash flow) and economic chain effects
+let scData = null, chData = null;
+const SC_ORDER = ["crescimento", "margem_fcl", "custo_capital", "crescimento_perpetuo"];
+function chartValueHist(id, d) {
+  const h = d.resultado.simulacao.histograma, e = h.bordas, c = h.contagens, price = d.preco, base = d.resultado.valor_por_acao.base;
+  const W = widthOf(id, 560), H = 280, L = 44, R = 14, T = 30, B = 40, cur = CCY[d.moeda] || d.moeda;
+  // the axis covers the draws (and today's price when it is close); a far price is written at the edge
+  const span = e[e.length - 1] - e[0], near = price >= e[0] - span * 0.5 && price <= e[e.length - 1] + span * 0.5;
+  const lo = near ? Math.min(e[0], price) : e[0], hi = near ? Math.max(e[e.length - 1], price) : e[e.length - 1];
+  const x = lin(lo, hi, L, W - R), top = Math.max(...c) * 1.12, y = lin(0, top, H - B, T);
+  const svg = frame(W, H);
+  gridY(svg, y, ticks(0, top, 4).filter((v) => Number.isInteger(v)), L, W - R, (v) => v.toLocaleString("pt-BR"));
+  c.forEach((n, i) => {
+    const x0 = x(e[i]) + 1, x1 = x(e[i + 1]) - 1;
+    svg.append(s("rect", { x: x0, y: y(n), width: Math.max(0.5, x1 - x0), height: Math.max(0, y(0) - y(n)), rx: 2, fill: e[i + 1] <= price ? "var(--s2)" : "var(--s1)",
+      "data-tip": `${cur} ${fmtNum(e[i], 2)} a ${fmtNum(e[i + 1], 2)}\n${n.toLocaleString("pt-BR")} sorteios` }));
+  });
+  [[price, "preço de hoje", "6 3"], [base, "base", "3 3"]].forEach(([v, lab, dash], k) => {
+    if (v < lo || v > hi) {
+      const right = v > hi;
+      svg.append(s("text", { x: right ? W - R : L, y: T - 8 - k * 12, "text-anchor": right ? "end" : "start", "font-size": 10.5, fill: "var(--ink)" },
+        right ? `${lab}: ${fmtNum(v, 2)} →` : `← ${lab}: ${fmtNum(v, 2)}`));
+      return;
+    }
+    const xv = x(v), anchor = xv > W - R - 40 ? "end" : xv < L + 40 ? "start" : "middle";
+    svg.append(s("line", { x1: xv, x2: xv, y1: T - 4, y2: H - B, stroke: "var(--ink2)", "stroke-width": 1.2, "stroke-dasharray": dash }));
+    svg.append(s("text", { x: xv, y: T - 8 - k * 12, "text-anchor": anchor, "font-size": 10.5, fill: "var(--ink)" }, lab));
+  });
+  for (const v of ticks(lo, hi, 5)) svg.append(s("text", { x: x(v), y: H - B + 15, "text-anchor": "middle", "font-size": 11, fill: "var(--muted)" }, fmtNum(v, v >= 100 ? 0 : 2)));
+  axisLabel(svg, (L + W) / 2, H - 6, `Valor por ação (${cur}); laranja: abaixo do preço de hoje`);
+  setChildren(id, svg);
+}
+function chartTornado(id, rows, base, ccy) {
+  const W = widthOf(id, 560), rowH = 34, left = W < 480 ? 120 : 190, right = 60, top = 8, H = top + rows.length * rowH + 28;
+  const vals = rows.flatMap((r) => [r.com_valor_baixo, r.com_valor_alto]).concat([base]);
+  const lo = Math.min(...vals), hi = Math.max(...vals), pad = (hi - lo) * 0.06 || 1;
+  const x = lin(lo - pad, hi + pad, left, W - right), svg = frame(W, H), cur = CCY[ccy] || ccy;
+  gridX(svg, x, ticks(lo - pad, hi + pad, 4), top, H - 26, (v) => fmtNum(v, v >= 100 ? 0 : 1));
+  svg.append(s("line", { x1: x(base), x2: x(base), y1: top, y2: H - 26, stroke: "var(--ink2)", "stroke-dasharray": "3 3" }));
+  rows.forEach((r, i) => {
+    const y0 = top + i * rowH + 8, a = Math.min(r.com_valor_baixo, r.com_valor_alto), b = Math.max(r.com_valor_baixo, r.com_valor_alto);
+    svg.append(s("text", { x: left - 8, y: y0 + 12, "text-anchor": "end", "font-size": 11, fill: "var(--ink2)" }, r.premissa));
+    svg.append(s("rect", { x: x(a), y: y0, width: Math.max(2, x(b) - x(a)), height: 16, rx: 3, fill: "var(--s1)",
+      "data-tip": `${r.premissa}\nno extremo pessimista: ${cur} ${fmtNum(r.com_valor_baixo, 2)}\nno extremo otimista: ${cur} ${fmtNum(r.com_valor_alto, 2)}` }));
+    svg.append(s("text", { x: x(b) + 6, y: y0 + 12, "font-size": 10.5, fill: "var(--ink2)" }, fmtNum(b - a, 2)));
+  });
+  setChildren(id, svg);
+}
+function premRow(key, p, editable = true) {
+  const cells = p.valores.map((v, i) => {
+    const inp = el("input", { class: "pct", type: "number", step: "0.1", value: String(Math.round(v * 1000) / 10), "data-k": key, "data-i": String(i), "aria-label": `${p.nome}: ${["pessimista", "base", "otimista"][i]} (%)` });
+    if (!editable) inp.setAttribute("disabled", "");
+    return el("td", { class: "num" }, inp);
+  });
+  return el("tr", {}, el("td", {}, p.nome), ...cells, el("td", { class: "kind" }, p.origem));
+}
+function renderSc(d) {
+  scData = d;
+  $("sc-results").classList.remove("hidden");
+  const r = d.resultado, v = r.valor_por_acao, cur = CCY[d.moeda] || d.moeda, b = d.base;
+  setChildren("sc-head", el("div", { class: "with-logo" }, logoEl(d.ticker, d.logo, 40),
+    el("div", {}, el("strong", {}, `${d.nome} (${shortTk(d.ticker)})`),
+      el("div", { class: "muted" }, `Preço de ${fmtDateBR(d.data_preco)}: ${fmtPrice(d.preco, d.moeda)} · ${b.nivel_nome} de ${fmtBig(b.nivel, d.moeda)} no ano fiscal de ${String(b.ano_fiscal).slice(0, 4)}`
+        + (d.financeira ? " · banco/seguradora: lucro × parcela distribuída" : ` · margem de caixa livre de hoje: ${fmtPct(b.margem_atual, 1)}`)))));
+  const gi = r.crescimento_implicito;
+  setChildren("sc-kpis",
+    kpi("Valor por ação (base)", fmtPrice(v.base, d.moeda), `${fmtPctS(r.potencial.base, 0)} sobre o preço de hoje`),
+    kpi("Faixa dos cenários", `${fmtNum(v.pessimista, 2)} a ${fmtNum(v.otimista, 2)}`, "pessimista a otimista"),
+    kpi("Sorteios acima do preço de hoje", fmtPct(r.simulacao.p_acima_do_preco, 0), `${r.simulacao.n.toLocaleString("pt-BR")} sorteios [S]`),
+    kpi("O preço de hoje embute", gi === null ? "fora da faixa" : `${fmtPctS(gi, 1)} ao ano`, "crescimento por 5 anos com as demais premissas na base"));
+  const prem = SC_ORDER.filter((k) => !(d.financeira && k === "margem_fcl")).map((k) => premRow(k, d.premissas[k]));
+  if (d.payout) prem.push(premRow("payout", d.payout));
+  $("sc-prem").querySelector("tbody").replaceChildren(...prem);
+  $("sc-hist-note").textContent = `Mediana dos sorteios: ${fmtPrice(r.simulacao.percentis.p50, d.moeda)}; metade central entre ${fmtNum(r.simulacao.percentis.p25, 2)} e ${fmtNum(r.simulacao.percentis.p75, 2)}.`;
+  chartValueHist("sc-hist", d);
+  chartTornado("sc-tornado", r.sensibilidade, v.base, d.moeda);
+  setChildren("sc-scen", table(["Cenário", "Valor por ação", "Sobre o preço"], ["pessimista", "base", "otimista"].map((k) => [k, fmtPrice(v[k], d.moeda), fmtPctS(r.potencial[k], 0)]), [1, 2]));
+  setChildren("sc-proj", table(["Ano", d.financeira ? "Lucro" : "Receita", d.financeira ? "Distribuído" : "Margem de caixa livre", "Caixa ao acionista", "Valor presente"],
+    r.projecao_base.map((x) => [String(x.ano), fmtBig(x.base, d.moeda), fmtPct(x.margem, 1), fmtBig(x.fluxo, d.moeda), fmtBig(x.valor_presente, d.moeda)]), [1, 2, 3, 4]));
+  setChildren("sc-notes", ...d.avisos.map((x) => el("li", {}, x)),
+    el("li", {}, `Parcela do valor que vem depois do ano 5: ${fmtPct(r.parcela_perpetuidade, 0)}.`),
+    el("li", {}, `Renda fixa usada no custo de capital: ${fmtPct(d.taxa_livre_de_risco, 2)} (${d.fonte_taxa}); beta medido: ${fmtNum(b.beta, 2)}.`),
+    el("li", { class: "muted" }, `Ações: ${b.acoes_fonte}.`), ...d.fontes.map((x) => el("li", { class: "muted" }, x)), el("li", { class: "muted" }, d.aviso));
+}
+async function runSc(premissas, payout) {
+  const st = premissas ? $("sc-prem-status") : $("sc-status");
+  const ativo = premissas && scData ? shortTk(scData.ticker) : String(new FormData($("sc-form")).get("ativo") || "").trim();
+  if (!ativo) { st.textContent = "Informe o código da ação."; return; }
+  const body = { ativo, ...(premissas ? { premissas } : {}), ...(payout ? { payout } : {}) };
+  const btn = premissas ? $("sc-recalc") : $("sc-run"); btn.disabled = true;
+  if (!premissas) $("sc-results").classList.add("hidden");
+  const live = liveStatus(st, "Buscando balanços e cotações…");
+  try {
+    const d = await postStream("/api/cenarios", body, live.update);
+    live.stop();
+    renderSc(d);
+    st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s.`;
+    if (!premissas) addHistory({ tipo: "cenarios", titulo: `Cenários: ${shortTk(d.ticker)}`, ticker: d.ticker, logo: d.logo,
+      resumo: `base ${fmtPrice(d.resultado.valor_por_acao.base, d.moeda)} · preço ${fmtPrice(d.preco, d.moeda)}`, link: "#/cenarios/empresa" });
+  } catch (e) {
+    live.stop();
+    st.textContent = (e.status === 400 || e.status === 422 ? "Atenção: " : "Erro: ") + e.message;
+  } finally { btn.disabled = false; }
+}
+$("sc-form").addEventListener("submit", (ev) => { ev.preventDefault(); runSc(); });
+$("sc-recalc").addEventListener("click", () => {
+  if (!scData) return;
+  const premissas = {}, payout = [];
+  let bad = false;
+  $("sc-prem").querySelectorAll("input[data-k]").forEach((inp) => {
+    const v = readSigned(inp.value);
+    if (v === null || !isFinite(v)) bad = true;
+    const k = inp.dataset.k, i = Number(inp.dataset.i), x = (v || 0) / 100;
+    if (k === "payout") payout[i] = x; else (premissas[k] = premissas[k] || [])[i] = x;
+  });
+  if (bad) { $("sc-prem-status").textContent = "Preencha todas as premissas com números (em %)."; return; }
+  if (scData.financeira) premissas.margem_fcl = [0, 0, 0];
+  runSc(premissas, payout.length ? payout : null);
+});
+$("sc-reset").addEventListener("click", () => { if (scData) { $("sc-form").elements["ativo"].value = shortTk(scData.ticker); runSc(); } });
+function scenarioTicker(t) {
+  if (!t) return;
+  location.hash = "#/cenarios/empresa";
+  $("sc-form").elements["ativo"].value = t;
+  runSc();
+}
+const CH_DEFAULT = { juros_br: [1, "(pontos percentuais; negativo = queda)"], dolar: [10, "(%; negativo = o dólar cai)"],
+  petroleo: [20, "(%; negativo = o petróleo cai)"], bolsa_eua: [-10, "(%; negativo = a bolsa cai)"], juros_eua: [1, "(pontos percentuais; negativo = queda)"] };
+$("ch-form").elements["choque"].addEventListener("change", (ev) => {
+  const [v, unit] = CH_DEFAULT[ev.target.value] || [1, ""];
+  $("ch-form").elements["tamanho"].value = String(v);
+  $("ch-unit").textContent = unit;
+});
+function chartSectors(id, rows) {
+  const W = widthOf(id, 900), rowH = 26, left = W < 480 ? 120 : 230, right = 56, top = 6, H = top + rows.length * rowH + 28;
+  const vals = rows.flatMap((r) => [r.efeito_p25, r.efeito_p75, r.efeito_mediano, 0]);
+  const lo = Math.min(...vals), hi = Math.max(...vals), pad = (hi - lo) * 0.08 || 0.01;
+  const x = lin(lo - pad, hi + pad, left, W - right), svg = frame(W, H);
+  gridX(svg, x, ticks(lo - pad, hi + pad, 4), top, H - 26, (v) => fmtPct(v, 0));
+  svg.append(s("line", { x1: x(0), x2: x(0), y1: top, y2: H - 26, stroke: "var(--axis)" }));
+  rows.forEach((r, i) => {
+    const y0 = top + i * rowH + 6, m = r.efeito_mediano;
+    const short = r.setor_nome.replace(/\s*\(.*\)$/, ""), maxc = W < 480 ? 15 : 30;
+    svg.append(s("text", { x: left - 8, y: y0 + 11, "text-anchor": "end", "font-size": 11, fill: "var(--ink2)" },
+      `${short.length > maxc ? short.slice(0, maxc - 1) + "…" : short} (${r.n})`));
+    svg.append(s("rect", { x: Math.min(x(0), x(m)), y: y0, width: Math.max(1.5, Math.abs(x(m) - x(0))), height: 14, rx: 3, fill: m >= 0 ? "var(--s1)" : "var(--s2)",
+      "data-tip": `${r.setor_nome}: mediana ${fmtPctS(m, 1)}\nmetade central: ${fmtPctS(r.efeito_p25, 1)} a ${fmtPctS(r.efeito_p75, 1)}\n${r.concordancia}` }));
+    svg.append(s("line", { x1: x(r.efeito_p25), x2: x(r.efeito_p75), y1: y0 + 7, y2: y0 + 7, stroke: "var(--ink)", "stroke-width": 1.5 }));
+    svg.append(s("text", { x: m >= 0 ? x(Math.max(m, r.efeito_p75)) + 6 : x(Math.max(0, r.efeito_p75)) + 6, y: y0 + 11, "font-size": 10.5, fill: "var(--ink2)" }, fmtPctS(m, 1)));
+  });
+  setChildren(id, svg);
+}
+function renderCh(d) {
+  chData = d;
+  $("ch-results").classList.remove("hidden");
+  $("ch-res-title").textContent = `Cadeia de efeitos: ${d.choque.descricao}`;
+  setChildren("ch-chain", ...d.cadeia.map((c) => el("li", {}, el("div", {}, el("strong", {}, c.etapa), el("span", {}, " — " + c.explicacao)))));
+  setChildren("ch-read", ...d.leitura.map((x) => el("li", {}, x)));
+  chartSectors("ch-sectors", d.setores);
+  setChildren("ch-table", table(["Setor", "Teoria espera", "Por quê (hipótese)", "Dados: efeito mediano", "Ações com |t| ≥ 2", "Leitura"],
+    d.setores.map((x) => [x.setor_nome, x.esperado || "—", x.motivo || "—", fmtPctS(x.efeito_mediano, 1), `${x.significativos} de ${x.n}`, x.concordancia]), [3, 4]));
+  setChildren("ch-stocks", table(["Ação", "Setor", "Beta", "t", "Efeito estimado", "Faixa de 95%"],
+    d.acoes.map((x) => [withLogo(x.ticker, x.logo, shortTk(x.ticker), 22, true), x.setor_nome, fmtNum(x.beta, 2), fmtNum(x.t, 1), fmtPctS(x.efeito, 1),
+      `${fmtPctS(x.faixa_95[0], 1)} a ${fmtPctS(x.faixa_95[1], 1)}`]), [2, 3, 4, 5]));
+  setChildren("ch-notes", ...d.avisos.map((x) => el("li", {}, x)), el("li", { class: "muted" }, `Indicador do choque: ${d.choque.indicador} (variação usada: ${fmtPctS(d.choque.movimento_indicador, 1)}).`),
+    el("li", { class: "muted" }, d.aviso));
+}
+$("ch-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const f = new FormData($("ch-form"));
+  const st = $("ch-status"), size = readSigned(f.get("tamanho"));
+  if (size === null || !isFinite(size) || size === 0) { st.textContent = "Informe o tamanho do choque (diferente de zero)."; return; }
+  const mk = String(f.get("mercado"));
+  const body = { choque: String(f.get("choque")), tamanho: size, mercado: mk === "minha" ? "BR" : mk };
+  if (mk === "minha") {
+    const t = pf.posicoes.map((p) => String(p.ticker || "").trim()).filter((x) => x && x.toUpperCase() !== "CAIXA_CDI");
+    if (!t.length) { st.textContent = "Cadastre as suas posições em Carteira → Minha carteira primeiro."; return; }
+    body.ativos = t.slice(0, 40);
+  }
+  $("ch-results").classList.add("hidden");
+  const btn = $("ch-run"); btn.disabled = true;
+  const live = liveStatus(st, "Buscando 5 anos de cotações…");
+  try {
+    const d = await postStream("/api/cadeia", body, live.update);
+    live.stop();
+    renderCh(d);
+    st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s.` + (d.do_cache ? " (reaproveitado: mesmo pedido há menos de 15 min)" : "");
+    addHistory({ tipo: "cadeia", titulo: `Efeitos: ${d.choque.descricao}`, resumo: d.leitura[0] || "", link: "#/cenarios/cadeia" });
+  } catch (e) {
+    live.stop();
+    st.textContent = (e.status === 400 || e.status === 422 ? "Atenção: " : "Erro: ") + e.message;
+  } finally { btn.disabled = false; }
+});
+
 // ---------- navigation: one view at a time; "#/view" routes, "#id" opens the view that holds the element
-const VIEW_NAMES = ["painel", "acoes", "oportunidades", "previsoes", "carteira", "laboratorio", "perfil"];
+const VIEW_NAMES = ["painel", "acoes", "oportunidades", "previsoes", "cenarios", "carteira", "laboratorio", "perfil"];
 let currentView = null;
 function onViewShown(name) {
   if (name === "laboratorio" && lastData) render(lastData);
-  if (name === "acoes" && stockData) renderStock(stockData);
+  if (name === "acoes") { if (stockData) renderStock(stockData); if (thData) renderTh(thData); }
+  if (name === "oportunidades" && rdData) renderRd(rdData);
   if (name === "painel") { renderHistory(); renderLastPortfolio(); renderProfileChip(); renderMine(); }
   if (name === "carteira") { if (mcData) renderMc(mcData); if (rkData) renderRk(rkData); }
   if (name === "previsoes") { if (fcData) renderFc(fcData); if (rgData) renderRg(rgData); else renderRgList(); }
+  if (name === "cenarios") { if (scData) renderSc(scData); if (chData) renderCh(chData); }
   if (name === "perfil") renderDataSummary();
 }
 function showView(name, target, tab) {

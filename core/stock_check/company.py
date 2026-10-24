@@ -39,6 +39,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -188,6 +189,22 @@ class YahooFundamentals:
             raise SourceError(f"Yahoo: autorização (crumb) indisponível (HTTP {st})")
         self._crumb, self._t = text, self._clock()
         return text
+
+    def get_json(self, url_for: Callable[[str], str]) -> object:
+        """GET another Yahoo JSON endpoint that needs the crumb (``url_for(crumb)``), renewing it once on 401/403."""
+        for attempt in range(2):
+            st, body = self._fetch(url_for(self.crumb(refresh=attempt > 0)), self.timeout_s)
+            if st in (401, 403) and attempt == 0:
+                continue
+            if st == 404:
+                raise SourceError("Yahoo: dado não publicado para este ativo")
+            if st != 200:
+                raise SourceError(f"Yahoo respondeu HTTP {st}")
+            try:
+                return json.loads(body)
+            except ValueError as e:
+                raise SourceError("Yahoo: resposta não é JSON") from e
+        raise SourceError("Yahoo: acesso negado mesmo após renovar a autorização")
 
     def summary(self, symbol: str) -> dict[str, object]:
         for attempt in range(2):

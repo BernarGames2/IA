@@ -29,6 +29,7 @@ from core.forecasting.model import Fit, P, fit, prob_above, quantiles
 from core.market_data.logos import logo_path
 from core.purpose.catalog import REAL_CATALOG, by_ticker
 from core.purpose.language import guarantee_phrases
+from utils.br_format import num, pct
 
 LOOKBACK = 5 * P
 QS = (0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95)
@@ -37,6 +38,10 @@ CATALOG = by_ticker(REAL_CATALOG)
 DISCLAIMER = ("Distribuição de cenários de um modelo estatístico sobre o histórico de preços [E]: não é preço-alvo, não "
               "é recomendação e não prevê notícias. O passado pode não se repetir; a calibração histórica mostra quanto "
               "o modelo acertou as próprias probabilidades neste ativo.")
+
+
+def _hlabel(h: float) -> str:
+    return f"{round(h * 12)} meses" if h < 1 else ("1 ano" if h == 1 else f"{num(h, 0 if h % 1 == 0 else 1)} anos")
 
 
 def _window(px: pd.Series) -> pd.Series:
@@ -72,7 +77,7 @@ def build(s3: Series3, horizon_years: float, rf_live: float | None = None, rf_so
     if rf is None:
         rf = DEMO_RISK_FREE_FALLBACK.get(s3.currency, 0.10)
         rf_src = "FALLBACK DE DEMONSTRAÇÃO (não é cotação)"
-        warns.append(f"taxa livre de risco indisponível: usado {rf:.2%} de demonstração — as probabilidades contra a renda "
+        warns.append(f"taxa livre de risco indisponível: usado {pct(rf, 2)} de demonstração — as probabilidades contra a renda "
                      "fixa ficam só ilustrativas")
     br = None
     if s3.bench is not None:
@@ -121,7 +126,7 @@ def build(s3: Series3, horizon_years: float, rf_live: float | None = None, rf_so
         calib = calibration.summarise(rows, hs) if rows else {"horizonte_pregoes": hs, "n": 0, "insuficiente": True,
                                                               "nota": "sem a taxa livre de risco histórica: calibração não calculada"}
         if h > 1.0:
-            calib["nota_horizonte"] = (f"horizonte pedido de {h:g} anos: com 10 anos de dados não há janelas independentes "
+            calib["nota_horizonte"] = (f"horizonte pedido de {_hlabel(h)}: com 10 anos de dados não há janelas independentes "
                                        "suficientes para testá-lo; mostrada a calibração do mesmo modelo em 12 meses")
     a = CATALOG.get(s3.ticker)
     ref_price = float(px.iloc[-1])
@@ -132,8 +137,9 @@ def build(s3: Series3, horizon_years: float, rf_live: float | None = None, rf_so
                   "moeda": s3.currency, "logo": logo_path(s3.ticker)},
         "preco_referencia": ref_price, "data_referencia": f"{t_ref:%Y-%m-%d}", "horizonte_dias": round(h * 365.25),
         "data_fim": f"{end_date:%Y-%m-%d}",
-        "hipotese": (f"o retorno de {s3.ticker} em {h:g} ano(s) segue a distribuição do modelo: mediana {qv[0.50]:+.1%}, "
-                     f"faixa de 80% de {qv[0.10]:+.1%} a {qv[0.90]:+.1%}; chance de superar a renda fixa {probs['p_superar_rf']:.0%}"),
+        "hipotese": (f"o retorno de {s3.ticker} em {_hlabel(h)} segue a distribuição do modelo: mediana "
+                     f"{pct(qv[0.50], 1, sign=True)}, faixa de 80% de {pct(qv[0.10], 1, sign=True)} a {pct(qv[0.90], 1, sign=True)}; "
+                     f"chance de superar a renda fixa {pct(probs['p_superar_rf'], 0)}"),
         "distribuicao": {"m_log": m, "s_log": sd, "quantis": {f"p{round(q * 100):02d}": v for q, v in qv.items()}},
         "probabilidades": probs,
         "premissas": {"modelo": MODEL, "taxa_livre_de_risco": rf, "fonte_taxa": rf_src, "premio_de_risco": erp, "tau": tau,
@@ -143,7 +149,7 @@ def build(s3: Series3, horizon_years: float, rf_live: float | None = None, rf_so
         "riscos": [f"volatilidade histórica de {f.vol:.0%} ao ano: resultados longe da mediana são comuns",
                    "eventos da empresa, do setor e da economia não estão no modelo (só o histórico de preços)"],
         "invalidacao": [f"volatilidade realizada no período acima de {1.5 * f.vol_log:.0%} ao ano (1,5× a usada pelo modelo)",
-                        f"fechamento abaixo de {ref_price * (1 + q05):.2f} {s3.currency} (o cenário dos 5% piores) antes do fim"],
+                        f"fechamento abaixo de {num(ref_price * (1 + q05), 2)} {s3.currency} (o cenário dos 5% piores) antes do fim"],
         "regime_vol": _regime(r.to_numpy()),
     }
     out = {

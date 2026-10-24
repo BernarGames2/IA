@@ -394,6 +394,49 @@ volatilidade ±25%, só o histórico, sem prêmio).
   custos; notas por evento, classe, prazo e regime. Limites ditos no resultado: apagar as últimas entradas não é
   detectável pela cadeia, e sem a chave do servidor quem reescreve tudo não é detectado.
 
+## 10e. Tese e fundamentos, armadilhas de valor e radar de oportunidades (`POST /api/tese`, `POST /api/radar`)
+
+* **Fundamentos ano a ano** (`core/fundamentals/sources.py`, `analysis.py`): demonstrações anuais publicadas pelo
+  Yahoo Finance (`fundamentals-timeseries`: receita, lucros, EBITDA, caixa operacional, capex, caixa livre, dívida,
+  caixa, patrimônio, ativos, ações, dividendos pagos, LPA) e estimativas de analistas com a agenda (`quoteSummary`:
+  `earningsTrend`, `recommendationTrend`, `calendarEvents`), pelo mesmo cliente com cookie e *crumb* do "Vale a
+  pena?", com cache de 24 h. Ano sem valor fica sem valor. Margens, ROE, dívida líquida/EBITDA, cobertura dos
+  dividendos pelo caixa livre, crescimento em 3 anos, diluição e o **Piotroski F-score** (9 testes; não calculado
+  para bancos e seguradoras, como no estudo original). Múltiplos (P/L, P/VP, EV/EBITDA, caixa livre e dividendos
+  sobre o valor de mercado) nunca misturam moedas.
+* **Detector de armadilhas de valor** (`value_trap.py`): primeiro, "parece barata?" (P/L ≤ 8, P/VP ≤ 1, dividendos ≥
+  8%, caixa livre ≥ 10% do valor de mercado, EV/EBITDA ≤ 5 ou queda ≥ 40% do topo de 3 anos); depois, 11 sinais de que
+  o preço baixo pode ser merecido (F-score ≤ 3, receita e lucro em queda, margem encolhendo, caixa livre negativo,
+  dividendos acima do caixa livre, dívida > 3× EBITDA, diluição > 5%, analistas cortando estimativas, preço em
+  tendência de queda, dividendos ≥ 15%). Risco alto com 4 ou mais sinais (ou F-score ≤ 2); cada sinal mostra a medida,
+  a regra e a fonte, ou "não medido".
+* **Tese estruturada** (`thesis.py`, aba "Tese e fundamentos" em Análise de ações): fatos medidos [H], estimativas
+  [E] (modelo de preços e, rotuladas, as de analistas), pontos a favor e contra com a base de cada um (medido, modelo,
+  terceiros ou setor), o que precisa ser verdade, datas futuras publicadas (resultados, data com e pagamento de
+  dividendos), condições de invalidação medíveis (receita −5%, margem −3 p.p., dívida > 3,5× EBITDA, estimativa de
+  LPA −10%, cenário dos 5% piores, dividendos pela metade), a contra-tese e a qualidade dos dados.
+* **Radar** (`radar.py`, aba "Radar" em Oportunidades): varre as ações do catálogo do(s) mercado(s) escolhido(s) e
+  ordena por notas z de valor, qualidade, crescimento, momento e risco, com pesos por estilo (equilibrado, valor,
+  qualidade, crescimento, dividendos, momento); ação que parece barata perde pontos por sinal de armadilha. Cada
+  candidato mostra as evidências com números, o que pesa contra e o que desfaria a sua posição; a fonte de balanços
+  tem orçamento de 35 s (quem não responde a tempo é avaliado só pelo preço, e isso é dito).
+
+## 10f. Cenários: futuros da empresa e efeitos em cadeia (`POST /api/cenarios`, `POST /api/cadeia`)
+
+* **Futuros da empresa** (`core/scenarios/dcf.py`): valor por ação pelo caixa ao acionista em 5 anos + perpetuidade,
+  na moeda do balanço. Premissas: crescimento da receita, margem de caixa livre no ano 5 (a margem anda em linha reta
+  da atual até ela), custo de capital (padrão: renda fixa + beta × 4%, o mesmo modelo das previsões) e crescimento
+  perpétuo (4% em BRL, 2,5% em USD); bancos e seguradoras usam lucro × parcela distribuída. Os valores iniciais vêm
+  dos balanços da própria empresa, com a origem escrita, e o investidor pode editar pessimista/base/otimista.
+  Resultado: três cenários, 20 mil sorteios triangulares (parcela acima do preço de hoje), o que mais pesa no valor
+  (tornado), a projeção do cenário base, a parcela do valor que vem da perpetuidade e o **crescimento implícito no
+  preço** (DCF reverso). Recusa quando faltam balanços ou as moedas do balanço e da cotação diferem.
+* **Efeitos em cadeia** (`core/scenarios/chain.py`): para juros no Brasil (IRFM11, duração ≈ 2), dólar (USDBRL=X),
+  petróleo (Brent, BZ=F), bolsa americana (SPY) e juros nos EUA (IEF, duração ≈ 7,5), a cadeia de transmissão e o
+  efeito esperado por setor (hipótese, com o motivo) ao lado do beta medido de cada ação (retornos semanais de 5 anos,
+  t de Newey–West) e do efeito estimado = beta × movimento do indicador; por setor, a mediana e se os dados confirmam,
+  contrariam ou não permitem dizer. Pode usar as ações do catálogo (Brasil ou EUA) ou as da carteira do investidor.
+
 ## 11. "Vale a pena?" — análise de uma ação (`--acao`, `POST /api/acao`)
 
 Você digita o código ou o nome de **qualquer ação da B3 ou dos EUA** (PETR4, VALE3, WEGE3, AAPL, "Petrobras",

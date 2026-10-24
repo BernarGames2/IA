@@ -39,6 +39,7 @@ from core.forecasting.data import BENCH, P, _clean, rf_growth, rf_index_from_ann
 from core.market_data.cash import fetch_cdi_cash
 from core.market_data.yahoo_chart import FetchFn
 from core.portfolio_analytics.data import CLASS_PT
+from utils.br_format import pct
 
 GENESIS = "0" * 64
 RETRO_BDAYS = 3
@@ -233,7 +234,7 @@ def _invalidation(rec: dict[str, object], s: pd.Series, t_ref: pd.Timestamp) -> 
     if len(after) > 1:
         path = after / after.iloc[0] - 1.0
         if q05 is not None and float(path.iloc[1:].min()) < float(q05):
-            hits.append(f"caiu abaixo do cenário dos 5% piores ({float(q05):+.1%}) antes do fim do horizonte")
+            hits.append(f"caiu abaixo do cenário dos 5% piores ({pct(float(q05), 1, sign=True)}) antes do fim do horizonte")
         lr = np.log(after).diff().dropna()
         if vol and len(lr) >= 20 and float(lr.std(ddof=1) * np.sqrt(P)) > 1.5 * float(vol):
             hits.append(f"volatilidade realizada de {float(lr.std(ddof=1) * np.sqrt(P)):.0%} ao ano, acima de 1,5× a do "
