@@ -437,6 +437,21 @@ volatilidade ±25%, só o histórico, sem prêmio).
   t de Newey–West) e do efeito estimado = beta × movimento do indicador; por setor, a mediana e se os dados confirmam,
   contrariam ou não permitem dizer. Pode usar as ações do catálogo (Brasil ou EUA) ou as da carteira do investidor.
 
+## 10g. Laboratório com cotações reais e laboratório de estratégias (`POST /api/analisar`, `POST /api/estrategias`)
+
+* **Otimização com os seus ativos**: o laboratório (`POST /api/analisar`) aceita `fonte_dados: "real"` com 3 a 15
+  ativos; baixa 5 anos de cotações (dólar convertido para reais), usa a Selic do BCB como taxa livre de risco (ou a
+  informada), inclui o BOVA11 como referência e roda o mesmo motor da demonstração (fronteira, Monte Carlo, VaR/ES,
+  EVT, estresse, backtest e validação independente, assistente). A demonstração sintética continua disponível.
+  Restrições do perfil inviáveis para os ativos escolhidos (ex.: perfil moderado sem renda fixa) são ditas, nunca
+  contornadas em silêncio.
+* **Estratégias** (`core/strategy_lab/`): quatro ideias publicadas — momento (Jegadeesh e Titman), baixa
+  volatilidade (Baker, Bradley e Wurgler), tendência com média móvel (Faber) e reversão de curto prazo (Jegadeesh) —
+  em variantes, sobre até 10 anos de cotações das ações do catálogo do mercado escolhido. Walk-forward mensal com
+  custos (+5 pb de derrapagem), escolha da variante só na validação (60% iniciais), teste final nos 40% restantes,
+  Sharpe deflacionado considerando todas as variantes, consistência por terços e conferência de que as decisões não
+  olham o futuro. Veredito estrito: "há evidência", "evidência fraca" ou "sem evidência".
+
 ## 11. "Vale a pena?" — análise de uma ação (`--acao`, `POST /api/acao`)
 
 Você digita o código ou o nome de **qualquer ação da B3 ou dos EUA** (PETR4, VALE3, WEGE3, AAPL, "Petrobras",

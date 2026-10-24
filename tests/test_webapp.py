@@ -45,7 +45,8 @@ def test_index_and_health(client):
     r = client.get("/")
     assert r.status_code == 200 and "Quant Portfolio Intelligence" in r.text and "DADOS SINTÉTICOS" in r.text
     h = client.get("/api/health").json()
-    assert h["status"] == "ok" and h["data"] == "análise geral: sintética; carteira com propósito: real (Yahoo Finance) ou sintética"
+    assert h["status"] == "ok" and h["data"] == ("laboratório: sintético ou real (ativos escolhidos); demais ferramentas: "
+                                                 "real (Yahoo Finance, BCB, B3)")
 
 
 def test_analyze_returns_validated_summary(client):

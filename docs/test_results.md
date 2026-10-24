@@ -8,11 +8,11 @@ matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-509 passed, 1 skipped (510 testes)
+514 passed, 1 skipped (515 testes)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
 
-(Registros anteriores: 493 passed, 1 skipped antes de fundamentos e cenários — seções 19 e 20; 484 passed, 1 skipped antes das previsões — seção 18; 476 passed, 1 skipped antes de "Minha carteira" e do risco — seção 17; 464 passed, 1 skipped antes da correção de valores pequenos — seção 15; 452 passed, 1 skipped
+(Registros anteriores: 509 passed, 1 skipped antes dos laboratórios com dados reais — seção 21; 493 passed, 1 skipped antes de fundamentos e cenários — seções 19 e 20; 484 passed, 1 skipped antes das previsões — seção 18; 476 passed, 1 skipped antes de "Minha carteira" e do risco — seção 17; 464 passed, 1 skipped antes da correção de valores pequenos — seção 15; 452 passed, 1 skipped
 antes da "Ação do dia" — seção 14; 414 passed, 1 skipped antes dos
 logos — seção 13; 361 passed, 1 skipped antes das correções
 da revisão adversarial — seção 12; 328 passed, 1 skipped antes do motor dinâmico.)
@@ -478,4 +478,26 @@ tornado, cenários, projeção); premissas editadas (crescimento −5/2/6%) reca
 recusada com a explicação; efeitos do dólar +10% e dos juros −1,5 p.p. com cadeia, setores e ações; sem erros de
 JavaScript e sem rolagem horizontal. Fonte real não consultada aqui (dublês: o preço de demonstração não corresponde
 aos balanços de teste). Suíte completa depois das seções 19 e 20: 509 aprovados, 1 pulado (o teste online).
+
+## 21. Laboratório com cotações reais e laboratório de estratégias
+
+`tests/test_strategy_lab.py` (5 testes):
+
+| O que se verifica | Resultado |
+|---|---|
+| sinal de momento plantado (metade das ações com +30% ao ano, metade com −10%): "há evidência", com os três critérios; a variante escolhida é a de melhor Sharpe na validação; decisões não mudam quando o futuro é alterado; Sharpe deflacionado ≥ 0,95 | passa |
+| mercado sem sinal: momento, reversão e baixa volatilidade não chegam a "há evidência" | passa |
+| custos: mais custo → mais custo anual (derrapagem de 5 pb sempre); giro medido; tendência usa o caixa e é recusada sem a taxa de juros; sem juros, o Sharpe contra zero é dito; hipótese desconhecida recusada | passa |
+| janela: 10 anos quando há ações completas; ação com 6 anos fica de fora e listada; sem ninguém com 10 anos, usa 5 | passa |
+| rota `/api/estrategias`: 200 com veredito, caixa, índice, curvas e conferência; hipótese desconhecida 422; ativos de dois mercados 400; índice indisponível 503 | passa |
+| laboratório de otimização com cotações reais: 200, dados reais, Selic do BCB como taxa, BOVA11 de referência, assistente funciona; menos de 3 ativos 400; cotações indisponíveis 503; a demonstração sintética continua | passa |
+
+O texto de `/api/health` mudou para dizer que o laboratório também usa dados reais; o teste da página foi atualizado
+para o texto novo.
+
+Navegador (servidor local com dublês, 1440 e 390 px): otimização com 5 ativos reais em 10,7 s (aviso de restrições
+inviáveis do perfil moderado sem renda fixa; o gráfico da fronteira, que quebrava com fronteira vazia, foi corrigido
+para mostrar os ativos e a explicação); estratégia de momento em 1,9 s com veredito, curva fora da amostra marcando o
+teste final, critérios, terços e variantes; sem erros de JavaScript e sem rolagem horizontal. Suíte completa
+depois desta etapa: 514 aprovados, 1 pulado (o teste online).
 

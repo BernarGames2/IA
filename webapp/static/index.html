@@ -1157,16 +1157,28 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
       </section>
 
       <!-- ============================================================ LABORATÓRIO -->
-      <section class="view" data-view="laboratorio" data-title="Laboratório quantitativo" data-eyebrow="Investir" aria-labelledby="f-title" hidden>
-        <div class="banner"><svg class="icon"><use href="#i-triangle-alert"/></svg>
-          <span>Demonstração com <strong>DADOS SINTÉTICOS</strong>: este laboratório usa um mercado sintético determinístico
-            (ativos <code>SINT_*</code>), que não descreve ativos reais. Serve para estudar os métodos — fronteira eficiente,
-            Monte Carlo, VaR, risco extremo, backtest e validação independente — com resultados reproduzíveis.</span></div>
+      <section class="view" data-view="laboratorio" data-title="Laboratório quantitativo" data-eyebrow="Investir" aria-label="Laboratório quantitativo" hidden>
+        <div class="tabs" role="tablist" aria-label="Laboratório" data-tabs="laboratorio">
+          <button type="button" role="tab" data-tab="otimizacao" aria-selected="true"><svg class="icon"><use href="#i-flask-conical"/></svg>Otimização</button>
+          <button type="button" role="tab" data-tab="estrategias" aria-selected="false"><svg class="icon"><use href="#i-list-checks"/></svg>Estratégias</button>
+        </div>
+        <div role="tabpanel" data-panel="otimizacao">
+        <div class="banner" id="lab-banner"><svg class="icon"><use href="#i-triangle-alert"/></svg>
+          <span id="lab-banner-text">Demonstração com <strong>DADOS SINTÉTICOS</strong>: este laboratório usa um mercado sintético
+            determinístico (ativos <code>SINT_*</code>), que não descreve ativos reais. Serve para estudar os métodos — fronteira
+            eficiente, Monte Carlo, VaR, risco extremo, backtest e validação independente — com resultados reproduzíveis. Para usar
+            ativos de verdade, escolha "Cotações reais" em Dados.</span></div>
         <section class="card">
           <div class="card-head"><div><h2 id="f-title">Parâmetros (hipotéticos)</h2>
             <p class="muted">Mesmos parâmetros → mesmos números (semente fixa).</p></div>
-            <span class="badge syn">Dados sintéticos</span></div>
+            <span class="badge syn" id="lab-badge">Dados sintéticos</span></div>
           <form id="form">
+            <label>Dados
+              <select name="fonte_dados"><option value="sintetico" selected>Demonstração sintética (SINT_*)</option>
+                <option value="real">Cotações reais dos ativos que eu escolher</option></select>
+            </label>
+            <label class="span-all hidden" id="lab-assets">Ativos (3 a 15, separados por vírgula; o BOVA11 entra como referência e também pode compor a carteira; nos perfis conservador e moderado inclua renda fixa, como IMAB11 ou IRFM11, senão as restrições do perfil ficam inviáveis)
+              <input name="ativos" maxlength="300" placeholder="PETR4, VALE3, ITUB4, WEGE3, IVVB11, IMAB11"></label>
             <label>Perfil
               <select name="profile">
                 <option value="conservador">Conservador</option>
@@ -1288,6 +1300,44 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
             <div id="answers"></div>
           </section>
           <p class="kind" id="footer"></p>
+        </div>
+              </div>
+        <div role="tabpanel" data-panel="estrategias" hidden>
+          <section class="card">
+            <div class="card-head"><div>
+              <h2 id="st-title">Laboratório de estratégias</h2>
+              <p class="lead">Teste uma ideia de investimento conhecida com até 10 anos de cotações reais, do jeito honesto: cada
+                decisão usa só o passado; há custos; uma parte do período escolhe a melhor variante e outra parte, que a escolha
+                nunca viu, faz o teste final; e a nota é corrigida por quantas variantes foram tentadas. A resposta pode ser — e
+                muitas vezes é — "sem evidência".</p></div>
+              <span class="badge real"><svg class="icon"><use href="#i-database"/></svg>Cotações reais</span></div>
+            <form id="st-form">
+              <label class="span-all">Hipótese
+                <select name="hipotese"><option value="momento" selected>Ações que mais subiram nos últimos meses continuam subindo? (momento)</option>
+                  <option value="baixa_volatilidade">Ações menos voláteis rendem melhor pelo risco? (baixa volatilidade)</option>
+                  <option value="tendencia">Ficar fora das ações abaixo da média móvel reduz as quedas? (tendência)</option>
+                  <option value="reversao">As que mais caíram no mês voltam a subir? (reversão)</option></select>
+              </label>
+              <label>Ações
+                <select name="mercado"><option value="BR" selected>Brasil (catálogo)</option><option value="US">EUA (catálogo)</option></select>
+              </label>
+              <label>Custo por operação (pontos-base)<input name="custo_bps" type="number" min="0" max="200" step="1" value="15"></label>
+              <button id="st-run" type="submit"><svg class="icon"><use href="#i-list-checks"/></svg>Testar hipótese</button>
+            </form>
+            <div class="status" id="st-status" role="status" aria-live="polite"></div>
+          </section>
+          <div id="st-results" class="hidden">
+            <section class="card"><div class="verdict-box" id="st-verdict"></div></section>
+            <section class="card"><h2>Fora da amostra: estratégia × pesos iguais × índice</h2><p class="muted" id="st-curve-note"></p>
+              <div class="legend" id="st-legend"></div><div class="chart" id="st-curve"></div></section>
+            <div class="grid2">
+              <section class="card"><h2>Critérios do veredito</h2><div class="tbl" id="st-criteria"></div></section>
+              <section class="card"><h2>Consistência por terço do período</h2><div class="tbl" id="st-thirds"></div></section>
+            </div>
+            <section class="card"><h2>Todas as variantes testadas</h2><p class="muted">A escolha usa só a validação; o teste final mostra como a escolhida se saiu depois.</p>
+              <div class="tbl" id="st-variants"></div></section>
+            <section class="card"><h2>Avisos e método</h2><ul class="clean" id="st-notes"></ul></section>
+          </div>
         </div>
       </section>
 
@@ -1559,12 +1609,14 @@ function chartWeights(d) {
 function chartFrontier(d) {
   const pts = d.frontier.points, marks = d.frontier.marks, assets = d.assets;
   const W = widthOf("ch-frontier", 560), H = 340, L = 56, R = 16, T = 12, B = 40;
-  const core = [...pts.map((p) => p.vol), ...Object.values(marks).map((m) => m.vol)];
-  const allVol = [...core, ...assets.map((a) => a.vol_est)];
-  // zoom on the efficient region; assets far to the right are pinned to the edge and labelled
-  const x1 = Math.min(Math.max(...allVol) * 1.05, Math.max(0.25, Math.max(...core) * 2.2));
+  const core = [...pts.map((p) => p.vol), ...Object.values(marks).map((m) => m.vol)].filter((v) => isFinite(v));
+  const allVol = [...core, ...assets.map((a) => a.vol_est)].filter((v) => isFinite(v));
+  // zoom on the efficient region; assets far to the right are pinned to the edge and labelled. Without a frontier
+  // (constraints infeasible for these assets) the scale simply covers the assets.
+  const x1 = core.length ? Math.min(Math.max(...allVol) * 1.05, Math.max(0.25, Math.max(...core) * 2.2)) : Math.max(0.05, ...allVol) * 1.1;
   const inView = (v) => v <= x1;
-  const ys = [...pts.map((p) => p.ret), ...Object.values(marks).map((m) => m.ret), ...assets.filter((a) => inView(a.vol_est)).map((a) => a.mu_used)];
+  let ys = [...pts.map((p) => p.ret), ...Object.values(marks).map((m) => m.ret), ...assets.filter((a) => inView(a.vol_est)).map((a) => a.mu_used)].filter((v) => isFinite(v));
+  if (!ys.length) ys = [0];
   const ylo = Math.min(0, ...ys), yhi = Math.max(...ys);
   const pad = (yhi - ylo) * 0.12 || 0.02;
   const x0 = 0, y0 = ylo - pad, y1 = yhi + pad;
@@ -1604,6 +1656,8 @@ function chartFrontier(d) {
     svg.append(node);
     lg.append(el("span", {}, el("i", { style: "background:" + c }), label));
   });
+  if (!pts.length) svg.append(s("text", { x: (L + W) / 2, y: T + 14, "text-anchor": "middle", "font-size": 11, fill: "var(--ink2)" },
+    "fronteira não calculada com as restrições do perfil para estes ativos"));
   axisLabel(svg, (L + W) / 2, H - 6, "Volatilidade anualizada estimada");
   axisLabel(svg, 14, (T + H - B) / 2, "Retorno esperado anualizado", true);
   setChildren("ch-frontier", svg);
@@ -1737,7 +1791,7 @@ function render(d) {
   const w = $("warnings"); w.replaceChildren();
   for (const t of d.warnings) w.append(el("li", {}, t));
   for (const c of d.profile.conflicts) w.append(el("li", {}, "Conflito de perfil: " + c));
-  w.append(el("li", {}, `Período sintético ${d.meta.data_start} a ${d.meta.data_end} (${d.meta.n_obs} datas, ${d.meta.symbols.length} ativos); inflação hipotética ${fmtPct(d.meta.inflation_assumed, 1)} a.a.`));
+  w.append(el("li", {}, `${d.meta.synthetic ? "Período sintético" : "Cotações reais (Yahoo Finance) de"} ${d.meta.data_start} a ${d.meta.data_end} (${d.meta.n_obs} datas, ${d.meta.symbols.length} ativos${d.meta.synthetic ? "" : ": " + d.meta.symbols.join(", ")}); inflação hipotética ${fmtPct(d.meta.inflation_assumed, 1)} a.a.`));
   $("sel-rule").textContent = "Regra: " + (d.selection.rule || "") +
     (d.selection.excluded_by_volatility_band && d.selection.excluded_by_volatility_band.length ? ` Excluídas pela faixa de volatilidade do perfil: ${d.selection.excluded_by_volatility_band.join(", ")}.` : "");
   chartWeights(d);
@@ -1807,8 +1861,22 @@ function readParams() {
   };
   const rf = f.get("risk_free_rate");
   if (rf !== null && String(rf).trim() !== "") p.risk_free_rate = Number(rf) / 100;
+  if (f.get("fonte_dados") === "real") {
+    p.fonte_dados = "real";
+    p.ativos = String(f.get("ativos") || "").split(/[,;\s]+/).map((x) => x.trim()).filter(Boolean);
+  }
   return p;
 }
+// the laboratory runs on the synthetic market or on the investor's own assets (real prices)
+function labSource() {
+  const real = $("form").elements["fonte_dados"].value === "real";
+  $("lab-assets").classList.toggle("hidden", !real);
+  $("lab-banner").classList.toggle("hidden", real);
+  const b = $("lab-badge");
+  b.className = "badge " + (real ? "real" : "syn");
+  b.textContent = real ? "Cotações reais" : "Dados sintéticos";
+}
+$("form").elements["fonte_dados"].addEventListener("change", labSource);
 const NET_ERR = "A conexão caiu antes da resposta (rede instável, tela bloqueada ou o servidor demorou demais). " +
   "Tente de novo — as cotações já baixadas ficam guardadas e a segunda tentativa costuma ser mais rápida. " +
   "Se persistir, escolha 'Demonstração sintética'.";
@@ -1898,7 +1966,8 @@ $("form").addEventListener("submit", async (ev) => {
     lastParams = p;
     render(d);
     st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s.`;
-    addHistory({ tipo: "lab", titulo: "Laboratório (dados sintéticos)", resumo: `${d.selected.name} · perfil ${d.profile.final}`, link: "#f-title" });
+    addHistory({ tipo: "lab", titulo: d.meta.synthetic ? "Laboratório (dados sintéticos)" : "Laboratório (cotações reais)",
+      resumo: `${d.selected.name} · perfil ${d.profile.final}` + (d.meta.synthetic ? "" : ` · ${d.meta.symbols.length} ativos`), link: "#f-title" });
   } catch (e) {
     live.stop();
     st.textContent = "Erro: " + e.message;
@@ -2451,7 +2520,7 @@ $("ask-form").addEventListener("submit", async (ev) => {
 
 // ---------- history of analyses (this device)
 const HIST_KEY = "qpi-historico";
-const HIST_ICON = { acao: "chart-candlestick", dia: "zap", carteira: "briefcase-business", lab: "flask-conical", previsao: "compass", tese: "file-text", radar: "radar", cenarios: "calculator", cadeia: "network" };
+const HIST_ICON = { acao: "chart-candlestick", dia: "zap", carteira: "briefcase-business", lab: "flask-conical", previsao: "compass", tese: "file-text", radar: "radar", cenarios: "calculator", cadeia: "network", estrategia: "list-checks" };
 function addHistory(item) {
   const prev = store.get(HIST_KEY, []);
   const list = Array.isArray(prev) ? prev : [];
@@ -2646,6 +2715,11 @@ function lineChart(id, dates, series, opts = {}) {
   const every = Math.max(1, Math.floor(n / (W < 600 ? 3 : 6)));
   for (let i = 0; i < n; i += every) svg.append(s("text", { x: x(i), y: H - B + 17, "text-anchor": "middle", "font-size": 11, fill: "var(--muted)" }, fmtDateShort(dates[i])));
   if (opts.base !== undefined && opts.base >= lo && opts.base <= hi) svg.append(s("line", { x1: L, x2: W - R, y1: y(opts.base), y2: y(opts.base), stroke: "var(--axis)", "stroke-dasharray": "3 3" }));
+  if (opts.mark && opts.mark.index >= 0 && opts.mark.index < n) {
+    const xm = x(opts.mark.index);
+    svg.append(s("line", { x1: xm, x2: xm, y1: T, y2: H - B, stroke: "var(--ink2)", "stroke-width": 1, "stroke-dasharray": "5 4" }));
+    svg.append(s("text", { x: xm + 4, y: T + 10, "font-size": 10.5, fill: "var(--ink)" }, opts.mark.label));
+  }
   for (const se of series.slice().reverse()) {
     let d = "", pen = false;
     se.values.forEach((v, i) => { if (v === null || !isFinite(v)) { pen = false; return; } d += (pen ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1); pen = true; });
@@ -3570,11 +3644,64 @@ $("ch-form").addEventListener("submit", async (ev) => {
   } finally { btn.disabled = false; }
 });
 
+// ---------- strategy lab (published hypotheses on real prices)
+let stData = null;
+function renderSt(d) {
+  stData = d;
+  $("st-results").classList.remove("hidden");
+  const tone = { "há evidência": "var(--good)", "evidência fraca": "var(--warn)", "sem evidência": "var(--crit)" }[d.veredito] || "var(--muted)";
+  const box = $("st-verdict");
+  box.style.setProperty("--c", tone);
+  box.replaceChildren(el("div", {}, el("strong", {}, d.pergunta)),
+    el("p", {}, el("span", { class: "verdict", style: "--c:" + tone + (d.veredito === "evidência fraca" ? ";color:#1d1d1b" : "") }, d.veredito.toUpperCase()), " " + d.leitura),
+    el("p", { class: "kind" }, `Variante escolhida na validação: ${d.variante_escolhida} · ${d.n_variantes} variantes testadas · ${d.acoes.length} ações (${d.mercado === "BR" ? "Brasil" : "EUA"}) · ${d.periodo.anos} anos de dados · custo de ${d.custo_bps} pontos-base`));
+  const cv = d.curvas, iTest = cv.datas.findIndex((x) => x >= cv.inicio_teste);
+  const colors = ["var(--s1)", "var(--s2)", "var(--s3)"];
+  const series = Object.entries(cv.series).map(([name, values], i) => ({ name, values, color: colors[i % 3], width: i === 0 ? 2 : 1.5 }));
+  setChildren("st-legend", ...series.map((se) => el("span", {}, el("i", { style: "background:" + se.color }), se.name)));
+  lineChart("st-curve", cv.datas, series, { base: 100, fmtY: (v) => fmtNum(v, 0), fmtTip: (v) => fmtNum(v, 1), mark: { index: iTest, label: "teste final" } });
+  $("st-curve-note").textContent = `Valor de 100 aplicados no início do período fora da amostra (${fmtDateBR(d.periodo.inicio_fora_da_amostra)}), depois dos custos. A validação vai até ${fmtDateBR(d.periodo.fim_validacao)}; o teste final começa em ${fmtDateBR(d.periodo.inicio_teste)}.`;
+  setChildren("st-criteria", table(["Critério", "Passou?", "Medida"], d.criterios.map((c) => [c.criterio, c.ok ? "sim" : "não", c.detalhe])));
+  setChildren("st-thirds", table(["Período", "Sharpe da estratégia", "Sharpe dos pesos iguais", "Venceu?"],
+    d.tercos.map((t) => [`${fmtDateBR(t.inicio)} a ${fmtDateBR(t.fim)}`, fmtNum(t.sharpe, 2), fmtNum(t.sharpe_igual, 2), t.venceu ? "sim" : "não"]), [1, 2]));
+  const cmp = d.comparacao;
+  const rows = d.variantes.map((v) => [v.variante + (v.variante === d.variante_escolhida ? " (escolhida)" : ""), fmtNum(v.sharpe_validacao, 2), fmtNum(v.sharpe_teste, 2),
+    fmtPct(v.cagr_teste, 1), fmtPct(v.queda_maxima_teste, 1), fmtNum(v.giro_anual, 1) + "×", fmtPct(v.custo_anual, 2)]);
+  rows.push(["pesos iguais (referência)", fmtNum(cmp.igual.validacao.sharpe, 2), fmtNum(cmp.igual.teste.sharpe, 2), fmtPct(cmp.igual.teste.cagr, 1), fmtPct(cmp.igual.teste.queda_maxima, 1), "—", "—"]);
+  rows.push([`índice ${d.indice} (referência)`, fmtNum(cmp.indice.validacao.sharpe, 2), fmtNum(cmp.indice.teste.sharpe, 2), fmtPct(cmp.indice.teste.cagr, 1), fmtPct(cmp.indice.teste.queda_maxima, 1), "—", "—"]);
+  setChildren("st-variants", table(["Variante", "Sharpe na validação", "Sharpe no teste", "Retorno anual no teste", "Maior queda no teste", "Giro anual", "Custo anual"], rows, [1, 2, 3, 4, 5, 6]));
+  setChildren("st-notes", ...d.avisos.map((x) => el("li", {}, x)),
+    el("li", {}, `Conferência de que as decisões não olham o futuro: ${d.sem_olhar_o_futuro.passou ? "passou" : "FALHOU"} (${d.sem_olhar_o_futuro.decisoes_conferidas} decisões refeitas com o futuro alterado).`),
+    el("li", {}, `Sharpe deflacionado (corrige pelas ${d.n_variantes} variantes): ${fmtNum(d.dsr, 2)}; Sharpe probabilístico: ${fmtNum(d.psr, 2)}.`),
+    ...(d.fora_por_falta_de_dados.length ? [el("li", { class: "muted" }, `Fora por falta de histórico completo: ${d.fora_por_falta_de_dados.join(", ")}.`)] : []),
+    ...d.fontes.map((x) => el("li", { class: "muted" }, x)), el("li", { class: "muted" }, d.aviso));
+}
+$("st-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const f = new FormData($("st-form"));
+  const body = { hipotese: String(f.get("hipotese")), mercado: String(f.get("mercado")), custo_bps: Number(f.get("custo_bps") || 0) };
+  const st = $("st-status");
+  if (!(body.custo_bps >= 0 && body.custo_bps <= 200)) { st.textContent = "O custo deve ficar entre 0 e 200 pontos-base."; return; }
+  $("st-results").classList.add("hidden");
+  const btn = $("st-run"); btn.disabled = true;
+  const live = liveStatus(st, "Buscando até 10 anos de cotações…");
+  try {
+    const d = await postStream("/api/estrategias", body, live.update);
+    live.stop();
+    renderSt(d);
+    st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s.` + (d.do_cache ? " (reaproveitado: mesmo pedido há menos de 15 min)" : "");
+    addHistory({ tipo: "estrategia", titulo: `Estratégia: ${d.hipotese.replace("_", " ")}`, resumo: `${d.veredito} · ${d.mercado === "BR" ? "Brasil" : "EUA"} · ${d.periodo.anos} anos`, link: "#/laboratorio/estrategias" });
+  } catch (e) {
+    live.stop();
+    st.textContent = (e.status === 400 || e.status === 422 ? "Atenção: " : "Erro: ") + e.message;
+  } finally { btn.disabled = false; }
+});
+
 // ---------- navigation: one view at a time; "#/view" routes, "#id" opens the view that holds the element
 const VIEW_NAMES = ["painel", "acoes", "oportunidades", "previsoes", "cenarios", "carteira", "laboratorio", "perfil"];
 let currentView = null;
 function onViewShown(name) {
-  if (name === "laboratorio" && lastData) render(lastData);
+  if (name === "laboratorio") { if (lastData) render(lastData); if (stData) renderSt(stData); }
   if (name === "acoes") { if (stockData) renderStock(stockData); if (thData) renderTh(thData); }
   if (name === "oportunidades" && rdData) renderRd(rdData);
   if (name === "painel") { renderHistory(); renderLastPortfolio(); renderProfileChip(); renderMine(); }

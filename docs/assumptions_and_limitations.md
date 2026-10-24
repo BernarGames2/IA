@@ -243,6 +243,13 @@
     semanais em 5 anos (mínimo 104 semanas) sobre o indicador do choque; a conversão de juros em retorno dos ETFs de
     títulos usa durações aproximadas (2 e 7,5); a cadeia por setor é conhecimento econômico geral (hipótese); um beta
     passado mistura tudo o que aconteceu nas mesmas semanas e pode mudar; choques simultâneos não se somam.
+56. **Laboratórios com dados reais**: o laboratório de otimização com cotações reais usa os parâmetros do motor da
+    demonstração (estimadores, restrições do perfil de demonstração, horizonte de 5 anos de dados) e inclui o BOVA11
+    como referência investível. O laboratório de estratégias usa o universo de hoje aplicado ao passado (viés de
+    sobrevivência, favorável às estratégias), pesos iguais dentro da seleção, rebalanceamento a cada 21 pregões, sem
+    impostos nem limite de liquidez; ações sem o histórico completo da janela ficam de fora (listadas); a janela é de
+    10 anos quando há ao menos 8 ações completas, senão 5; sem a taxa de juros histórica a hipótese de tendência é
+    recusada e o Sharpe das demais é medido contra zero (dito no resultado).
 
 ## Itens pendentes / próximos passos
 

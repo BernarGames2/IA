@@ -37,6 +37,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from config import APP_NAME, APP_VERSION, AppConfig
 from core.ai_analyst.analyst import ResearchAnalyst
 from core.ai_analyst.tools import AnalysisContext
+from core.data_loader import load_price_dataset
 from core.forecasting.api import (
     EvaluateRequest,
     ForecastRequest,
@@ -53,18 +54,24 @@ from core.fundamentals.api import (
 )
 from core.market_data.base import DataUnavailableError
 from core.market_data.logos import clean_domain, domain_for, fetch_logo
+from core.market_data.quality import QualitySettings
+from core.market_data.risk_free import fetch_live_rates
 from core.portfolio_analytics.api import handle_dashboard, handle_risk
 from core.portfolio_analytics.data import PortfolioRequest
 from core.portfolio_engine import AnalysisResult, run_analysis
 from core.profiler import demo_profile
+from core.purpose.catalog import REAL_CATALOG, by_ticker
 from core.purpose.engine import (
     AmountTooSmall,
     PurposeRequest,
     PurposeResult,
+    _default_provider,
+    norm_ticker,
     run_purpose,
 )
 from core.purpose.report import render_markdown
 from core.purpose.report import to_dict as purpose_to_dict
+from core.purpose.synthetic_universe import asset_meta
 from core.scenarios.api import (
     ChainRequest,
     ScenarioRequest,
@@ -74,6 +81,7 @@ from core.scenarios.api import (
 from core.stock_check.analyzer import analyze_stock
 from core.stock_check.analyzer import to_dict as stock_to_dict
 from core.stock_check.daily_pick import daily_pick
+from core.strategy_lab.api import StrategyRequest, handle_strategy
 from models.investor import InvestorProfileInput, RiskProfile
 from utils.serialization import to_jsonable
 from webapp.summary import build_summary
@@ -103,9 +111,11 @@ class AnalyzeRequest(BaseModel):
     mode: Literal["rapido", "completo"] = "rapido"
     seed: int = Field(42, ge=0, le=2**31 - 1)
     risk_free_rate: float | None = Field(None, ge=-0.05, le=1.0)
+    fonte_dados: Literal["sintetico", "real"] = "sintetico"
+    ativos: list[str] | None = Field(None, max_length=15)
 
     def key(self) -> tuple[object, ...]:
-        return tuple(self.model_dump().values())
+        return tuple(tuple(v) if isinstance(v, list) else v for v in self.model_dump().values())
 
 
 class AskRequest(BaseModel):
@@ -229,8 +239,40 @@ def _profile_input(p: AnalyzeRequest) -> InvestorProfileInput:
                                    "horizon_years": p.horizon_years})
 
 
+LAB_BENCHMARK = "BOVA11.SA"
+CATALOG_BY_TICKER = by_ticker(REAL_CATALOG)
+
+
+def _lab_tickers(p: AnalyzeRequest) -> list[str]:
+    """The investor's assets for the real-data laboratory (3 to 15, normalised; the Ibovespa ETF is added as the
+    benchmark when absent)."""
+    names = list(dict.fromkeys(norm_ticker(t) for t in (p.ativos or []) if t.strip()))
+    if not 3 <= len(names) <= 15:
+        raise ValueError("no laboratório com cotações reais, informe de 3 a 15 ativos")
+    return names
+
+
+def _lab_rf(p: AnalyzeRequest) -> float | None:
+    """Risk-free rate for the real-data laboratory: the investor's, else the live Selic (BCB); None lets the config
+    use its flagged demonstration value."""
+    if p.risk_free_rate is not None or p.fonte_dados != "real":
+        return p.risk_free_rate
+    prov = _market_provider()
+    try:
+        live, _err = fetch_live_rates({"BRL"}, prov, _rf_fetch())  # type: ignore[arg-type]
+    except Exception:  # noqa: BLE001 - the flagged demonstration value is used and said
+        return None
+    q = live.get("BRL")
+    return q.rate if q else None
+
+
 def _config(p: AnalyzeRequest) -> AppConfig:
     full = p.mode == "completo"
+    if p.fonte_dados == "real":
+        names = _lab_tickers(p)
+        return AppConfig(offline=False, tickers=names, benchmark=LAB_BENCHMARK, period="5y", base_currency="BRL",
+                         profile=p.profile, n_simulations=p.simulations, seed=p.seed, risk_free_rate=_lab_rf(p),
+                         run_heavy_analyses=full, n_resamples=20 if full else 0, make_charts=False, output_dir=_OUTPUT_DIR)
     return AppConfig(offline=True, profile=p.profile, n_simulations=p.simulations, seed=p.seed,
                      risk_free_rate=p.risk_free_rate, run_heavy_analyses=full, n_resamples=20 if full else 0,
                      make_charts=False, output_dir=_OUTPUT_DIR)
@@ -247,7 +289,16 @@ def _analysis(p: AnalyzeRequest) -> tuple[AnalysisResult, float]:
         raise HTTPException(503, "servidor ocupado; tente novamente em instantes")
     try:
         t0 = time.perf_counter()
-        res = run_analysis(_config(p), _profile_input(p))
+        cfg = _config(p)
+        dataset = None
+        if p.fonte_dados == "real":
+            syms = [*cfg.tickers, *([LAB_BENCHMARK] if LAB_BENCHMARK not in cfg.tickers else [])]
+            prov = _market_provider() or _default_provider(_OUTPUT_DIR / "cache", None, _DOWNLOAD_BUDGET_S)
+            ds = load_price_dataset(syms, prov, period="5y", interval="1d", base_currency="BRL",  # type: ignore[arg-type]
+                                    meta={t: asset_meta(CATALOG_BY_TICKER[t], False) for t in syms if t in CATALOG_BY_TICKER},
+                                    quality=QualitySettings(min_history=252))
+            dataset = (ds, None)
+        res = run_analysis(cfg, _profile_input(p), dataset=dataset)
         out = (res, time.perf_counter() - t0)
     finally:
         _slots.release()
@@ -274,17 +325,21 @@ def static_asset(path: str) -> Response:
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "version": APP_VERSION, "commit": _COMMIT,
-            "data": "análise geral: sintética; carteira com propósito: real (Yahoo Finance) ou sintética"}
+            "data": "laboratório: sintético ou real (ativos escolhidos); demais ferramentas: real (Yahoo Finance, BCB, B3)"}
 
 
 @app.post("/api/analisar")
 def analisar(p: AnalyzeRequest, stream: bool = False) -> Response:
     def compute(progress: Callable[[str], None]) -> dict[str, object]:
-        progress("calculando a análise " + ("completa (alguns minutos)…" if p.mode == "completo" else "rápida…"))
+        progress(("baixando 5 anos de cotações dos ativos escolhidos e " if p.fonte_dados == "real" else "")
+                 + "calculando a análise " + ("completa (alguns minutos)…" if p.mode == "completo" else "rápida…"))
         try:
             res, elapsed = _analysis(p)
         except HTTPException:
             raise
+        except DataUnavailableError as e:
+            raise HTTPException(503, f"dados indisponíveis agora ({_short(e)}). Nada foi estimado no lugar: confira os "
+                                     "códigos ou tente de novo em alguns minutos.") from e
         except (ValueError, ArithmeticError) as e:   # invalid inputs -> 400; library failure -> 500
             raise _analysis_error(e) from e
         return build_summary(res, p.mode, elapsed)
@@ -581,6 +636,15 @@ def cenarios(p: ScenarioRequest, stream: bool = False) -> Response:
 def cadeia(p: ChainRequest, stream: bool = False) -> Response:
     """Economic chain effects of a macro shock: editorial chain next to the measured sensitivity of each stock."""
     return _engine(p.key(), lambda progress: handle_chain(
+        p, provider=_market_provider(), fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache", progress=progress,
+        budget_s=_DOWNLOAD_BUDGET_S), stream, unavailable="tente de novo em alguns minutos")
+
+
+@app.post("/api/estrategias")
+def estrategias(p: StrategyRequest, stream: bool = False) -> Response:
+    """Strategy lab: a published hypothesis tested walk-forward on real prices, with costs, validation/test split,
+    deflated Sharpe over every variant tried and a look-ahead check; the verdict can be 'sem evidência'."""
+    return _engine(p.key(), lambda progress: handle_strategy(
         p, provider=_market_provider(), fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache", progress=progress,
         budget_s=_DOWNLOAD_BUDGET_S), stream, unavailable="tente de novo em alguns minutos")
 
