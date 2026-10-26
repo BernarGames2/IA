@@ -226,6 +226,14 @@ def test_resolver_uses_listings_for_unknown_names():
 
 
 # ----------------------------------------------------------------------------- engine
+def _http_today(url, timeout):
+    """The same listings for whatever day is asked: the engine reads the listing of today's date, so a file pinned
+    to 16/10/2026 would fall outside the 8 days it walks back once the calendar moves on."""
+    if "COTAHIST" in url:
+        return 200, _zip(COTAHIST)
+    return _http(url, timeout)
+
+
 def test_engine_complete_universe_reports_the_funnel(tmp_path):
     from core.purpose.engine import POOL_FACTOR, PurposeRequest, run_purpose
     from tests.test_real_data import _fake_market, _Prov, _real_symbols
@@ -234,7 +242,7 @@ def test_engine_complete_universe_reports_the_funnel(tmp_path):
                          motivo_investidor="Quero investir em saúde.", offline=False, n_simulacoes=500,
                          max_ativos=20, universo="completo")
     r = run_purpose(req, output_dir=tmp_path, provider=_Prov(_fake_market(_real_symbols())), cache_dir=tmp_path,
-                    rf_fetch=_http, fast=True)
+                    rf_fetch=_http_today, fast=True)
     fun = r.universe["funil"]
     assert fun["used_listings"] and fun["listed_b3"] == 7 and fun["selected"] == int(POOL_FACTOR * 20)
     assert any("todas as ações listadas" in a.message for a in r.alerts)

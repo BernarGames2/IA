@@ -37,6 +37,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from config import APP_NAME, APP_VERSION, AppConfig
 from core.ai_analyst.analyst import ResearchAnalyst
 from core.ai_analyst.tools import AnalysisContext
+from core.competition.api import ReadRequest, handle_build, handle_read
+from core.competition.build import CompetitionRequest
 from core.data_loader import load_price_dataset
 from core.forecasting.api import (
     EvaluateRequest,
@@ -649,6 +651,26 @@ def estrategias(p: StrategyRequest, stream: bool = False) -> Response:
     return _engine(p.key(), lambda progress: handle_strategy(
         p, provider=_market_provider(), fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache", progress=progress,
         budget_s=_DOWNLOAD_BUDGET_S), stream, unavailable="tente de novo em alguns minutos")
+
+
+@app.post("/api/competicao/ler")
+def competicao_ler(p: ReadRequest) -> dict[str, object]:
+    """Reads the client case, the rulebook and the approved-ETF list pasted by the team (deterministic rules, every
+    value with the sentence it came from); nothing is downloaded."""
+    try:
+        return handle_read(p)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@app.post("/api/competicao/montar")
+def competicao_montar(p: CompetitionRequest, stream: bool = False) -> Response:
+    """Competition portfolio: the purpose engine with the client's profile and the rulebook's limits, whole-share
+    orders, a rule-by-rule check, the client-fit map and an Investment Policy Statement draft (real prices only)."""
+    return _engine(p.key(), lambda progress: handle_build(
+        p, provider=_market_provider(), fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache",
+        output_dir=_OUTPUT_DIR / "competicao", progress=progress, budget_s=_DOWNLOAD_BUDGET_S), stream,
+        unavailable="tente de novo em alguns minutos (as cotações já baixadas ficam guardadas)")
 
 
 @app.post("/api/monitorar")

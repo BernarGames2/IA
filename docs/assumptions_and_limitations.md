@@ -254,6 +254,16 @@
     as condições do balanço comparam o primeiro ano fiscal publicado depois do usado na tese; a condição de preço
     usa fechamentos ajustados, que podem ser reajustados depois por proventos.
 
+58. **Competição de investimentos**: a leitura do caso e das regras usa padrões fixos em inglês e português (frases
+    fora desses padrões não são lidas; o formulário conferido pela equipe é a palavra final); exclusões por tema usam
+    os setores do catálogo, uma lista editorial de empresas cujo negócio principal é a atividade excluída e padrões na
+    indústria e no nome das listagens da Nasdaq (podem deixar passar ou excluir a mais; a quantidade excluída aparece
+    no resultado); só ETFs do catálogo do site podem entrar (ETFs aprovados fora dele não são analisados); bolsas
+    cobertas: EUA (NYSE, Nasdaq, NYSE American) e B3; preço mínimo e volume são os do último pregão nos dados; o caixa
+    não investido é tratado sem rendimento; retiradas periódicas do cliente não entram na simulação (dito no
+    resultado); a faixa até o fim das negociações supõe retornos lognormais com o retorno esperado e a covariância
+    estimados pelo motor; o IPS é um rascunho montado com os números calculados e as citações do caso.
+
 ## Itens pendentes / próximos passos
 
 * Validar o modo online com dados reais (SPY/AGG/GLD e ativos B3) em ambiente com acesso ao Yahoo Finance,

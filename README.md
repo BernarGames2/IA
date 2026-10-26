@@ -185,7 +185,7 @@ A versão web fica em `webapp/`: API FastAPI (`webapp/server.py`) + página úni
 etapa de build). Identidade visual própria: fundo azul-marinho/grafite, fonte Inter servida pelo próprio app
 (`/static/fonts/`, SIL OFL), ícones Lucide (ISC) embutidos, tokens de cor/espaçamento/raio, tema escuro (padrão) e
 claro, `prefers-reduced-motion` respeitado. Navegação por telas (`#/painel`, `#/acoes`, `#/oportunidades`,
-`#/previsoes`, `#/cenarios`, `#/carteira`, `#/laboratorio`, `#/perfil`, com abas como `#/acoes/tese` ou
+`#/previsoes`, `#/cenarios`, `#/carteira`, `#/competicao`, `#/laboratorio`, `#/perfil`, com abas como `#/acoes/tese` ou
 `#/oportunidades/radar`): menu lateral no computador, trilho de ícones no tablet e barra inferior
 no celular; links antigos por âncora (`#d-title`, `#p-title`…) abrem a tela certa. O **Painel** mostra o que existe
 de fato neste aparelho (última carteira montada, histórico de análises, perfil); o **Perfil** guarda as respostas do
@@ -211,6 +211,7 @@ com `fonte_dados: "real"`, sobre as cotações dos ativos escolhidos (seção 10
 | `POST /api/cenarios`, `/api/cadeia` | futuros da empresa e efeitos em cadeia (seção 10f) |
 | `POST /api/estrategias` | laboratório de estratégias (seção 10g) |
 | `POST /api/monitorar` | acompanhamento sob demanda das teses marcadas (seção 10h) |
+| `POST /api/competicao/ler`, `/api/competicao/montar` | competição de investimentos: leitura do caso e das regras, carteira que cumpre as regras (seção 10i) |
 | `GET /api/logo/...` | logos das empresas pelo próprio app |
 | `GET /api/health`, `GET /api/docs` | saúde e documentação OpenAPI |
 
@@ -471,6 +472,39 @@ seus limites numéricos; no Painel, "Conferir agora" busca os dados naquele mome
 próximo balanço" até a fonte publicar um ano fiscal posterior ao da tese; a estimativa de analistas é comparada a
 qualquer momento; a condição de preço usa o menor fechamento desde a tese (ou "aguardando novas cotações"). As
 previsões registradas são avaliadas junto. O resultado diz quando foi conferido.
+
+## 10i. Competição de investimentos (`POST /api/competicao/ler`, `POST /api/competicao/montar`)
+
+Para competições como a Wharton Global High School Investment Competition, em que a equipe recebe o caso de um
+cliente e administra uma carteira virtual com as regras da sua edição (tela **Competição**):
+
+* **Leitura dos textos** (`core/competition/reader.py`, sem modelo de linguagem): o caso do cliente e as regras, em
+  inglês ou português, são lidos por padrões fixos; cada item traz a frase exata de onde saiu (conferida por teste) e
+  o que não está no texto fica em branco. Do caso: idade, patrimônio, meta, aportes, retiradas, prazo (o mais longo;
+  os mais curtos viram metas intermediárias), tolerância a risco (vale o rótulo que o cliente usa; com rótulos
+  diferentes, o mais conservador), objetivo, queda aceitável, retorno exigido, liquidez em 12 meses, exclusões
+  (combustíveis fósseis, tabaco, armas, álcool, jogos — só com uma palavra de recusa antes do termo, na mesma frase)
+  e valores (sustentabilidade, saúde, tecnologia, educação, comunidade, legado). Das regras: capital e moeda, preço
+  mínimo por ação, mínimo de ETFs e lista aprovada, peso máximo por ativo, número de posições e de setores, caixa
+  máximo, margem e venda a descoberto, limite de operações, tamanho da ordem frente ao volume diário, frações e a
+  janela de negociação (datas de inscrição e de relatório são ignoradas). A lista de ETFs aprovados é colada à parte.
+* **Montagem** (`core/competition/build.py`): o motor da carteira com propósito (seção 10) com o perfil do cliente,
+  cotações reais e as regras como restrições duras — preço mínimo (último fechamento), só ETFs da lista aprovada,
+  teto por ativo (vale também para o quase-caixa) e quantas posições, ETFs e setores a carteira precisa ter (escolha
+  exata das posições por programação inteira mista, `semicontinuous_weights`). A meta do cliente é reproduzida na
+  escala do capital da competição (multiplicar todos os valores pelo mesmo fator não muda a chance de atingi-la); sem
+  meta em dinheiro, vale o retorno exigido ou, como hipótese dita, manter o poder de compra. As ordens usam o capital
+  inteiro em ações inteiras (frações só se as regras permitirem), e uma posição acima do teto nos preços de compra
+  perde ações uma a uma.
+* **Conferência regra a regra**, medida nas ordens e nunca suposta: o que o site não consegue medir aparece como
+  "conferir"; se uma regra não fecha, a página diz qual.
+* **Cliente atendido**: cada necessidade do caso com a citação e a medida da carteira; resultados até o fim das
+  negociações e no horizonte do cliente; **rascunho do IPS em inglês** (perfil, objetivo de retorno, tolerância a
+  risco, restrições, alocação estratégica, seleção, gestão de risco, monitoramento) e resumo em português, os dois
+  com linguagem probabilística verificada; ordens em CSV.
+
+Nada é executado: a equipe digita as ordens no simulador da competição. As regras mudam a cada edição, e o site não
+traz regras prontas de nenhuma competição.
 
 ## 11. "Vale a pena?" — análise de uma ação (`--acao`, `POST /api/acao`)
 

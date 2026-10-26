@@ -356,6 +356,31 @@ table.corr td { font-variant-numeric: tabular-nums; }
 .list .t { display: block; font-size: 0.9rem; font-weight: 600; overflow-wrap: anywhere; }
 .list .s { display: block; font-size: 0.78rem; color: var(--ink-3); overflow-wrap: anywhere; }
 .list .when { font-size: 0.74rem; color: var(--ink-3); white-space: nowrap; }
+/* competition page */
+.step-n { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; margin-right: 10px;
+  background: var(--accent-soft); color: var(--accent); font-size: 0.82rem; font-weight: 750; vertical-align: 2px; }
+form h3.span-all { margin: 10px 0 -4px; }
+.field-label { display: block; font-size: 0.8rem; font-weight: 550; color: var(--ink-2); margin-bottom: 8px; }
+.checks { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.finding { border-left: 3px solid var(--line-strong); padding: 4px 0 4px 12px; margin: 10px 0; font-size: 0.86rem; }
+.finding.ok { border-left-color: var(--accent); }
+.finding .q { display: block; color: var(--ink-3); font-size: 0.8rem; font-style: italic; overflow-wrap: anywhere; margin-top: 2px; }
+.finding .n { display: block; color: var(--ink-3); font-size: 0.76rem; margin-top: 2px; }
+pre.doc { white-space: pre-wrap; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem; line-height: 1.5; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md);
+  padding: 14px; max-height: 560px; overflow: auto; margin: 0; color: var(--ink); }
+.fit-item { display: flex; gap: 10px; align-items: flex-start; margin: 10px 0; }
+.fit-item > .st { flex: none; min-width: 92px; margin-top: 2px; }
+.fit-item .d { display: block; color: var(--ink-2); font-size: 0.84rem; margin-top: 2px; }
+.btn-wide { grid-column: 1 / -1; justify-self: start; }
+@media (max-width: 600px) {
+  .btn-wide { justify-self: stretch; }
+  table.orders th:nth-child(3), table.orders td:nth-child(3), table.orders th:nth-child(4), table.orders td:nth-child(4),
+  table.orders th:nth-child(n+6), table.orders td:nth-child(n+6) { display: none; }
+  table.orders td:first-child { min-width: 132px; }
+  table.orders th, table.orders td { padding: 10px 8px; }
+}
+.fit-item .q { display: block; color: var(--ink-3); font-size: 0.8rem; font-style: italic; overflow-wrap: anywhere; }
 .bars { display: grid; gap: 10px; }
 .bar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; font-size: 0.85rem; }
 .bar-row .track { grid-column: 1 / -1; height: 6px; background: var(--surface-3); border-radius: 999px; overflow: hidden; }
@@ -492,6 +517,7 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
 <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /> <path d="m15 5 4 4" /></symbol>
 <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2" /> <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" /></symbol>
 <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></symbol>
+<symbol id="i-trophy" viewBox="0 0 24 24"><path d="M10 14.66v1.626a2 2 0 0 1-.976 1.696A5 5 0 0 0 7 21.978" /> <path d="M14 14.66v1.626a2 2 0 0 0 .976 1.696A5 5 0 0 1 17 21.978" /> <path d="M18 9h1.5a1 1 0 0 0 0-5H18" /> <path d="M4 22h16" /> <path d="M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z" /> <path d="M6 9H4.5a1 1 0 0 1 0-5H6" /></symbol>
 <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /> <path d="M7 11V7a5 5 0 0 1 10 0v4" /></symbol>
 </defs></svg>
 
@@ -510,6 +536,7 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
       <a href="#/cenarios" data-nav="cenarios"><svg class="icon"><use href="#i-calculator"/></svg><span>Cenários</span></a>
       <span class="nav-label">Investir</span>
       <a href="#/carteira" data-nav="carteira"><svg class="icon"><use href="#i-wallet"/></svg><span>Carteira</span></a>
+      <a href="#/competicao" data-nav="competicao"><svg class="icon"><use href="#i-trophy"/></svg><span>Competição</span></a>
       <a href="#/laboratorio" data-nav="laboratorio"><svg class="icon"><use href="#i-flask-conical"/></svg><span>Laboratório</span></a>
       <span class="nav-label">Você</span>
       <a href="#/perfil" data-nav="perfil"><svg class="icon"><use href="#i-user-round"/></svg><span>Perfil e dados</span></a>
@@ -1177,6 +1204,131 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
         </div>
       </section>
 
+      <!-- ============================================================ COMPETIÇÃO -->
+      <section class="view" data-view="competicao" data-title="Competição" data-eyebrow="Investir" aria-label="Competição" hidden>
+        <section class="card">
+          <div class="card-head"><div>
+            <h2 id="cp-title">Carteira para competição de investimentos</h2>
+            <p class="lead">Para competições como a Wharton Global High School Investment Competition: cole o desafio do
+              cliente (client case) e as regras da sua edição. O site lê os textos, preenche o perfil do cliente e as regras —
+              mostrando a frase de onde tirou cada item — e monta, com cotações reais, uma carteira que cumpre as regras e
+              atende o cliente: as ordens em ações inteiras para digitar no simulador, a conferência regra a regra e um
+              rascunho do IPS (Investment Policy Statement) em inglês. Nada é executado aqui, e as regras mudam a cada ano:
+              use as da sua edição.</p></div>
+            <span class="badge real"><svg class="icon"><use href="#i-database"/></svg>Cotações reais</span></div>
+        </section>
+
+        <section class="card">
+          <h2><span class="step-n">1</span>Cole o desafio e as regras</h2>
+          <form id="cp-read-form">
+            <label class="span-all">Desafio do cliente (em inglês ou português)
+              <textarea name="desafio" maxlength="30000" rows="7" placeholder="Ex.: Meet the Rivera family. Maria is a 45-year-old nurse… They have $250,000 in savings and want $1,000,000 in 20 years…"></textarea>
+              <span class="hint">Cole o caso inteiro. Se ele estiver num arquivo .txt, carregue abaixo.</span></label>
+            <label class="span-all">Regras da competição (trading rules)
+              <textarea name="regras" maxlength="30000" rows="5" placeholder="Ex.: Each team receives $500,000 in virtual cash… stocks priced at $5 or higher… at least one ETF from the approved list… no margin…"></textarea></label>
+            <label class="span-all">ETFs aprovados (opcional: cole os códigos da lista)
+              <textarea name="etfs" maxlength="20000" rows="2" placeholder="SPY, VOO, QQQ, AGG, BND…"></textarea>
+              <span class="hint">Com a lista, só ETFs dela entram na carteira. Sem ela, confira no regulamento se o ETF escolhido é aprovado.</span></label>
+            <label>Carregar o desafio de um arquivo .txt<input type="file" id="cp-file" accept=".txt,text/plain"></label>
+            <button id="cp-read" type="submit"><svg class="icon"><use href="#i-file-text"/></svg>Ler textos</button>
+          </form>
+          <div class="status" id="cp-read-status" role="status" aria-live="polite"></div>
+          <div id="cp-reading" class="hidden">
+            <p class="muted" id="cp-read-note"></p>
+            <div class="grid2">
+              <div><h3>Do desafio do cliente</h3><div id="cp-found-case"></div></div>
+              <div><h3>Das regras</h3><div id="cp-found-rules"></div></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2><span class="step-n">2</span>Confira o cliente e as regras</h2>
+          <p class="muted">A leitura preenche os campos; o que não estava no texto fica em branco. Corrija o que precisar.</p>
+          <form id="cp-form">
+            <h3 class="span-all">Cliente</h3>
+            <label>Nome (opcional)<input name="nome" maxlength="80" placeholder="ex.: família Rivera"></label>
+            <label>Idade<input name="idade" type="number" min="14" max="110" step="1"></label>
+            <label>Horizonte (anos)<input name="horizonte_anos" type="number" min="0.5" max="50" step="0.5" required></label>
+            <label>Tolerância a risco
+              <select name="perfil_risco"><option value="conservador">Conservador</option><option value="moderado" selected>Moderado</option><option value="arrojado">Arrojado</option></select></label>
+            <label>Objetivo principal
+              <select name="objetivo_tipo"><option value="">Não informado</option><option value="crescimento">Crescer o patrimônio</option>
+                <option value="renda">Renda</option><option value="preservacao">Preservar o capital</option></select></label>
+            <label>Moeda dos valores do caso
+              <select name="moeda_caso"><option value="USD" selected>US$</option><option value="BRL">R$</option><option value="EUR">€</option></select></label>
+            <label>Quanto o cliente tem hoje<input name="patrimonio_cliente" inputmode="decimal" placeholder="ex.: 250000"></label>
+            <label>Meta em dinheiro<input name="valor_alvo_cliente" inputmode="decimal" placeholder="ex.: 1000000"></label>
+            <label>Aportes por ano<input name="aporte_anual_cliente" inputmode="decimal" placeholder="ex.: 12000"></label>
+            <label>Retiradas por ano<input name="retirada_anual_cliente" inputmode="decimal" placeholder="ex.: 40000"></label>
+            <label>Retorno exigido (% ao ano)<input name="retorno_exigido" inputmode="decimal" placeholder="ex.: 6"></label>
+            <label>Maior queda que aceita (%)<input name="tolerancia_perda" inputmode="decimal" placeholder="ex.: 20"></label>
+            <label>Pode precisar em 12 meses (%)<input name="necessidade_liquidez" inputmode="decimal" placeholder="ex.: 10"></label>
+            <div class="span-all"><span class="field-label">Não quer investir em</span>
+              <div class="checks" id="cp-excl"></div></div>
+            <div class="span-all"><span class="field-label">Valores e interesses do cliente (inclinam a carteira, sem passar dos limites de risco)</span>
+              <div class="checks" id="cp-themes"></div></div>
+            <label class="span-all">Outras empresas que o cliente não quer (códigos)<input name="ativos_excluidos" maxlength="600" placeholder="ex.: TSLA, META"></label>
+            <label class="span-all">Observações para o IPS (opcional)<textarea name="observacoes" maxlength="1500" rows="2" placeholder="ex.: o cliente quer manter as ações da empresa onde trabalha"></textarea></label>
+
+            <h3 class="span-all">Regras da competição</h3>
+            <label>Nome da competição<input name="competicao" maxlength="120" placeholder="ex.: Wharton 2026–27"></label>
+            <label>Capital inicial<input name="capital" inputmode="decimal" required placeholder="ex.: 500000"></label>
+            <label>Moeda
+              <select name="moeda"><option value="USD" selected>US$ (dólar)</option><option value="BRL">R$ (real)</option></select></label>
+            <label>Bolsas
+              <select name="mercados"><option value="US" selected>EUA (NYSE, Nasdaq)</option><option value="US,BR">EUA e Brasil (B3)</option></select></label>
+            <label>Preço mínimo por ação<input name="preco_minimo" inputmode="decimal" placeholder="ex.: 5"></label>
+            <label>Peso máximo por ativo (%)<input name="peso_maximo" inputmode="decimal" placeholder="ex.: 25"></label>
+            <label>Menor posição (% do capital)<input name="peso_minimo" inputmode="decimal" value="1"></label>
+            <label>Mínimo de posições<input name="min_posicoes" type="number" min="1" max="100" step="1"></label>
+            <label>Máximo de posições<input name="max_posicoes" type="number" min="2" max="200" step="1"></label>
+            <label>Mínimo de ETFs<input name="min_etfs" type="number" min="0" max="20" step="1" value="0"></label>
+            <label>Mínimo de setores<input name="min_setores" type="number" min="1" max="15" step="1"></label>
+            <label>Caixa máximo (%)<input name="caixa_maximo" inputmode="decimal" placeholder="ex.: 10"></label>
+            <label>Máximo de operações<input name="max_operacoes" type="number" min="1" max="10000" step="1"></label>
+            <label>Ordem até × volume diário<input name="limite_volume" inputmode="decimal" placeholder="ex.: 2"></label>
+            <label>Fim das negociações<input name="fim_negociacao" type="date"></label>
+            <label class="check"><input name="permitir_fracoes" type="checkbox"> Frações de ação permitidas</label>
+            <details class="span-all more"><summary>Ajustes do cálculo (opcional)</summary>
+              <div class="subform">
+                <label>Peso dos valores do cliente: <span id="cp-align-lab">30%</span>
+                  <input name="peso_alinhamento" id="cp-align" type="range" min="0" max="60" step="5" value="30"></label>
+                <label>Universo
+                  <select name="universo"><option value="completo" selected>Todas as ações listadas</option><option value="curado">Catálogo curado (mais rápido)</option></select></label>
+                <label>Ativos levados à otimização
+                  <select name="max_ativos"><option value="25">25 (mais rápido)</option><option value="40" selected>40</option><option value="60">60 (mais lento)</option></select></label>
+              </div>
+            </details>
+            <button id="cp-run" class="btn-wide" type="submit"><svg class="icon"><use href="#i-trophy"/></svg>Montar carteira da competição</button>
+          </form>
+          <div class="status" id="cp-status" role="status" aria-live="polite"></div>
+        </section>
+
+        <div id="cp-results" class="hidden">
+          <div id="cp-banner"></div>
+          <div class="kpis" id="cp-kpis"></div>
+          <section class="card"><h2><span class="step-n">3</span>Conferência das regras</h2><p class="muted">Medida nas ordens abaixo, não suposta. "Conferir" = o site não tem como medir; confira você.</p><ul class="clean plain" id="cp-checks"></ul></section>
+          <section class="card"><h2>Ordens para digitar no simulador</h2><p class="muted" id="cp-orders-note"></p><div class="tbl" id="cp-orders"></div>
+            <div class="row" style="margin-top:12px"><button class="secondary sm" type="button" id="cp-copy-orders"><svg class="icon"><use href="#i-copy"/></svg>Copiar ordens</button>
+              <a class="btn ghost sm" id="cp-csv" href="#" download="ordens_competicao.csv"><svg class="icon"><use href="#i-download"/></svg>Baixar ordens (CSV)</a></div></section>
+          <div class="grid2">
+            <section class="card"><h2>Divisão da carteira</h2><div id="cp-alloc"></div></section>
+            <section class="card"><h2>Como a carteira atende o cliente</h2><ul class="clean plain" id="cp-fit"></ul></section>
+          </div>
+          <section class="card"><h2>Até o fim da competição e no horizonte do cliente</h2><p id="cp-window"></p><div class="tbl" id="cp-scen"></div></section>
+          <section class="card"><h2>Rascunho do IPS (em inglês)</h2>
+            <p class="muted">Ponto de partida para o Investment Policy Statement: confira cada número e reescreva com as palavras da equipe antes de entregar.</p>
+            <pre class="doc" id="cp-ips"></pre>
+            <div class="row" style="margin-top:12px"><button class="secondary sm" type="button" id="cp-copy-ips"><svg class="icon"><use href="#i-copy"/></svg>Copiar IPS</button>
+              <a class="btn ghost sm" id="cp-dl-ips" href="#" download="ips_rascunho.txt"><svg class="icon"><use href="#i-download"/></svg>Baixar .txt</a></div></section>
+          <section class="card"><h2>Resumo para a equipe</h2><p id="cp-resumo" class="lead"></p></section>
+          <section class="card"><h2>Regras aplicadas, hipóteses e avisos</h2><ul class="clean" id="cp-notes"></ul>
+            <details><summary>Alertas do motor de carteira</summary><ul class="clean" id="cp-alerts"></ul></details></section>
+          <section class="card"><h2>Fontes dos dados</h2><ul class="clean" id="cp-sources"></ul></section>
+        </div>
+      </section>
+
       <!-- ============================================================ LABORATÓRIO -->
       <section class="view" data-view="laboratorio" data-title="Laboratório quantitativo" data-eyebrow="Investir" aria-label="Laboratório quantitativo" hidden>
         <div class="tabs" role="tablist" aria-label="Laboratório" data-tabs="laboratorio">
@@ -1440,6 +1592,7 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
     <div class="grip"></div>
     <a href="#/previsoes" data-nav="previsoes"><svg class="icon"><use href="#i-compass"/></svg>Previsões</a>
     <a href="#/cenarios" data-nav="cenarios"><svg class="icon"><use href="#i-calculator"/></svg>Cenários</a>
+    <a href="#/competicao" data-nav="competicao"><svg class="icon"><use href="#i-trophy"/></svg>Competição</a>
     <a href="#/laboratorio" data-nav="laboratorio"><svg class="icon"><use href="#i-flask-conical"/></svg>Laboratório quantitativo</a>
     <a href="#/perfil" data-nav="perfil"><svg class="icon"><use href="#i-user-round"/></svg>Perfil e dados</a>
     <button type="button" id="theme-mobile"><svg class="icon"><use href="#i-moon"/></svg>Alternar tema</button>
@@ -2541,7 +2694,7 @@ $("ask-form").addEventListener("submit", async (ev) => {
 
 // ---------- history of analyses (this device)
 const HIST_KEY = "qpi-historico";
-const HIST_ICON = { acao: "chart-candlestick", dia: "zap", carteira: "briefcase-business", lab: "flask-conical", previsao: "compass", tese: "file-text", radar: "radar", cenarios: "calculator", cadeia: "network", estrategia: "list-checks" };
+const HIST_ICON = { acao: "chart-candlestick", dia: "zap", carteira: "briefcase-business", lab: "flask-conical", previsao: "compass", tese: "file-text", radar: "radar", cenarios: "calculator", cadeia: "network", estrategia: "list-checks", competicao: "trophy" };
 function addHistory(item) {
   const prev = store.get(HIST_KEY, []);
   const list = Array.isArray(prev) ? prev : [];
@@ -2660,7 +2813,8 @@ function renderDataSummary() {
   const label = { "qpi-perfil": "perfil", "qpi-historico": "histórico de análises", "qpi-ultima-carteira-real": "última carteira (real)",
     "qpi-ultima-carteira-sintetico": "última carteira (demonstração)", "qpi-theme": "tema", "qpi-carteira": "minha carteira (posições e movimentações)",
     "qpi-carteira-resumo": "resumo do painel da carteira", "qpi-previsoes": "registro de previsões",
-    "qpi-teses": "teses acompanhadas", "qpi-acompanhamento": "última conferência do acompanhamento" };
+    "qpi-teses": "teses acompanhadas", "qpi-acompanhamento": "última conferência do acompanhamento",
+    "qpi-competicao": "textos e formulário da competição" };
   $("data-summary").textContent = keys.length ? "Guardado neste aparelho: " + keys.map((k) => label[k] || k.replace(/^qpi-/, "")).join(", ") + "."
     : "Nada guardado neste aparelho ainda.";
 }
@@ -3793,8 +3947,289 @@ $("watch-run").addEventListener("click", async () => {
 });
 renderWatch();
 
+// ---------- investment competition: read the case and the rules, then build the portfolio the rules allow
+const CP_KEY = "qpi-competicao";
+const CP_EXCL = { combustiveis_fosseis: "Combustíveis fósseis", tabaco: "Tabaco", armas: "Armas e defesa",
+  alcool: "Bebidas alcoólicas", jogos: "Jogos de azar e apostas" };
+const CP_THEMES = { sustentabilidade: "Sustentabilidade", saude: "Saúde", tecnologia: "Tecnologia", educacao: "Educação",
+  comunidade: "Comunidade", familia_legado: "Família e legado" };
+const CP_PCT = new Set(["retorno_exigido", "tolerancia_perda", "necessidade_liquidez", "peso_maximo", "peso_minimo", "caixa_maximo"]);
+const CP_MONEY = new Set(["patrimonio_cliente", "valor_alvo_cliente", "aporte_anual_cliente", "retirada_anual_cliente",
+  "meta_intermediaria", "capital", "preco_minimo"]);
+const CP_RULE_FIELDS = new Set(["moeda", "capital", "preco_minimo", "min_etfs", "peso_maximo", "min_posicoes", "max_posicoes",
+  "min_setores", "caixa_maximo", "max_operacoes", "limite_volume", "permitir_fracoes", "fim_negociacao"]);
+let cpData = null, cpQuotes = {}, cpGoals = [], cpEtfs = { text: null, list: [] }, cpCsvUrl = null, cpIpsUrl = null;
+$("cp-excl").replaceChildren(...Object.entries(CP_EXCL).map(([k, v]) =>
+  el("label", { class: "check" }, el("input", { type: "checkbox", name: "exclusoes", value: k }), v)));
+$("cp-themes").replaceChildren(...Object.entries(CP_THEMES).map(([k, v]) =>
+  el("label", { class: "check" }, el("input", { type: "checkbox", name: "temas", value: k }), v)));
+function cpValue(campo, v) {
+  if (v === null || v === undefined) return "—";
+  if (Array.isArray(v)) return v.map((k) => CP_EXCL[k] || CP_THEMES[k] || k).join(", ");
+  if (typeof v === "boolean") return v ? "sim" : "não";
+  if (CP_PCT.has(campo)) return fmtPct(v, 1);
+  if (CP_MONEY.has(campo)) return Number(v).toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+  if (campo === "fim_negociacao" || campo === "inicio_negociacao") return fmtDateBR(v);
+  if (campo === "limite_volume") return fmtNum(v, 1) + "×";
+  return String(v);
+}
+function cpFindings(id, r) {
+  if (!r) { setChildren(id, el("p", { class: "muted" }, "Nada colado.")); return; }
+  const items = r.achados.map((f) => el("div", { class: "finding ok" }, el("strong", {}, f.rotulo + ": "), cpValue(f.campo, f.valor),
+    el("span", { class: "q" }, "“" + f.trecho + "”"), f.nota ? el("span", { class: "n" }, f.nota) : ""));
+  if (r.faltando.length) items.push(el("div", { class: "finding" }, el("strong", {}, "Não encontrado no texto: "),
+    r.faltando.join("; "), el("span", { class: "n" }, "preencha à mão se souber")));
+  for (const a of r.avisos) items.push(el("div", { class: "finding" }, el("span", { class: "st", style: "--c:var(--warn)" }, "atenção"), " " + a));
+  setChildren(id, ...items);
+}
+function cpSet(name, v) {
+  const f = $("cp-form").elements[name];
+  if (!f || v === null || v === undefined) return;
+  if (f.type === "checkbox") { f.checked = !!v; return; }
+  if (CP_PCT.has(name)) v = Math.round(v * 1000) / 10;
+  // number inputs take a dot; the text fields show the Brazilian decimal comma
+  f.value = typeof v === "number" && f.type !== "number" ? String(v).replace(".", ",") : String(v);
+}
+function cpApply(d) {
+  const form = $("cp-form");
+  if (d.desafio) {
+    cpQuotes = {};
+    cpGoals = [];
+    for (const f of d.desafio.achados) {
+      cpQuotes[f.campo] = { valor: f.valor, trecho: f.trecho };
+      if (f.campo === "meta_intermediaria") {
+        const yrs = (String(f.nota).match(/em ([\d.,]+) anos/) || [])[1];
+        cpGoals.push(`${Number(f.valor).toLocaleString("en-US")}${yrs ? " in " + yrs.replace(",", ".") + " years" : ""} (case: "${f.trecho}")`);
+      } else if (f.campo === "exclusoes" || f.campo === "temas") {
+        const set = new Set(f.valor || []);
+        form.querySelectorAll(`input[name="${f.campo}"]`).forEach((b) => { b.checked = set.has(b.value); });
+      } else if (f.campo === "moeda_caso") cpSet("moeda_caso", f.valor);
+      else cpSet(f.campo, f.valor);
+    }
+  }
+  if (d.regras) for (const f of d.regras.achados) if (CP_RULE_FIELDS.has(f.campo)) cpSet(f.campo, f.valor);
+}
+function cpCitations(cliente) {
+  const out = {};
+  for (const [k, q] of Object.entries(cpQuotes)) {
+    if (!q || !q.trecho || !(k in cliente)) continue;
+    const a = cliente[k], b = q.valor;
+    const same = Array.isArray(a) ? (Array.isArray(b) && [...a].sort().join() === [...b].sort().join())
+      : (typeof a === "number" && typeof b === "number") ? Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(b)) : a === b;
+    if (same) out[k] = String(q.trecho).slice(0, 700);
+  }
+  return out;
+}
+function cpBody() {
+  const f = $("cp-form"), E = f.elements, bad = [];
+  const num = (n, pct = false) => {
+    const v = readNum(E[n].value);
+    if (v === null) return null;
+    if (!isFinite(v)) { bad.push(n); return null; }
+    return pct ? v / 100 : v;
+  };
+  const int = (n) => {
+    const t = String(E[n].value).trim();
+    if (!t) return null;
+    const v = Number(t);
+    if (!Number.isInteger(v)) { bad.push(n); return null; }
+    return v;
+  };
+  const checked = (n) => Array.from(f.querySelectorAll(`input[name="${n}"]:checked`)).map((b) => b.value);
+  const cliente = { nome: E.nome.value.trim(), idade: int("idade"), horizonte_anos: num("horizonte_anos"),
+    perfil_risco: E.perfil_risco.value, objetivo_tipo: E.objetivo_tipo.value || null, moeda_caso: E.moeda_caso.value,
+    patrimonio_cliente: num("patrimonio_cliente"), valor_alvo_cliente: num("valor_alvo_cliente"),
+    aporte_anual_cliente: num("aporte_anual_cliente"), retirada_anual_cliente: num("retirada_anual_cliente"),
+    retorno_exigido: num("retorno_exigido", true), tolerancia_perda: num("tolerancia_perda", true),
+    necessidade_liquidez: num("necessidade_liquidez", true), exclusoes: checked("exclusoes"), temas: checked("temas"),
+    ativos_excluidos: E.ativos_excluidos.value.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean),
+    observacoes: E.observacoes.value.trim(), metas_intermediarias: cpGoals.slice(0, 10) };
+  cliente.citacoes = cpCitations(cliente);
+  const regras = { nome: E.competicao.value.trim(), capital: num("capital"), moeda: E.moeda.value,
+    mercados: E.mercados.value.split(","), preco_minimo: num("preco_minimo"), peso_maximo: num("peso_maximo", true),
+    peso_minimo: num("peso_minimo", true), min_posicoes: int("min_posicoes"), max_posicoes: int("max_posicoes"),
+    min_etfs: int("min_etfs"), min_setores: int("min_setores"), caixa_maximo: num("caixa_maximo", true),
+    max_operacoes: int("max_operacoes"), limite_volume: num("limite_volume"), permitir_fracoes: E.permitir_fracoes.checked,
+    fim_negociacao: E.fim_negociacao.value || null, etfs_aprovados: [] };
+  for (const o of [cliente, regras]) for (const k of Object.keys(o)) if (o[k] === null) delete o[k];
+  return { body: { cliente, regras, peso_alinhamento: Number(E.peso_alinhamento.value) / 100, universo: E.universo.value,
+    max_ativos: Number(E.max_ativos.value) }, bad };
+}
+function cpSave() {
+  const rf = $("cp-read-form").elements, fields = {};
+  for (const e of $("cp-form").elements) {
+    if (!e.name || e.tagName === "BUTTON") continue;
+    if (e.name === "exclusoes" || e.name === "temas") { fields[e.name] = fields[e.name] || []; if (e.checked) fields[e.name].push(e.value); }
+    else fields[e.name] = e.type === "checkbox" ? e.checked : e.value;
+  }
+  store.set(CP_KEY, { textos: { desafio: rf.desafio.value, regras: rf.regras.value, etfs: rf.etfs.value }, campos: fields,
+    metas: cpGoals, citacoes: cpQuotes });
+}
+function cpLoad() {
+  const v = store.get(CP_KEY, null), rf = $("cp-read-form"), f = $("cp-form");
+  rf.reset(); f.reset();
+  cpGoals = []; cpQuotes = {};
+  if (v && typeof v === "object") {
+    for (const k of ["desafio", "regras", "etfs"]) if (v.textos && typeof v.textos[k] === "string") rf.elements[k].value = v.textos[k];
+    for (const [k, val] of Object.entries(v.campos || {})) {
+      if (k === "exclusoes" || k === "temas") {
+        const set = new Set(Array.isArray(val) ? val : []);
+        f.querySelectorAll(`input[name="${k}"]`).forEach((b) => { b.checked = set.has(b.value); });
+        continue;
+      }
+      const e = f.elements[k];
+      if (!e || !("value" in e) || e.tagName === "BUTTON") continue;
+      if (e.type === "checkbox") e.checked = !!val; else e.value = String(val);
+    }
+    cpGoals = Array.isArray(v.metas) ? v.metas.filter((x) => typeof x === "string") : [];
+    cpQuotes = v.citacoes && typeof v.citacoes === "object" ? v.citacoes : {};
+  }
+  $("cp-align-lab").textContent = $("cp-align").value + "%";
+}
+$("cp-form").addEventListener("change", cpSave);
+$("cp-read-form").addEventListener("change", cpSave);
+$("cp-align").addEventListener("input", (ev) => { $("cp-align-lab").textContent = ev.target.value + "%"; });
+$("cp-file").addEventListener("change", (ev) => {
+  const file = ev.target.files && ev.target.files[0];
+  const st = $("cp-read-status");
+  if (!file) return;
+  if (file.size > 200000) { st.textContent = "Arquivo grande demais (até 200 KB de texto)."; return; }
+  const rd = new FileReader();
+  rd.onload = () => { $("cp-read-form").elements["desafio"].value = String(rd.result || "").slice(0, 30000); cpSave();
+    st.textContent = "Arquivo carregado no campo do desafio: toque em Ler textos."; };
+  rd.onerror = () => { st.textContent = "Não consegui ler o arquivo: copie e cole o texto."; };
+  rd.readAsText(file);
+});
+$("cp-read-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const fd = new FormData($("cp-read-form"));
+  const body = { desafio: String(fd.get("desafio") || ""), regras: String(fd.get("regras") || ""), etfs: String(fd.get("etfs") || "") };
+  const st = $("cp-read-status"), btn = $("cp-read");
+  btn.disabled = true;
+  st.replaceChildren(el("span", { class: "spinner" }), " Lendo os textos…");
+  try {
+    const d = await post("/api/competicao/ler", body);
+    cpApply(d);
+    if (body.etfs.trim()) cpEtfs = { text: body.etfs.trim(), list: d.etfs || [] };
+    $("cp-reading").classList.remove("hidden");
+    cpFindings("cp-found-case", d.desafio);
+    cpFindings("cp-found-rules", d.regras);
+    $("cp-read-note").textContent = d.aviso + (body.etfs.trim() ? ` Lista de ETFs aprovados: ${d.etfs.length} código(s)` +
+      (d.etfs.length ? ` (${d.etfs.slice(0, 12).join(", ")}${d.etfs.length > 12 ? "…" : ""}).` : ".") : "");
+    const n = (d.desafio ? d.desafio.achados.length : 0) + (d.regras ? d.regras.achados.length : 0);
+    st.textContent = `Leitura pronta: ${n} item(ns) encontrados e copiados para o passo 2. Confira antes de montar a carteira.`;
+    cpSave();
+  } catch (e) {
+    st.textContent = (e.status === 400 || e.status === 422 ? "Atenção: " : "Erro: ") + e.message;
+  } finally { btn.disabled = false; }
+});
+async function cpCopy(text, what) {
+  try { await navigator.clipboard.writeText(text); toast(what + " copiado"); }
+  catch (e) { toast("Não consegui copiar: selecione o texto e copie à mão", "triangle-alert"); }
+}
+$("cp-copy-ips").addEventListener("click", () => { if (cpData) cpCopy(cpData.ips_en, "IPS"); });
+$("cp-copy-orders").addEventListener("click", () => {
+  if (cpData) cpCopy(cpData.posicoes.map((p) => `${shortTk(p.ticker)}\tcomprar\t${p.quantidade}`).join("\n"), "Ordens");
+});
+function renderCp(d) {
+  cpData = d;
+  $("cp-results").classList.remove("hidden");
+  const ccy = d.moeda;
+  const big = (x) => (x === null || x === undefined || !isFinite(x)) ? "n/d" : (CCY[ccy] || ccy) + " " + Math.round(x).toLocaleString("pt-BR");
+  const fails = d.conferencia.filter((c) => c.ok === false), unknown = d.conferencia.filter((c) => c.ok === null);
+  setChildren("cp-banner", fails.length
+    ? el("div", { class: "banner" }, icon("triangle-alert"), el("div", {}, el("strong", {}, "A carteira não cumpre todas as regras: "),
+      fails.map((c) => c.regra).join(", ") + ". Veja a conferência abaixo e ajuste as regras ou o perfil antes de usar."))
+    : el("div", { class: "notice" }, icon("circle-check"), el("div", {}, el("strong", {}, `Cumpre as ${d.conferencia.length - unknown.length} regras conferidas`),
+      unknown.length ? ` · para você conferir: ${unknown.map((c) => c.regra).join(", ")}.` : ".")));
+  const m = d.metricas, j = d.janela, nEtf = d.posicoes.filter((p) => p.etf).length;
+  setChildren("cp-kpis",
+    kpi("Posições", String(d.posicoes.length), `${nEtf} ETF(s) · ações inteiras`),
+    kpi("Investido", big(d.investido), `caixa ${big(d.caixa)}`),
+    kpi("Retorno esperado [E]", fmtPct(m.retorno_E, 1) + " a.a.", `volatilidade [E] ${fmtPct(m.vol_E, 1)}`),
+    kpi("Chance da meta [E]", m.p_meta === null || m.p_meta === undefined ? "n/d" : fmtPct(m.p_meta, 0),
+      m.ic95 && m.ic95[0] !== null && m.ic95[0] !== undefined ? `IC95% ${fmtPct(m.ic95[0], 0)} a ${fmtPct(m.ic95[1], 0)}` : ""),
+    kpi("Até " + j.fim, `${big(j.p10)} a ${big(j.p90)}`, "80% dos cenários [E]"));
+  const tone = (ok) => ok === true ? ["var(--good)", "cumpre"] : ok === false ? ["var(--crit)", "não cumpre"] : ["var(--warn)", "conferir"];
+  setChildren("cp-checks", ...d.conferencia.map((c) => {
+    const [col, lab] = tone(c.ok);
+    return el("li", { class: "fit-item" }, el("span", { class: "st", style: "--c:" + col }, lab),
+      el("div", {}, el("strong", {}, c.regra), el("span", { class: "d" }, `Exigido: ${c.exigido} · na carteira: ${c.obtido}`),
+        c.nota ? el("span", { class: "kind", style: "display:block" }, c.nota) : ""));
+  }));
+  $("cp-orders-note").textContent = `Preços do último fechamento (${fmtDateBR(d.data_precos)}), em ${CCY[ccy] || ccy}: no simulador vale o ` +
+    `preço do momento da ordem, então as quantidades podem precisar de ajuste fino. Total: ${big(d.investido)} investidos e ${big(d.caixa)} em caixa. ` +
+    "No celular a tabela mostra ativo, quantidade e peso; o arquivo CSV tem preço e valor de cada ordem.";
+  const ordersTable = table(["Ativo", "Quantidade", "Preço", "Valor", "Peso", "Tipo", "Papel na carteira"],
+    d.posicoes.map((p) => [withLogo(p.ticker, p.logo, `${shortTk(p.ticker)} · ${p.nome}`), fmtQty(p.quantidade), fmtPrice(p.preco, ccy),
+      big(p.valor), fmtPct(p.peso, 1), (p.etf ? "ETF" : "ação") + (p.setor ? " · " + p.setor : ""), String(p.papel).split(":")[0]]), [1, 2, 3, 4]);
+  ordersTable.classList.add("orders");
+  setChildren("cp-orders", ordersTable);
+  if (cpCsvUrl) URL.revokeObjectURL(cpCsvUrl);
+  cpCsvUrl = URL.createObjectURL(new Blob([d.ordens_csv], { type: "text/csv;charset=utf-8" }));
+  $("cp-csv").href = cpCsvUrl;
+  if (cpIpsUrl) URL.revokeObjectURL(cpIpsUrl);
+  cpIpsUrl = URL.createObjectURL(new Blob([d.ips_en], { type: "text/plain;charset=utf-8" }));
+  $("cp-dl-ips").href = cpIpsUrl;
+  setChildren("cp-alloc", barsList(d.alocacao.map((a) => [a.classe_pt, a.peso])));
+  setChildren("cp-fit", ...d.cliente_atendido.map((f) => {
+    const [col, lab] = f.ok === true ? ["var(--good)", "atende"] : f.ok === false ? ["var(--crit)", "não atende"] : ["var(--muted)", "informação"];
+    return el("li", { class: "fit-item" }, el("span", { class: "st", style: "--c:" + col }, lab),
+      el("div", {}, el("strong", {}, f.necessidade), " — " + f.como, f.caso ? el("span", { class: "q" }, "Caso: “" + f.caso + "”") : ""));
+  }));
+  $("cp-window").textContent = `Até ${j.fim} (${j.dias} pregões), os ${big(d.capital)} ficam entre ${big(j.p10)} e ${big(j.p90)} em 80% ` +
+    `dos cenários simulados [E] (mediana ${big(j.p50)}); chance de terminar com ganho: ${fmtPct(j.p_ganho, 0)}; de perder mais de 10%: ` +
+    `${fmtPct(j.p_perda_10, 0)}. Pior período de mesma duração no histórico destes pesos [H]: ` +
+    `${m.pior_janela_H === null || m.pior_janela_H === undefined ? "n/d" : fmtPct(m.pior_janela_H, 1) + " (" + m.pior_janela_datas + ")"}. ` +
+    `${j.nota ? j.nota + ". " : ""}No horizonte do cliente, na escala do capital da competição (${d.objetivo.como}):`;
+  setChildren("cp-scen", table(["Cenário no horizonte", "Patrimônio final", "Em valores de hoje", "Atinge a meta?"],
+    d.cenarios_horizonte.map((r) => [r.cenario, big(r.patrimonio_final), big(r.patrimonio_final_real), r.atinge_objetivo ? "sim" : "não"]), [1, 2]));
+  $("cp-ips").textContent = d.ips_en;
+  $("cp-resumo").textContent = d.resumo_pt;
+  const notes = [...d.regras_aplicadas.map((x) => "Regra: " + x), ...d.hipoteses.map((x) => "Hipótese: " + x), ...d.notas,
+    `Exclusões: ${d.exclusoes.empresas} empresa(s)` + (d.exclusoes.setores.length ? ` e o(s) setor(es) ${d.exclusoes.setores.join(", ")}` : "") + " fora da análise.",
+    `Universo: ${d.universo.origem}; ${d.universo.candidatos} candidatos; cotações de ${d.universo.periodo}.`,
+    ...Object.entries(d.rf).map(([k, v]) => `Taxa livre de risco em ${k}: ${fmtPct(v.taxa, 2)} (${v.fonte}).`),
+    `Estratégia quantitativa: ${d.estrategia.nome}. ${d.estrategia.texto}`, d.aviso];
+  setChildren("cp-notes", ...notes.map((x) => el("li", {}, x)));
+  const order = { FAIL: 0, WARNING: 1, INFO: 2 };
+  setChildren("cp-alerts", ...d.alertas.slice().sort((a, b) => order[a.severity] - order[b.severity]).map((a) =>
+    el("li", {}, statusBadge(a.severity), " [" + a.category + "] " + a.message)));
+  setChildren("cp-sources", ...(d.fontes || []).map((x) => el("li", {}, `${x.dado}: ${x.fonte}` + (x.data ? ` (data ${x.data})` : "") + (x.limite ? ` — ${x.limite}` : ""))));
+}
+$("cp-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const st = $("cp-status");
+  const { body, bad } = cpBody();
+  if (bad.length) { st.textContent = "Use números nestes campos: " + bad.join(", ") + "."; return; }
+  if (!body.cliente.horizonte_anos) { st.textContent = "Informe o horizonte do cliente, em anos."; return; }
+  if (!body.regras.capital) { st.textContent = "Informe o capital inicial da competição."; return; }
+  const etfText = String(new FormData($("cp-read-form")).get("etfs") || "").trim();
+  // a new request never leaves the previous portfolio on screen: if it fails, nothing old is shown as current
+  $("cp-results").classList.add("hidden");
+  const btn = $("cp-run"); btn.disabled = true;
+  const live = liveStatus(st, "Enviando o pedido (cotações reais; cerca de 1 a 2 min — mantenha a tela aberta)…");
+  try {
+    if (etfText) {
+      if (cpEtfs.text !== etfText) { const r = await post("/api/competicao/ler", { etfs: etfText }); cpEtfs = { text: etfText, list: r.etfs || [] }; }
+      body.regras.etfs_aprovados = cpEtfs.list;
+    }
+    cpSave();
+    const d = await postStream("/api/competicao/montar", body, live.update);
+    live.stop();
+    renderCp(d);
+    st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s.` + (d.do_cache ? " (resultado calculado há poucos minutos, reaproveitado)" : "");
+    addHistory({ tipo: "competicao", titulo: "Competição: " + (body.regras.nome || "carteira"), link: "#/competicao",
+      resumo: `${d.posicoes.length} posições · ${d.cumpre_regras ? "cumpre as regras conferidas" : "NÃO cumpre todas as regras"}` });
+  } catch (e) {
+    live.stop();
+    st.textContent = (e.status === 400 || e.status === 422 ? "Atenção: " : "Erro: ") + e.message +
+      (e.status === 400 || e.status === 422 ? "" : " Nenhuma carteira foi mostrada: um resultado antigo não substitui uma consulta que falhou.");
+  } finally { btn.disabled = false; }
+});
+
 // ---------- navigation: one view at a time; "#/view" routes, "#id" opens the view that holds the element
-const VIEW_NAMES = ["painel", "acoes", "oportunidades", "previsoes", "cenarios", "carteira", "laboratorio", "perfil"];
+const VIEW_NAMES = ["painel", "acoes", "oportunidades", "previsoes", "cenarios", "carteira", "competicao", "laboratorio", "perfil"];
 let currentView = null;
 function onViewShown(name) {
   if (name === "laboratorio") { if (lastData) render(lastData); if (stData) renderSt(stData); }
@@ -3871,6 +4306,7 @@ function initLocal() {
   renderProfileChip(); renderHistory(); renderLastPortfolio(); renderDataSummary();
   pf = loadPf(); renderPosEditor(); renderMovEditor(); renderMine();
   rgData = null; renderRgList(); renderWatch();
+  cpLoad();
 }
 initLocal();
 route();

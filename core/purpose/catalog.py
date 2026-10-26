@@ -454,6 +454,23 @@ SYNTHETIC_CATALOG: tuple[CatalogAsset, ...] = (
 )
 
 
+ETF_MACRO_CLASSES = ("etf_eua", "etf_br", "renda_fixa_br", "ouro")      # funds traded on an exchange
+# sectors that are not a line of business: broad index funds, bonds, cash, gold, crypto, unknown
+NON_BUSINESS_SECTORS = ("indice", "etf", "nao_classificado", "titulos", "titulos_publicos", "pos_fixado", "caixa",
+                        "ouro", "cripto")
+
+
+def is_etf(a: CatalogAsset) -> bool:
+    """Exchange-traded fund (index, sector, bond or gold ETF); the CDI cash model is not one."""
+    return a.macro_class in ETF_MACRO_CLASSES
+
+
+def business_sector(a: CatalogAsset) -> str | None:
+    """The line of business the asset belongs to, for rules such as "at least five sectors"; None for broad index
+    funds, bonds, cash, gold, crypto and assets whose source gives no sector."""
+    return None if a.sector in NON_BUSINESS_SECTORS else a.sector
+
+
 def by_ticker(catalog: tuple[CatalogAsset, ...]) -> dict[str, CatalogAsset]:
     return {a.ticker: a for a in catalog}
 

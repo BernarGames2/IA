@@ -136,6 +136,7 @@ class InvestorPolicy:
     assumptions: list[str] = field(default_factory=list)
     rules: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    hard_cap: float | None = None      # per-asset maximum of an external rulebook: nothing goes above it, not even cash
 
     def is_cash(self, a: CatalogAsset) -> bool:
         """Cash for THIS investor: a cash-like instrument in the investor's own currency."""
@@ -189,7 +190,7 @@ class InvestorPolicy:
         optimisers would park most of the money in the near-riskless instrument whatever the profile."""
         if self.min_cash <= 0:
             return {}
-        return {a.ticker: 1.0 for a in assets if self.is_cash(a)}
+        return {a.ticker: min(1.0, self.hard_cap or 1.0) for a in assets if self.is_cash(a)}
 
     def required_groups(self, assets: list[CatalogAsset]) -> list[tuple[str, list[str], int]]:
         """(label, members, how many) that must reach the optimiser so the limits can be met:
@@ -218,7 +219,7 @@ class InvestorPolicy:
                 "avisos": self.warnings,
                 "limites_por_classe": dict(self.limits.max_class_weight),
                 "minimos_por_classe": dict(self.limits.min_class_weight),
-                "peso_maximo_por_ativo": self.limits.max_weight_per_asset,
+                "peso_maximo_por_ativo": self.limits.max_weight_per_asset, "teto_externo_por_ativo": self.hard_cap,
                 "hipoteses": self.assumptions, "regras": self.rules}
 
 

@@ -82,3 +82,14 @@ antigo foi atualizado: o texto de `/api/health`, que dizia que o laboratório er
 2. Configurar `QPI_AUDIT_KEY` na Vercel.
 3. Base setorial (medianas de múltiplos por setor) para "parece barata" relativo.
 4. Calendário oficial de pregões (B3/NYSE) e dados *point-in-time* para reduzir o viés de sobrevivência dos testes.
+
+## 8. Atualização de 26/10/2026 — página para competição de investimentos
+
+| Funcionalidade | Estado inicial | Alteração realizada | Teste ou verificação |
+|---|---|---|---|
+| Carteira para competição (caso do cliente + regras da competição) | Ausente | Tela "Competição": lê o desafio do cliente e as regras (inglês ou português, cada item com a frase de origem), monta com cotações reais uma carteira do motor com propósito que cumpre as regras (preço mínimo, ETFs aprovados, teto por ativo, número de posições, ETFs e setores), lista as ordens em ações inteiras, confere regra a regra e gera o rascunho do IPS em inglês | 8 testes (`test_competition.py`); navegador a 1440 e 390 px (`test_results.md` §23) |
+
+O motor da carteira com propósito ganhou regras externas opcionais (sem elas, o comportamento é o de antes, conferido
+pelos testes antigos). As regras de cada edição da competição são informadas pela equipe; o site não traz regras
+prontas. Como nas demais telas, as fontes reais não puderam ser testadas daqui: conferir no site publicado. Suíte
+completa depois desta atualização: 526 aprovados, 1 pulado (o teste online).

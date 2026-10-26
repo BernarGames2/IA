@@ -135,13 +135,17 @@ def check_feasibility(pc: PortfolioConstraints) -> FeasibilityReport:
 
 def semicontinuous_weights(pc: PortfolioConstraints, floor: np.ndarray, target: np.ndarray | None = None,
                            pool: Sequence[int] | None = None, avoid: Sequence[Sequence[int]] = (), min_held: int = 1,
-                           time_limit_s: float = 5.0) -> np.ndarray | None:
+                           time_limit_s: float = 5.0, max_held: int | None = None,
+                           count_groups: Sequence[tuple[Sequence[int], int]] = (),
+                           distinct: tuple[Sequence[Sequence[int]], int] | None = None) -> np.ndarray | None:
     """Weights within the bounds and group limits where each asset is either out (0) or held at no less than its
-    ``floor`` (e.g. the smallest purchase as a weight): at least ``min_held`` held, only assets in ``pool`` (default
-    all), never exactly one of the held sets in ``avoid``; the closest to ``target`` in sum of absolute differences
-    when one is given. Mixed-integer LP (HiGHS), exact where a greedy choice of the held set can spend the money on
-    large lots before a group minimum is met. Turnover limits are not modelled. None when no such weights exist (or
-    none was found within the time limit)."""
+    ``floor`` (e.g. the smallest purchase as a weight): at least ``min_held`` held (and at most ``max_held``), only
+    assets in ``pool`` (default all), never exactly one of the held sets in ``avoid``; the closest to ``target`` in sum
+    of absolute differences when one is given. Counting rules (e.g. from a competition rulebook): ``count_groups``
+    lists (members, minimum held among them) — "at least one ETF"; ``distinct`` = (member sets, minimum number of
+    sets with at least one holding) — "at least five sectors". Mixed-integer LP (HiGHS), exact where a greedy choice
+    of the held set can spend the money on large lots before a group minimum is met. Turnover limits are not
+    modelled. None when no such weights exist (or none was found within the time limit)."""
     n = pc.n
     can = np.zeros(n, bool)
     can[list(range(n) if pool is None else pool)] = True
@@ -151,29 +155,50 @@ def semicontinuous_weights(pc: PortfolioConstraints, floor: np.ndarray, target: 
     if np.any(must & (up <= 0)):
         return None
     k = 2 if target is None else 3          # variables: w, z (held or not) and, with a target, d >= |w - target|
+    sets = [np.asarray(list(g), int) for g in distinct[0]] if distinct else []
+    m = len(sets)                            # one more binary per set of ``distinct``: the set has a holding
+    width = k * n + m
     eye, zero = np.eye(n), np.zeros((n, n))
     pad = [] if target is None else [zero]
+    yz = np.zeros((n, m))
     a, glo, ghi, _ = pc.group_matrix()
-    z_row = np.concatenate([np.zeros(n), np.ones(n), np.zeros((k - 2) * n)])
-    cons = [LinearConstraint(np.vstack([np.hstack([eye, -np.diag(up), *pad]),                  # w <= up * z
-                                        np.hstack([-eye, np.diag(np.minimum(lo, up)), *pad])]),  # floor * z <= w
+    z_row = np.concatenate([np.zeros(n), np.ones(n), np.zeros((k - 2) * n + m)])
+    cons = [LinearConstraint(np.vstack([np.hstack([eye, -np.diag(up), *pad, yz]),                  # w <= up * z
+                                        np.hstack([-eye, np.diag(np.minimum(lo, up)), *pad, yz])]),  # floor * z <= w
                              -np.inf, 0.0),
-            LinearConstraint(np.concatenate([np.ones(n), np.zeros((k - 1) * n)])[None, :], 1.0, 1.0),
-            LinearConstraint(z_row[None, :], min_held, np.inf)]
+            LinearConstraint(np.concatenate([np.ones(n), np.zeros((k - 1) * n + m)])[None, :], 1.0, 1.0),
+            LinearConstraint(z_row[None, :], min_held, np.inf if max_held is None else max_held)]
     if a.shape[0]:
-        cons.append(LinearConstraint(np.hstack([a, np.zeros((a.shape[0], (k - 1) * n))]), glo, ghi))
+        cons.append(LinearConstraint(np.hstack([a, np.zeros((a.shape[0], (k - 1) * n + m))]), glo, ghi))
     if target is not None:
         t = np.asarray(target, float)
-        cons.append(LinearConstraint(np.vstack([np.hstack([eye, zero, -eye]), np.hstack([-eye, zero, -eye])]),
+        cons.append(LinearConstraint(np.vstack([np.hstack([eye, zero, -eye, yz]), np.hstack([-eye, zero, -eye, yz])]),
                                      -np.inf, np.concatenate([t, -t])))
+    for members, least in count_groups:
+        r = np.zeros(width)
+        r[n + np.asarray(list(members), int)] = 1.0
+        cons.append(LinearConstraint(r[None, :], least, np.inf))
+    if m:
+        rows = np.zeros((m, width))
+        for j, g in enumerate(sets):
+            rows[j, n + g] = -1.0
+            rows[j, k * n + j] = 1.0         # a set counts only when one of its members is held
+        cons.append(LinearConstraint(rows, -np.inf, 0.0))
+        r = np.zeros(width)
+        r[k * n:] = 1.0
+        cons.append(LinearConstraint(r[None, :], distinct[1], np.inf))  # type: ignore[index]
     for h in avoid:                          # no-good cut: not exactly this held set again
         r = -z_row
         r[n + np.asarray(list(h), int)] = 1.0
         cons.append(LinearConstraint(r[None, :], -np.inf, len(h) - 1))
-    res = milp(np.concatenate([np.zeros(2 * n), np.ones(n)]) if target is not None else np.zeros(2 * n),
-               constraints=cons, integrality=z_row, options={"time_limit": time_limit_s},
-               bounds=Bounds(np.concatenate([np.zeros(n), must.astype(float), np.zeros((k - 2) * n)]),
-                             np.concatenate([up, (up > 0).astype(float), np.full((k - 2) * n, np.inf)])))
+    integer = z_row.copy()
+    integer[k * n:] = 1.0
+    cost = np.zeros(width)
+    if target is not None:
+        cost[2 * n:3 * n] = 1.0
+    res = milp(cost, constraints=cons, integrality=integer, options={"time_limit": time_limit_s},
+               bounds=Bounds(np.concatenate([np.zeros(n), must.astype(float), np.zeros((k - 2) * n + m)]),
+                             np.concatenate([up, (up > 0).astype(float), np.full((k - 2) * n, np.inf), np.ones(m)])))
     if res.x is None:
         return None
     w = np.where(res.x[n:2 * n] > 0.5, np.clip(res.x[:n], 0.0, None), 0.0)

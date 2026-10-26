@@ -8,11 +8,11 @@ matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-518 passed, 1 skipped (519 testes)
+526 passed, 1 skipped (527 testes)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
 
-(Registros anteriores: 514 passed, 1 skipped antes do acompanhamento sob demanda — seção 22; 509 passed, 1 skipped antes dos laboratórios com dados reais — seção 21; 493 passed, 1 skipped antes de fundamentos e cenários — seções 19 e 20; 484 passed, 1 skipped antes das previsões — seção 18; 476 passed, 1 skipped antes de "Minha carteira" e do risco — seção 17; 464 passed, 1 skipped antes da correção de valores pequenos — seção 15; 452 passed, 1 skipped
+(Registros anteriores: 518 passed, 1 skipped antes da página da competição — seção 23; 514 passed, 1 skipped antes do acompanhamento sob demanda — seção 22; 509 passed, 1 skipped antes dos laboratórios com dados reais — seção 21; 493 passed, 1 skipped antes de fundamentos e cenários — seções 19 e 20; 484 passed, 1 skipped antes das previsões — seção 18; 476 passed, 1 skipped antes de "Minha carteira" e do risco — seção 17; 464 passed, 1 skipped antes da correção de valores pequenos — seção 15; 452 passed, 1 skipped
 antes da "Ação do dia" — seção 14; 414 passed, 1 skipped antes dos
 logos — seção 13; 361 passed, 1 skipped antes das correções
 da revisão adversarial — seção 12; 328 passed, 1 skipped antes do motor dinâmico.)
@@ -37,6 +37,8 @@ Falhas encontradas pelos testes durante o desenvolvimento e corrigidas (não mas
 | `test_retries_with_backoff_then_failure`, `test_convergence_failure_is_reported`, `test_robust_mv_more_conservative_than_nominal` | expectativas do teste estavam erradas (comportamento do código era o correto) | testes corrigidos com a propriedade matemática certa |
 | revisão manual do relatório "Vale a pena?" (PGMN3 com dublês) | a manchete dizia "evidência de que o ativo supera o CDI: forte" com t = −2,53, ou seja, quando ele rendeu MENOS | texto e critério conforme o sinal de t |
 | tabela de indicadores no celular (Playwright, 390 px) | a coluna de valores não quebrava linha e ficava fora da tela | coluna de valores com quebra de linha; rótulos mais curtos |
+| `test_engine_complete_universe_reports_the_funnel` (em 26/10/2026) | o dublê da B3 só servia o arquivo de 16/10/2026, e o motor procura a listagem de hoje voltando até 8 dias: com o calendário andando, a B3 "sumia" (0 em vez de 7 ativos) | o dublê desse teste serve a mesma listagem para o dia pedido; nada mudou no código do motor |
+| tabela de ordens da competição no celular (Playwright, 390 px) | com 7 colunas, a do ativo encolhia a uma letra por linha | no celular a tabela mostra ativo, quantidade e peso (o CSV tem todas); a conferência de regras virou lista |
 
 ## 2. Execução ponta a ponta offline
 
@@ -518,3 +520,27 @@ condição com situação, valor de hoje e limite, e a avaliação das previsõe
 acompanhar remove a tese; sem erros de JavaScript e sem rolagem horizontal. Suíte completa depois desta
 etapa: 518 aprovados, 1 pulado (o teste online).
 
+
+## 23. Competição de investimentos
+
+`tests/test_competition.py` (8 testes):
+
+| O que se verifica | Resultado |
+|---|---|
+| caso em inglês e em português: idade, patrimônio, meta, prazo (o mais longo; a faculdade em 8 anos vira meta intermediária), aportes (o salário não conta), perfil pelo rótulo do cliente, objetivo, queda aceitável, liquidez (US$ 25 mil de 250 mil = 10%), exclusões e valores; toda frase citada é um trecho literal do texto colado | passa |
+| regras: capital e moeda, preço mínimo de US$ 5, pelo menos 1 ETF da lista aprovada, teto de 25%, pelo menos 10 posições, sem margem nem venda a descoberto, 200 operações, 2× o volume diário, negociação de 28/09 a 04/12/2026 (inscrição e prazo do relatório ignorados); regras em português | passa |
+| nada é adivinhado: "not an aggressive investor", "not interested in technology", salário anual e "works in the oil industry" não viram perfil, tema, aporte nem exclusão; texto vazio → itens faltando; lista de ETFs com nomes junto dos códigos | passa |
+| regras impossíveis recusadas com a conta (3 posições de até 20% = 60%; mínimo acima do máximo; mais ETFs que a lista; menor posição acima do teto) | passa |
+| meta na escala do capital (×2: US$ 1 mi com US$ 250 mil → US$ 2 mi com US$ 500 mil, aportes também ×2); retorno exigido; poder de compra como hipótese dita; 35 pregões até 04/12/2026; posição acima do teto perde ações uma a uma | passa |
+| carteira com dublês do mercado: todas as regras conferidas cumprem (12 a 20 posições, teto de 20%, ações inteiras, preço ≥ US$ 5, ≥ 2 ETFs só da lista aprovada, ≥ 5 setores, caixa ≤ 2%, exclusões do cliente fora); duas ações plantadas abaixo de US$ 5 ficam fora pela regra do preço; IPS e resumo sem linguagem de promessa | passa |
+| regra que não fecha (lista aprovada sem nenhum ETF existente) → "não cumpre" na conferência, nunca escondido | passa |
+| rotas `/api/competicao/ler` (200; vazio → 400) e `/api/competicao/montar` (200; regras impossíveis → 422; sem cotações → 503) | passa |
+
+Navegador (servidor local com dublês do mercado terminando hoje, 1440 e 390 px): caso e regras colados → "Ler
+textos" encontra 27 itens e preenche o formulário (horizonte 20, perfil moderado, US$ 250 mil, capital US$ 500 mil,
+preço mínimo 5, teto 25%, 10 posições, fim em 04/12/2026, exclusões e valores marcados); "Montar carteira" mostra
+"Cumpre as 11 regras conferidas", 10 ordens, a ligação com o cliente (8 itens), o IPS (6,5 mil caracteres) e o
+resumo; recarregar a página mantém os textos e o formulário (guardados só no aparelho); no celular a conferência
+vira lista e a tabela de ordens mostra ativo, quantidade e peso; sem erros de JavaScript (só os 404 dos logos do
+dublê) e sem rolagem horizontal. Suíte completa depois desta etapa: 526 aprovados, 1 pulado (o teste online); um
+teste antigo que dependia da data de hoje foi corrigido (tabela de falhas da seção 1).

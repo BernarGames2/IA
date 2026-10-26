@@ -69,10 +69,13 @@ from core.purpose.alignment import (
 )
 from core.purpose.catalog import (
     REAL_CATALOG,
+    SECTOR_LABEL,
     SYNTHETIC_CATALOG,
     TAG_SOURCE_REAL,
     CatalogAsset,
+    business_sector,
     expand,
+    is_etf,
 )
 from core.purpose.changes import (
     PRESENT,
@@ -177,7 +180,7 @@ class PurposeRequest(BaseModel):
                                                description="fração do dinheiro que pode precisar em 12 meses")
     mercados: list[Literal["BR", "US"]] | None = Field(None, min_length=1)
     permitir_cripto: bool = False
-    ativos_excluidos: list[str] = Field(default_factory=list, max_length=200)
+    ativos_excluidos: list[str] = Field(default_factory=list, max_length=1000)
     setores_excluidos: list[str] = Field(default_factory=list, max_length=60)
     carteira_atual: dict[str, float] = Field(default_factory=dict, max_length=200,
                                              description="o que você já tem: ticker -> valor, na moeda do objetivo")
@@ -187,6 +190,14 @@ class PurposeRequest(BaseModel):
                                                      description="impressão digital das entradas da recomendação anterior")
     fracionario_eua: bool = False
     valor_minimo_posicao: float = Field(100.0, ge=0, le=1e7, description="menor compra que vale a pena fazer")
+    # rules from an external rulebook (e.g. an investment competition, core/competition); None/0 = no such rule
+    preco_minimo: float | None = Field(None, gt=0, le=1e5, description="menor preço por ação/cota aceito")
+    peso_maximo_ativo: float | None = Field(None, gt=0, le=1, description="teto por ativo imposto pela regra")
+    min_posicoes: int | None = Field(None, ge=1, le=100)
+    max_posicoes: int | None = Field(None, ge=2, le=200)
+    min_etfs: int = Field(0, ge=0, le=20, description="quantos ETFs a carteira precisa ter, no mínimo")
+    etfs_permitidos: list[str] | None = Field(None, max_length=600, description="lista aprovada; None = qualquer ETF")
+    min_setores: int | None = Field(None, ge=1, le=15, description="setores diferentes com pelo menos uma posição")
 
     @field_validator("moeda_objetivo")
     @classmethod
@@ -197,6 +208,11 @@ class PurposeRequest(BaseModel):
     @classmethod
     def _excl(cls, v: list[str]) -> list[str]:
         return sorted({norm_ticker(t) for t in v if t.strip()})
+
+    @field_validator("etfs_permitidos")
+    @classmethod
+    def _etfs(cls, v: list[str] | None) -> list[str] | None:
+        return None if v is None else sorted({norm_ticker(t) for t in v if t.strip()})
 
     @field_validator("carteira_atual", "carteira_anterior")
     @classmethod
@@ -236,7 +252,18 @@ class PurposeRequest(BaseModel):
         if self.moeda is not None and self.moeda.upper() != self.moeda_objetivo:
             raise ValueError("capital/aportes em moeda diferente da moeda do objetivo não são convertidos "
                              "automaticamente: informe-os na moeda do objetivo")
+        if self.min_posicoes and self.max_posicoes and self.min_posicoes > self.max_posicoes:
+            raise ValueError("o número mínimo de posições passa do máximo")
+        if self.peso_maximo_ativo and self.max_posicoes and self.peso_maximo_ativo * self.max_posicoes < 1 - 1e-9:
+            raise ValueError(f"com no máximo {self.max_posicoes} posições de até {self.peso_maximo_ativo:.0%} cada, só "
+                             f"{self.peso_maximo_ativo * self.max_posicoes:.0%} do dinheiro pode ser investido")
+        if self.etfs_permitidos is not None and self.min_etfs > len(self.etfs_permitidos):
+            raise ValueError("a regra pede mais ETFs do que a lista aprovada tem")
         return self
+
+    @property
+    def counting_rules(self) -> bool:
+        return bool(self.min_posicoes or self.max_posicoes or self.min_etfs or self.min_setores)
 
 
 @dataclass
@@ -321,12 +348,25 @@ def _start_capital(req: PurposeRequest) -> float:
 
 def _policy(req: PurposeRequest) -> InvestorPolicy:
     m = PERIODS_PER_YEAR[req.periodicidade]
-    return build_policy(profile=req.perfil_risco, horizon_years=req.horizonte_anos, base_currency=req.moeda_objetivo,
-                        objective=req.objetivo_tipo, loss_tolerance=req.tolerancia_perda,
-                        liquidity_need=req.necessidade_liquidez, markets=req.mercados,
-                        allow_crypto=req.permitir_cripto, excluded_tickers=req.ativos_excluidos,
-                        excluded_sectors=req.setores_excluidos, capital=_start_capital(req),
-                        monthly_contribution=req.aporte_periodico * m / 12.0 if m else 0.0, synthetic=req.offline)
+    pol = build_policy(profile=req.perfil_risco, horizon_years=req.horizonte_anos, base_currency=req.moeda_objetivo,
+                       objective=req.objetivo_tipo, loss_tolerance=req.tolerancia_perda,
+                       liquidity_need=req.necessidade_liquidez, markets=req.mercados,
+                       allow_crypto=req.permitir_cripto, excluded_tickers=req.ativos_excluidos,
+                       excluded_sectors=req.setores_excluidos, capital=_start_capital(req),
+                       monthly_contribution=req.aporte_periodico * m / 12.0 if m else 0.0, synthetic=req.offline)
+    cap = req.peso_maximo_ativo
+    if cap is None:
+        return pol
+    rules = list(pol.rules)
+    if cap < pol.limits.max_weight_per_asset:
+        rules.append(f"Regra externa: no máximo {cap:.0%} por ativo (o perfil {pol.profile.value} permitiria "
+                     f"{pol.limits.max_weight_per_asset:.0%}); vale também para o caixa.")
+    else:
+        rules.append(f"Regra externa: no máximo {cap:.0%} por ativo (o limite do perfil, "
+                     f"{pol.limits.max_weight_per_asset:.0%}, já é menor); vale também para o caixa.")
+    return dataclasses.replace(
+        pol, limits=pol.limits.model_copy(update={"max_weight_per_asset": min(cap, pol.limits.max_weight_per_asset)}),
+        hard_cap=cap, rules=rules)
 
 
 def _fmt(x: float, ccy: str = "") -> str:
@@ -511,9 +551,43 @@ def _restate(comb: CombinedPortfolio, w: pd.Series, cov: pd.DataFrame, mu: pd.Se
                                notes=[*comb.notes, note])
 
 
+@dataclass(frozen=True)
+class CountRules:
+    """Rules on HOW MANY positions an external rulebook (e.g. an investment competition) asks for: held positions
+    between ``min_held`` and ``max_held``, at least ``k`` of each (label, members, k) group, and holdings in at least
+    ``least_sets`` of the member sets in ``sets`` (e.g. one per sector)."""
+
+    min_held: int = 2
+    max_held: int | None = None
+    groups: tuple[tuple[str, frozenset[str], int], ...] = ()
+    sets: tuple[frozenset[str], ...] = ()
+    least_sets: int = 0
+
+    def solver_args(self, syms: list[str]) -> dict[str, object]:
+        pos = {s: i for i, s in enumerate(syms)}
+        idx = [[pos[s] for s in g if s in pos] for g in self.sets]
+        return {"min_held": self.min_held, "max_held": self.max_held,
+                "count_groups": [([pos[s] for s in mem if s in pos], k) for _, mem, k in self.groups],
+                "distinct": ([g for g in idx if g], self.least_sets) if self.least_sets else None}
+
+
+def _count_rules(req: PurposeRequest, cat: dict[str, CatalogAsset]) -> CountRules | None:
+    if not req.counting_rules:
+        return None
+    etfs = frozenset(s for s, a in cat.items() if is_etf(a))
+    sectors: dict[str, set[str]] = {}
+    for s, a in cat.items():
+        if (sec := business_sector(a)) is not None:
+            sectors.setdefault(sec, set()).add(s)
+    return CountRules(min_held=max(2, req.min_posicoes or 2), max_held=req.max_posicoes,
+                      groups=((f"pelo menos {req.min_etfs} ETF(s)", etfs, req.min_etfs),) if req.min_etfs else (),
+                      sets=tuple(frozenset(v) for _, v in sorted(sectors.items())) if req.min_setores else (),
+                      least_sets=req.min_setores or 0)
+
+
 def _make_executable(comb: CombinedPortfolio, pc: PortfolioConstraints, cov: pd.DataFrame, mu: pd.Series,
-                     al: AlignmentResult, floor: pd.Series, vol_cap: float, te_limit: float | None = None
-                     ) -> tuple[CombinedPortfolio, dict[str, str], bool]:
+                     al: AlignmentResult, floor: pd.Series, vol_cap: float, te_limit: float | None = None,
+                     counts: CountRules | None = None) -> tuple[CombinedPortfolio, dict[str, str], bool]:
     """Every position must be at least its floor (``WEIGHT_FLOOR``, or the smallest sensible purchase — one
     lot or the minimum position — as a weight of the reference amount). Greedy semi-continuous rule: hold
     the positions whose theoretical weight reaches the floor; if the limits cannot be met with them alone,
@@ -522,8 +596,10 @@ def _make_executable(comb: CombinedPortfolio, pc: PortfolioConstraints, cov: pd.
     set are then the executable portfolio closest to the theoretical one (minimum tracking error, plus a
     small distance-in-weights term so near-riskless assets are not shuffled), within every limit, the
     volatility cap and, when the alignment tilt was applied, its tracking-error budget against the quant
-    portfolio (dropped, and said, only if the limits cannot be met with it). Returns the portfolio, the
-    positions left out with the reason, and False when no held set meets the limits (weights unchanged)."""
+    portfolio (dropped, and said, only if the limits cannot be met with it). With ``counts`` (how many positions,
+    ETFs, sectors an external rulebook asks for) the held set is always chosen exactly, with those counts as
+    constraints. Returns the portfolio, the positions left out with the reason, and False when no held set meets the
+    limits (weights unchanged)."""
     syms = pc.symbols
     n = len(syms)
     target = comb.final.loc[syms].to_numpy()
@@ -533,7 +609,7 @@ def _make_executable(comb: CombinedPortfolio, pc: PortfolioConstraints, cov: pd.
     order = [int(i) for i in np.argsort(-target, kind="stable") if target[i] > 1e-10]
     held = [i for i in order if target[i] >= fl[i] - 1e-12]
     cand = [i for i in order if i not in held]
-    if not cand:
+    if not cand and counts is None:
         return comb, {}, True
     cap = max(vol_cap, float(np.sqrt(max(target @ c @ target, 0.0))))
     eps = 1e-4 * float(np.trace(c)) / n
@@ -571,7 +647,8 @@ def _make_executable(comb: CombinedPortfolio, pc: PortfolioConstraints, cov: pd.
         return r.weights.to_numpy() if r.success else None
 
     w, te_relaxed = None, False
-    while bounds(held)[0].sum() <= 1 + 1e-9:
+    extra = counts.solver_args(syms) if counts is not None else {}
+    while counts is None and bounds(held)[0].sum() <= 1 + 1e-9:
         w = attempt(held)
         if w is not None or not cand:
             break
@@ -584,7 +661,7 @@ def _make_executable(comb: CombinedPortfolio, pc: PortfolioConstraints, cov: pd.
         for pool in (order, [i for i in range(n) if pc.upper[i] > 0]):
             tried: list[list[int]] = []
             while w is None and len(tried) < 5:
-                x = semicontinuous_weights(pc, fl, target, pool, tried)
+                x = semicontinuous_weights(pc, fl, target, pool, tried, **extra)  # type: ignore[arg-type]
                 if x is None:
                     break
                 tried.append([int(i) for i in np.flatnonzero(x > 0)])
@@ -610,7 +687,9 @@ def _make_executable(comb: CombinedPortfolio, pc: PortfolioConstraints, cov: pd.
                      + (f"; {', '.join(below)} ficou(aram) abaixo de uma compra mínima porque o limite por ativo é "
                         "menor que ela" if below else "")
                      + ("; para fechar os limites, o orçamento de tracking error do alinhamento foi excedido"
-                        if te_relaxed else "")),
+                        if te_relaxed else "")
+                     + ("; as posições foram escolhidas com as regras de contagem (quantas posições, ETFs e setores)"
+                        if counts is not None else "")),
             dropped, True)
 
 
@@ -831,7 +910,7 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
     # may hold everything, under a cash minimum): below that no portfolio is executable, said before any data is
     # fetched (step 7 checks today's prices)
     ref_amount, ref_note = _reference_amount(req)
-    w_top = 1.0 if policy.min_cash > 0 else policy.limits.max_weight_per_asset
+    w_top = min(1.0, policy.hard_cap or 1.0) if policy.min_cash > 0 else policy.limits.max_weight_per_asset
     k_min = max(2, math.ceil(1 / w_top - 1e-9))
     if req.valor_minimo_posicao > 0 and ref_amount < k_min * req.valor_minimo_posicao - 1e-9:
         why = (f"o perfil {policy.profile.value} não deixa nenhum ativo passar de {w_top:.0%} da carteira, então "
@@ -844,6 +923,16 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
             "pode pedir mais. " + _SMALL_FIX)
 
     # 3 ---------------------------------------------------------------- discovery + stage A
+    allowed_etfs = set(req.etfs_permitidos) if req.etfs_permitidos is not None else None
+
+    def allows(a: CatalogAsset) -> str | None:
+        """The investor's preferences, then the approved-ETF list of an external rulebook (when one is given)."""
+        if why := policy.allows(a):
+            return why
+        if allowed_etfs is not None and is_etf(a) and a.ticker not in allowed_etfs:
+            return "ETF fora da lista aprovada pela regra"
+        return None
+
     cache_root = cache_dir or Path(".cache") / "market_data"
     funnel: Funnel | None = None
     pre = extract_themes(req.motivo_investidor)          # themes only steer the theme slots
@@ -856,7 +945,7 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
         base = expand(SYNTHETIC_CATALOG, classes)
         if want_cash and classes is not None:      # the synthetic stand-in for the CDI cash
             base += [a for a in SYNTHETIC_CATALOG if traits(a).market == "CAIXA" and a not in base]
-        excluded_pref = {a.ticker: why for a in base if (why := policy.allows(a))}
+        excluded_pref = {a.ticker: why for a in base if (why := allows(a))}
         pool = [a for a in base if a.ticker not in excluded_pref]
         known = {a.ticker: a for a in SYNTHETIC_CATALOG}
         for t in sorted(mine):
@@ -880,7 +969,7 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
             a_ = known.get(t) or (listing_to_catalog(listed[t]) if t in listed else None)
             if a_ is None:
                 not_analysed[t] = "não reconhecido: não está no catálogo curado nem nas listagens consultadas"
-            elif why := policy.allows(a_):
+            elif why := allows(a_):
                 not_analysed[t] = f"fora das suas preferências: {why}"
             elif classes is not None and a_.macro_class not in classes:
                 not_analysed[t] = "fora das classes de ativos escolhidas"
@@ -888,7 +977,7 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
                 always.append(a_)
         pool_cap = min(max(int(POOL_FACTOR * req.max_ativos), req.max_ativos + 10), POOL_MAX)
         pool, funnel = preselect(expand(REAL_CATALOG, classes), listings, pre_tags, pool_cap, classes,
-                                 allows=policy.allows, always=always)
+                                 allows=allows, always=always)
         excluded_pref = dict(funnel.excluded_by_preference)
         listed_txt = (f"{funnel.listed_b3} na B3 e {funnel.listed_us} nos EUA listados + catálogo curado"
                       if funnel.used_listings else "catálogo curado (listagens completas indisponíveis)")
@@ -956,8 +1045,19 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
     gov = apply_governance(ds_pool.symbols, req.incluir_sob_revisao, governance_path, req.restricoes_governanca)
     series = {s: ds_pool.raw_prices[s] for s in gov.kept}
     say(f"medindo risco, qualidade, liquidez e correlação de {len(series)} ativos…")
+    need = policy.required_groups([cat[s] for s in series])
+    if req.min_etfs:
+        need.append((f"a regra de pelo menos {req.min_etfs} ETF(s)", [s for s in series if is_etf(cat[s])],
+                     max(2, req.min_etfs + 1)))
+    if req.min_setores:
+        by_sector: dict[str, list[str]] = {}
+        for s in series:
+            if (sec := business_sector(cat[s])) is not None:
+                by_sector.setdefault(sec, []).append(s)
+        need.extend((f"a regra de pelo menos {req.min_setores} setores (setor {SECTOR_LABEL.get(k, k)})", v, 1)
+                    for k, v in sorted(by_sector.items()))
     scr = screen(series, ds_pool.volumes, {s: cat[s] for s in series}, policy.profile, policy.objective, rf0[ccy],
-                 req.max_ativos, required=policy.required_groups([cat[s] for s in series]),
+                 req.max_ativos, required=need,
                  themed={s for s in series if set(cat[s].tags) & pre_tags},
                  keep={s: ("você já tem este ativo" if s in req.carteira_atual else "estava na recomendação anterior")
                        + ": entra na análise para ser comparado com as alternativas" for s in series if s in mine})
@@ -1075,6 +1175,12 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
             for s_ in ds.symbols}
     not_exec = {s_: f"a classe {cat[s_].asset_class} tem limite de 0% para o seu perfil e horizonte"
                 for s_, cp in caps.items() if cp <= 0}
+    if req.preco_minimo is not None:      # e.g. "stocks priced at $5 or higher": the last close is the reference
+        for s_ in ds.symbols:
+            if s_ not in not_exec and not is_money(cat[s_]) and float(last_px[s_]) < req.preco_minimo:
+                not_exec[s_] = (f"último preço {_fmt(float(last_px[s_]), ccy)} abaixo do mínimo de "
+                                f"{_fmt(req.preco_minimo, ccy)} da regra")
+                caps[s_] = 0.0
     keep_x, too_big = executable_universe({s_: cat[s_] for s_ in ds.symbols if s_ not in not_exec}, last_px, caps,
                                           ref_amount, req.valor_minimo_posicao, req.fracionario_eua, ccy)
     not_exec.update(too_big)
@@ -1194,7 +1300,8 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
     comb, dropped, viable = _make_executable(comb, res.constraints, res.cov.cov, res.mu, al, floor,
                                              max(comb.vol_quant, vol_cap),
                                              req.peso_alinhamento * req.orcamento_tracking_error
-                                             if comb.alignment_target is not None else None)
+                                             if comb.alignment_target is not None else None,
+                                             _count_rules(req, {s_: cat[s_] for s_ in res.constraints.symbols}))
     if not viable:
         alerts.append(Alert("execucao", "WARNING", "sem as posições pequenas demais para comprar ("
                             + ", ".join(dropped) + ") os limites do perfil não fecham: a carteira-alvo foi mantida e "
