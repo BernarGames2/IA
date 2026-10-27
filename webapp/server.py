@@ -59,7 +59,10 @@ from core.fundamentals.monitor import check as monitor_check
 from core.market_data.base import DataUnavailableError
 from core.market_data.logos import clean_domain, domain_for, fetch_logo
 from core.market_data.quality import QualitySettings
+from core.market_data.quotes import QuotesFn, live_quotes, remembered
 from core.market_data.risk_free import fetch_live_rates
+from core.market_watch.overview import MarketRequest
+from core.market_watch.overview import overview as market_overview
 from core.portfolio_analytics.api import handle_dashboard, handle_risk
 from core.portfolio_analytics.data import PortfolioRequest
 from core.portfolio_engine import AnalysisResult, run_analysis
@@ -84,7 +87,7 @@ from core.scenarios.api import (
 )
 from core.stock_check.analyzer import analyze_stock
 from core.stock_check.analyzer import to_dict as stock_to_dict
-from core.stock_check.daily_pick import daily_pick
+from core.stock_check.daily_pick import apply_live_prices, daily_pick
 from core.strategy_lab.api import StrategyRequest, handle_strategy
 from models.investor import InvestorProfileInput, RiskProfile
 from utils.serialization import to_jsonable
@@ -101,6 +104,7 @@ _MAX_CONCURRENT = 2
 _CACHE_SIZE = 4
 _RESULT_TTL_S = 15 * 60       # a real-data result is reused for at most 15 minutes, then recomputed
 _DOWNLOAD_BUDGET_S = 45.0     # total time allowed for downloading real quotes in one request
+_QUOTES_TTL_S = 60.0          # latest quotes and the market screen are reused for at most one minute
 _PING_EVERY_S = 5.0           # keep-alive event interval of streamed responses
 
 
@@ -213,16 +217,16 @@ _cache: OrderedDict[tuple[object, ...], tuple[AnalysisResult, float]] = OrderedD
 _purpose_cache: OrderedDict[str, tuple[float, dict[str, object]]] = OrderedDict()
 
 
-def _cached(k: str, real: bool) -> dict[str, object] | None:
+def _cached(k: str, real: bool, ttl: float = _RESULT_TTL_S) -> dict[str, object] | None:
     """A stored result, if still valid: synthetic results never expire (same seed -> same numbers); a
-    real-data result expires after _RESULT_TTL_S so new quotes lead to a new analysis. The copy says it
-    came from the cache and when it was computed."""
+    real-data result expires after ``ttl`` (_RESULT_TTL_S by default) so new quotes lead to a new analysis. The
+    copy says it came from the cache and when it was computed."""
     with _cache_lock:
         hit = _purpose_cache.get(k)
         if hit is None:
             return None
         t, payload = hit
-        if real and time.time() - t > _RESULT_TTL_S:
+        if real and time.time() - t > ttl:
             del _purpose_cache[k]
             return None
         _purpose_cache.move_to_end(k)
@@ -383,6 +387,11 @@ def _rf_fetch() -> object | None:
     return None
 
 
+def _quote_source() -> Callable[[Callable[[str], None] | None], QuotesFn]:
+    """Latest quotes (Yahoo chart metadata, delayed), remembered for 60 s across requests. Replaceable in tests."""
+    return lambda progress: remembered(live_quotes(budget_s=_DOWNLOAD_BUDGET_S, progress=progress), _QUOTES_TTL_S)
+
+
 def _logo_fetch() -> object | None:
     """HTTP fetch used for company logos; None = standard library. Replaceable in tests."""
     return None
@@ -504,6 +513,18 @@ def acao_do_dia(p: DailyPickRequest, stream: bool = False) -> Response:
         raise HTTPException(400, "valores da carteira atual devem ser números maiores ou iguais a zero")
 
     def compute(progress: Callable[[str], None]) -> dict[str, object]:
+        """The pick from the daily history (cached), then the latest prices of the pick and the alternatives."""
+        base = pick(progress)
+        if p.fonte_dados != "real":
+            return base
+        progress("buscando o preço de agora…")
+        try:
+            return apply_live_prices(base, _quote_source()(None), p.fracionario_eua)
+        except (OSError, ValueError, KeyError, TypeError) as e:     # the pick stands; the latest price is said missing
+            log.warning("latest prices failed", exc_info=e)
+            return {**base, "precos_ao_vivo": False}
+
+    def pick(progress: Callable[[str], None]) -> dict[str, object]:
         k = p.key()
         hit = _cached(k, p.fonte_dados == "real")
         if hit is not None:
@@ -537,11 +558,11 @@ def acao_do_dia(p: DailyPickRequest, stream: bool = False) -> Response:
 
 
 def _engine(k: str, run: Callable[[Callable[[str], None]], dict[str, object]], stream: bool, real: bool = True,
-            unavailable: str = "tente de novo em alguns minutos") -> Response:
-    """Shared flow of the newer engines: cache (15 min for real data), one of the limited computation slots,
-    input errors as 400, missing real data as 503 (nothing estimated in its place), defects as 500."""
+            unavailable: str = "tente de novo em alguns minutos", ttl: float = _RESULT_TTL_S) -> Response:
+    """Shared flow of the newer engines: cache (15 min for real data, or ``ttl``), one of the limited computation
+    slots, input errors as 400, missing real data as 503 (nothing estimated in its place), defects as 500."""
     def compute(progress: Callable[[str], None]) -> dict[str, object]:
-        hit = _cached(k, real)
+        hit = _cached(k, real, ttl)
         if hit is not None:
             return hit
         if not _slots.acquire(timeout=120):
@@ -671,6 +692,15 @@ def competicao_montar(p: CompetitionRequest, stream: bool = False) -> Response:
         p, provider=_market_provider(), fetch=_rf_fetch(), cache_dir=_OUTPUT_DIR / "cache",
         output_dir=_OUTPUT_DIR / "competicao", progress=progress, budget_s=_DOWNLOAD_BUDGET_S), stream,
         unavailable="tente de novo em alguns minutos (as cotações já baixadas ficam guardadas)")
+
+
+@app.post("/api/mercado")
+def mercado(p: MarketRequest, stream: bool = False) -> Response:
+    """Market of the day: indices, biggest gains and drops, most traded, prices (delayed quotes, with the time of the
+    last trade; no move is attributed to a cause). Reused for one minute."""
+    return _engine(p.key(), lambda progress: market_overview(
+        p, _quote_source()(progress), cache_dir=_OUTPUT_DIR / "cache", fetch=_rf_fetch(), progress=progress), stream,
+        unavailable="tente de novo em alguns minutos", ttl=_QUOTES_TTL_S)
 
 
 @app.post("/api/monitorar")

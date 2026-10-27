@@ -90,6 +90,10 @@ só com o catálogo e avisa. Perfis válidos ficam 24 h em cache (`cache/perfis/
 
 * `MarketDataProvider.fetch(symbols, period, interval) -> dict[str, RawSeries]` (Protocol). Implementações:
   `YFinanceProvider`, `SyntheticProvider`; testes usam provedores falsos.
+* Cotações do dia: `QuotesFn = Callable[[list[str]], tuple[dict[str, Quote], dict[str, str]]]`
+  (`core/market_data/quotes.py`; `QuoteProvider` herda tentativas, ritmo, disjuntor e limite de tempo do provedor de
+  gráficos e lê os metadados do gráfico de 1 dia); usada pela tela Mercado (`core/market_watch/overview.py`) e pela
+  "Ação do dia" (`apply_live_prices`). Falhas voltam em `failures`, nunca preenchidas.
 * Estimadores: funções `f(returns: DataFrame, periods) -> Series/CovarianceResult` registradas em dicionários
   (`ESTIMATORS`), com `evaluate_oos` comum.
 * Otimizadores: recebem `mu`, `cov`, `PortfolioConstraints`, retornam `OptimizationResult` (pesos, status,

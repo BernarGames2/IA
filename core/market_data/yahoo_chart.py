@@ -250,6 +250,10 @@ class YahooChartProvider:
         return True
 
     def _download(self, symbol: str, period: str, interval: str) -> RawSeries:
+        return parse_chart(symbol, self._get_json(symbol, period, interval), self.name)
+
+    def _get_json(self, symbol: str, period: str, interval: str) -> dict:
+        """The chart-API JSON of one symbol, with the retries, pacing and time budget described above."""
         last = "sem tentativa"
         net_errors = 0
         throttled = False
@@ -282,7 +286,7 @@ class YahooChartProvider:
                     last = f"resposta inválida: {e}"
                     throttled = False
                     continue
-                return parse_chart(symbol, payload, self.name)
+                return payload
             if status == 404:
                 raise DownloadError(f"{symbol}: ticker não encontrado no provedor (HTTP 404)")
             if status in (401, 403):              # the provider refuses this client, not just this ticker

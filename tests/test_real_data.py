@@ -185,6 +185,12 @@ def test_engine_real_mode_reports_where_to_invest_and_why(tmp_path):
     assert all(a["por_que"] and a["negocio"] and a["ticker"] in r.table.index for a in alloc)
     assert [a["peso"] for a in alloc] == sorted((a["peso"] for a in alloc), reverse=True)
     assert "Carteira-base quantitativa" in r.strategy_text
+    # a US asset bought in reais also shows its price in dollars (same day; one exchange rate for all)
+    orig, bought = r.execution["precos_originais"], {p["ticker"]: p for p in r.execution["compra_inicial"]["posicoes"]}
+    us = [t for t in bought if not t.endswith(".SA") and t != "CAIXA_CDI"]
+    assert us and set(us) <= set(orig) and all(v["moeda"] == "USD" for v in orig.values())
+    assert not any(t.endswith(".SA") for t in orig)
+    assert len({round(bought[t]["preco"] / orig[t]["preco"], 6) for t in us}) == 1
     md = render_markdown(r)
     assert "Onde investir e por quê" in md and "Dados reais" in md and "SINTÉTICOS" not in md
 

@@ -381,6 +381,71 @@ pre.doc { white-space: pre-wrap; overflow-wrap: anywhere; font-family: ui-monosp
   table.orders th, table.orders td { padding: 10px 8px; }
 }
 .fit-item .q { display: block; color: var(--ink-3); font-size: 0.8rem; font-style: italic; overflow-wrap: anywhere; }
+/* market screen and buy lists */
+.mk-live { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin: 0 0 12px; font-size: 0.84rem; color: var(--ink-2); }
+.mk-live .st { font-size: 0.78rem; }
+.idx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(176px, 100%), 1fr)); gap: 12px; margin: 0 0 16px; }
+.idx { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px 16px 12px; min-width: 0; }
+.idx .k { font-size: 0.76rem; color: var(--ink-3); font-weight: 550; }
+.idx .v { font-size: 1.32rem; font-weight: 650; letter-spacing: -0.02em; margin-top: 2px; overflow-wrap: anywhere; }
+.idx .n { font-size: 0.72rem; color: var(--ink-3); margin-top: 2px; }
+.idx .spark-wrap { position: relative; margin-top: 8px; }
+.idx .spark { display: block; width: 100%; height: 34px; overflow: visible; }
+.idx .spark-wrap i { position: absolute; right: -3px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 0 2px var(--surface); }
+.idx.off .v { font-size: 0.86rem; font-weight: 500; color: var(--ink-3); letter-spacing: 0; }
+.chg { font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chg.up, .icon.up { color: var(--pos); } .chg.down, .icon.down { color: var(--neg); } .chg.flat { color: var(--ink-3); }
+.h-ico { display: flex; align-items: center; gap: 8px; }
+.breadth { display: flex; gap: 2px; height: 12px; margin: 12px 0 10px; }
+.breadth i { display: block; height: 100%; min-width: 4px; border-radius: 4px; }
+.breadth .up { background: var(--pos); } .breadth .flat { background: var(--line-strong); } .breadth .down { background: var(--neg); }
+.breadth-legend { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 0.86rem; color: var(--ink-2); }
+.movers { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.movers.cols { grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr)); column-gap: 16px; }
+.movers li > button { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; width: 100%;
+  min-height: 0; padding: 9px 10px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); text-align: left;
+  font-weight: 500; white-space: normal; }
+.movers li > button:hover, .movers li > button:active { background: var(--surface-2); transform: none; }
+.movers .t { display: block; font-weight: 650; font-size: 0.9rem; }
+.movers .s { display: block; font-size: 0.76rem; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.movers .r { text-align: right; }
+.movers .p { display: block; font-size: 0.9rem; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.movers .chg { display: block; font-size: 0.8rem; }
+.movers .empty-line { padding: 10px; color: var(--ink-3); font-size: 0.86rem; }
+.mk-tools { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; margin: 0 0 12px; }
+.buy-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.buy-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 14px; align-items: start; padding: 14px;
+  border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface-2); }
+.buy-item .logo { grid-row: 1 / span 4; }
+.buy-item > :not(.logo) { grid-column: 2; }
+.buy-item .price { font-size: 0.9rem; color: var(--ink); font-variant-numeric: tabular-nums; }
+.buy-item .name { font-weight: 650; overflow-wrap: anywhere; }
+.buy-item .name small { display: block; font-weight: 500; color: var(--ink-3); font-size: 0.78rem; }
+.buy-item .qty { font-size: 1.02rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.buy-item .why { color: var(--ink-2); font-size: 0.86rem; }
+.buy-total { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 12px 0 0; font-size: 0.9rem; }
+.buy-total strong { font-variant-numeric: tabular-nums; }
+.buy-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 14px 0 6px; }
+.buy-nums > div { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 12px 14px; min-width: 0; }
+.buy-nums .k { display: block; font-size: 0.74rem; color: var(--ink-3); font-weight: 550; }
+.buy-nums .v { display: block; font-size: 1.24rem; font-weight: 700; letter-spacing: -0.015em; overflow-wrap: anywhere; }
+.buy-nums .n { display: block; font-size: 0.76rem; color: var(--ink-3); margin-top: 2px; }
+details.full { margin: 4px 0 16px; }
+details.full > summary { display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 9px 16px; margin: 0 0 16px;
+  border-radius: var(--r-md); border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font-weight: 600;
+  list-style: none; }
+details.full > summary::-webkit-details-marker { display: none; }
+details.full > summary .icon { transition: transform .15s; }
+details.full[open] > summary .icon { transform: rotate(180deg); }
+@media (max-width: 600px) {
+  .idx-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .idx { padding: 12px; }
+  .idx .v { font-size: 1.08rem; }
+  .buy-nums { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .buy-nums > div:first-child { grid-column: 1 / -1; }
+  .mk-tools { grid-template-columns: minmax(0, 1fr); }
+}
 .bars { display: grid; gap: 10px; }
 .bar-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; font-size: 0.85rem; }
 .bar-row .track { grid-column: 1 / -1; height: 6px; background: var(--surface-3); border-radius: 999px; overflow: hidden; }
@@ -530,6 +595,7 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
     <nav class="nav" aria-label="Seções">
       <a href="#/painel" data-nav="painel"><svg class="icon"><use href="#i-layout-dashboard"/></svg><span>Painel</span></a>
       <span class="nav-label">Pesquisar</span>
+      <a href="#/mercado" data-nav="mercado"><svg class="icon"><use href="#i-chart-line"/></svg><span>Mercado hoje</span></a>
       <a href="#/acoes" data-nav="acoes"><svg class="icon"><use href="#i-chart-candlestick"/></svg><span>Análise de ações</span></a>
       <a href="#/oportunidades" data-nav="oportunidades"><svg class="icon"><use href="#i-radar"/></svg><span>Oportunidades</span></a>
       <a href="#/previsoes" data-nav="previsoes"><svg class="icon"><use href="#i-compass"/></svg><span>Previsões</span></a>
@@ -573,6 +639,9 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
           <div id="painel-profile"></div>
         </div>
         <div class="actions-grid">
+          <a class="action" href="#/mercado"><span class="ico"><svg class="icon"><use href="#i-chart-line"/></svg></span>
+            <span><strong>Mercado hoje</strong><span class="d">Ibovespa, dólar, maiores altas e quedas e os preços (com atraso)</span></span>
+            <svg class="icon"><use href="#i-chevron-right"/></svg></a>
           <a class="action" href="#s-title"><span class="ico"><svg class="icon"><use href="#i-chart-candlestick"/></svg></span>
             <span><strong>Analisar uma ação</strong><span class="d">Veredito por regras, empresa, fundamentos e projeção</span></span>
             <svg class="icon"><use href="#i-chevron-right"/></svg></a>
@@ -632,6 +701,51 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
             <div class="legend-item"><b>hipótese</b>Premissas declaradas — quando você não informa algo, a hipótese aparece escrita.</div>
           </div>
         </section>
+      </section>
+
+      <!-- ============================================================ MERCADO -->
+      <section class="view" data-view="mercado" data-title="Mercado hoje" data-eyebrow="Pesquisar" aria-label="Mercado hoje" hidden>
+        <section class="card">
+          <div class="card-head"><div>
+            <h2 id="mk-title">O que o mercado está fazendo hoje</h2>
+            <p class="lead">Ibovespa, dólar, as ações que mais sobem e mais caem e o preço de cada uma. Toque em uma ação para
+              analisá-la. Só os números: o motivo de uma alta ou queda está nas notícias.</p></div>
+            <span class="badge real"><svg class="icon"><use href="#i-clock"/></svg>Cotações com atraso</span></div>
+          <form id="mk-form">
+            <label>Bolsa
+              <select name="mercado"><option value="BR" selected>Brasil (B3)</option><option value="US">EUA (NYSE e Nasdaq)</option></select>
+            </label>
+            <label>Ações acompanhadas
+              <select name="quantidade"><option value="30">30</option><option value="60" selected>60</option><option value="100">100</option></select>
+            </label>
+            <label class="check span-all"><input name="auto" type="checkbox" checked> Atualizar sozinho a cada 2 min (com esta tela aberta)</label>
+            <button id="mk-run" type="submit" class="btn-wide"><svg class="icon"><use href="#i-refresh-cw"/></svg>Atualizar agora</button>
+          </form>
+          <div class="status" id="mk-status" role="status" aria-live="polite"></div>
+        </section>
+        <div id="mk-results" class="hidden">
+          <p class="mk-live" id="mk-live"></p>
+          <div class="idx-grid" id="mk-idx"></div>
+          <section class="card"><h2>Quantas sobem e quantas caem</h2><div id="mk-breadth"></div></section>
+          <div class="grid2">
+            <section class="card"><h2 class="h-ico"><svg class="icon up"><use href="#i-trending-up"/></svg>Maiores altas</h2>
+              <ol class="movers" id="mk-up"></ol></section>
+            <section class="card"><h2 class="h-ico"><svg class="icon down"><use href="#i-trending-down"/></svg>Maiores quedas</h2>
+              <ol class="movers" id="mk-down"></ol></section>
+          </div>
+          <section class="card"><h2>Mais negociadas hoje</h2>
+            <p class="muted">Pelo volume financeiro aproximado: ações negociadas hoje × último preço.</p>
+            <ol class="movers cols" id="mk-traded"></ol></section>
+          <section class="card"><div class="card-head"><div><h2>Todas as cotações</h2><p class="muted" id="mk-count"></p></div></div>
+            <div class="mk-tools">
+              <label>Procurar<input id="mk-filter" type="search" maxlength="40" autocomplete="off" placeholder="PETR4, Vale, Apple…"></label>
+              <label>Ordem
+                <select id="mk-sort"><option value="up">Maior alta primeiro</option><option value="down">Maior queda primeiro</option>
+                  <option value="name">Código (A–Z)</option></select></label>
+            </div>
+            <ol class="movers cols" id="mk-all"></ol></section>
+          <section class="card"><h2>De onde vêm os números</h2><p id="mk-note"></p><ul class="clean" id="mk-src"></ul></section>
+        </div>
       </section>
 
       <!-- ============================================================ AÇÕES -->
@@ -1179,6 +1293,13 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
 
         <div id="p-results" class="hidden">
           <div class="banner" id="p-banner"></div>
+          <section class="card" aria-labelledby="p-buy-h">
+            <div class="card-head"><div><h2 id="p-buy-h">O que comprar</h2><p class="muted" id="p-buy-sub"></p></div></div>
+            <ol class="buy-list" id="p-buy"></ol>
+            <div class="buy-total" id="p-buy-total"></div>
+            <p class="muted" id="p-buy-note"></p>
+          </section>
+          <details class="full" id="p-full"><summary><svg class="icon"><use href="#i-chevron-down"/></svg>Ver a análise completa: pesos, risco, cenários, regras e fontes</summary>
           <div class="kpis" id="p-kpis"></div>
           <section class="card"><h2>Onde investir e por quê</h2><p id="p-strategy" class="lead"></p><div class="tbl" id="p-alloc"></div>
             <p class="muted" id="p-alloc-note">Valor inicial = capital inicial × peso; aporte por período = aporte × peso. Alocação de
@@ -1200,6 +1321,7 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
           <section class="card"><h2>Alertas de validação</h2><ul class="clean" id="p-alerts"></ul>
             <p><a class="btn ghost sm" id="p-download" href="#" download="carteira_proposito.md"><svg class="icon"><use href="#i-download"/></svg>Baixar relatório completo (Markdown)</a></p></section>
           <section class="card"><h2>Fontes dos dados</h2><ul class="clean" id="p-sources"></ul><p class="kind" id="p-repro"></p></section>
+          </details>
         </div>
         </div>
       </section>
@@ -1582,7 +1704,7 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
 
   <nav class="tabbar" aria-label="Navegação">
     <a href="#/painel" data-nav="painel"><svg class="icon"><use href="#i-layout-dashboard"/></svg>Painel</a>
-    <a href="#/acoes" data-nav="acoes"><svg class="icon"><use href="#i-chart-candlestick"/></svg>Ações</a>
+    <a href="#/mercado" data-nav="mercado"><svg class="icon"><use href="#i-chart-line"/></svg>Mercado</a>
     <a href="#/oportunidades" data-nav="oportunidades"><svg class="icon"><use href="#i-radar"/></svg>Radar</a>
     <a href="#/carteira" data-nav="carteira"><svg class="icon"><use href="#i-wallet"/></svg>Carteira</a>
     <button type="button" id="more-open" aria-haspopup="dialog" aria-controls="more-sheet"><svg class="icon"><use href="#i-ellipsis"/></svg>Mais</button>
@@ -1590,6 +1712,7 @@ AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE. -->
   <div class="sheet-backdrop" id="more-backdrop"></div>
   <div class="sheet" id="more-sheet" role="dialog" aria-modal="true" aria-label="Mais seções">
     <div class="grip"></div>
+    <a href="#/acoes" data-nav="acoes"><svg class="icon"><use href="#i-chart-candlestick"/></svg>Análise de ações</a>
     <a href="#/previsoes" data-nav="previsoes"><svg class="icon"><use href="#i-compass"/></svg>Previsões</a>
     <a href="#/cenarios" data-nav="cenarios"><svg class="icon"><use href="#i-calculator"/></svg>Cenários</a>
     <a href="#/competicao" data-nav="competicao"><svg class="icon"><use href="#i-trophy"/></svg>Competição</a>
@@ -2300,7 +2423,58 @@ function renderPurpose(d) {
   if (purposeUrl) URL.revokeObjectURL(purposeUrl);
   purposeUrl = URL.createObjectURL(new Blob([d.markdown], { type: "text/markdown;charset=utf-8" }));
   $("p-download").href = purposeUrl;
-  renderPlan(d); renderChanges(d); renderConc(d); renderScreen(d); renderRules(d); renderSources(d);
+  renderPlan(d); renderChanges(d); renderConc(d); renderScreen(d); renderRules(d); renderSources(d); renderBuy(d);
+}
+// the short answer first: what to buy, how many, at what price, and why — one line each (details in the full analysis)
+const ROLE_PLAIN = { "estabilizador": "reduz as oscilações da carteira", "motor de retorno": "é uma das principais fontes de retorno esperado [E]",
+  "crescimento (assume mais risco do que o seu peso)": "busca crescimento, com mais risco do que o seu peso",
+  "diversificador": "diversifica: traz risco na medida do seu peso" };
+function unitWord(cls, q) {
+  const one = Math.abs(q - 1) < 1e-9;
+  if (cls === "acoes_br" || cls === "acoes_eua") return one ? "ação" : "ações";
+  if (cls === "cripto") return one ? "unidade" : "unidades";
+  return one ? "cota" : "cotas";
+}
+function whyShort(a) {
+  if (!a) return "";
+  const label = String(a.papel || "").split(":")[0].trim();
+  const role = ROLE_PLAIN[label] || label;
+  const purpose = String(a.proposito || "");
+  const tie = purpose.startsWith("atende ao(s) tema(s) do seu motivo: ") ? "ligada ao seu motivo (" + purpose.split(": ").slice(1).join(": ") + ")" : "";
+  return [role, tie].filter(Boolean).join("; ");
+}
+function renderBuy(d) {
+  const ex = d.execucao || {}, q = d.entrada || {}, plan = ex.compra_inicial || ex.proximo_aporte;
+  const first = !!ex.compra_inicial;
+  const info = Object.fromEntries((d.onde_investir || []).map((a) => [a.ticker, a]));
+  const orig = ex.precos_originais || {};
+  const g = d.objetivo || {};
+  $("p-buy-sub").textContent = (plan ? (first ? `Com ${fmtMoney(q.capital_inicial)} para investir agora` : `No primeiro aporte de ${fmtMoney(q.aporte_periodico)} (${q.periodicidade})`) + ". " : "")
+    + (g.p_objetivo !== undefined && g.p_objetivo !== null ? `Chance estimada de chegar a ${fmtMoney(g.valor_alvo)} no prazo: ${fmtPct(g.p_objetivo, 0)} (simulação [S], não promessa).` : "");
+  const rows = plan && plan.posicoes ? plan.posicoes : [];
+  setChildren("p-buy", ...(rows.length ? rows.map((r) => {
+    const a = info[r.ticker] || {}, o = orig[r.ticker];
+    const nb = (t) => String(t).replace(/ /g, "\u00a0");          // an amount never breaks across lines
+    return el("li", { class: "buy-item" }, logoEl(r.ticker, a.logo || logoOf(r.ticker), 40),
+      el("div", { class: "name" }, `${shortTk(r.ticker)} — ${a.nome || r.ticker}`, el("small", {}, a.negocio || "")),
+      el("div", { class: "qty" }, r.em_dinheiro ? `Aplicar ${nb(fmtMoney2(r.valor))}` : `Comprar ${nb(fmtQty(r.quantidade) + " " + unitWord(a.classe, r.quantidade))}`),
+      ...(r.em_dinheiro ? [] : [el("div", { class: "price" }, `Preço ${nb(fmtMoney2(r.preco))} cada` + (o ? ` (${nb(fmtPrice(o.preco, o.moeda))})` : "")
+        + ` · total ${nb(fmtMoney2(r.valor))}`)]),
+      el("div", { class: "why" }, el("strong", {}, "Por quê: "), whyShort(a) || a.por_que || "—"));
+  }) : [el("li", { class: "muted" }, "Nada para comprar agora com este valor: veja o motivo na análise completa (plano de compra).")]));
+  const spent = rows.reduce((t, r) => t + (r.valor || 0), 0);
+  setChildren("p-buy-total", ...(plan ? [el("span", {}, "Total: ", el("strong", {}, fmtMoney2(spent))),
+    el("span", {}, "Sobra sem investir: ", el("strong", {}, fmtMoney2(plan.caixa_nao_investido)))] : []));
+  const later = Object.keys((plan && plan.fora_desta_compra) || {});
+  const alerts = (d.alertas || []).filter((x) => x.severity === "FAIL" || x.severity === "WARNING").length;
+  $("p-buy-note").textContent = [
+    later.length ? `Ficam para os próximos aportes (o valor não compra 1 lote agora): ${later.map(shortTk).join(", ")}.` : "",
+    first && ex.proximo_aporte ? `Depois, a cada aporte de ${fmtMoney(q.aporte_periodico)}: o plano está na análise completa.` : "",
+    d.dados_sinteticos ? "Preços sintéticos (demonstração): os códigos SINT_* não existem no mercado."
+      : `Preços: último dado diário (${fmtDateBR((d.universo || {}).ultima_cotacao || "")}), com atraso — confira na corretora antes de comprar; `
+      + "o preço muda durante o pregão.",
+    alerts ? `${alerts} alerta(s) de validação: veja na análise completa.` : "",
+    "Pesquisa, não recomendação."].filter(Boolean).join(" ");
 }
 const KIND_PT = { entrou: "entrou", saiu: "saiu", aumentou: "aumentou", reduziu: "reduziu", mantido: "mantido" };
 function planBlock(pl, title) {
@@ -2604,25 +2778,42 @@ function renderDaily(d) {
   if (p) {
     const f = p.fatos_H || {};
     const corr = p.correlacao_com_sua_carteira;
+    const lv = p.ao_vivo, fits = p.quantidade > 0;
+    const price = el("div", {}, el("span", { class: "k" }, lv ? "Preço agora" : "Preço (último fechamento)"),
+      el("span", { class: "v" }, fmtMoney2(p.preco)),
+      el("span", { class: "n" }, ...(lv ? [chgEl(lv.variacao_dia), " hoje"] : [fmtDateBR(p.preco_data)])));
+    const when = lv ? `Preço do último negócio, ${whenSP(lv.hora_utc) || lv.hora}` + (lv.pregao_aberto === true ? " (pregão aberto)"
+      : lv.pregao_aberto === false ? " (pregão fechado)" : "")
+      + (lv.cambio ? `: ${fmtPrice(lv.preco_original, lv.moeda)} × dólar a ${fmtMoney2(lv.cambio)}` : "")
+      + `. Cotação com atraso${lv.atraso_min ? ` de cerca de ${lv.atraso_min} min` : ""}, não é tempo real: confira o preço na corretora antes de comprar. `
+      + `A escolha usa o histórico até o fechamento de ${fmtDateBR(p.preco_data)} (${fmtMoney2(p.preco_fechamento)}).`
+      : `${p.ao_vivo_nota ? p.ao_vivo_nota[0].toUpperCase() + p.ao_vivo_nota.slice(1) + ". " : ""}Preço do fechamento de ${fmtDateBR(p.preco_data)}, com atraso: confira na corretora antes de comprar.`;
     setChildren("d-pick",
       el("div", { class: "with-logo" }, logoEl(p.ticker, p.logo, 48),
         el("div", {}, el("strong", {}, `${p.ticker} — ${p.nome}`),
           el("div", { class: "muted" }, `${p.mercado} · ${p.setor} · ${p.posicao}ª maior pontuação entre ${p.de} ações medidas no perfil ${d.perfil}`))),
-      el("p", { class: "buy" }, `Comprar ${fmtQty(p.quantidade)} ${p.quantidade === 1 ? "ação" : "ações"} a ${fmtMoney2(p.preco)} = ${fmtMoney2(p.custo)}`
-        + (p.sobra > 0.005 ? ` (sobra ${fmtMoney2(p.sobra)})` : "")),
-      el("p", { class: "muted" }, `Preço do fechamento de ${p.preco_data} (com atraso: confira na corretora) · ${p.regra_de_lote}`),
+      el("div", { class: "buy-nums" },
+        el("div", {}, el("span", { class: "k" }, "Quantas comprar"), el("span", { class: "v" }, fits ? `${fmtQty(p.quantidade)} ${p.quantidade === 1 ? "ação" : "ações"}` : "nenhuma"),
+          el("span", { class: "n" }, p.regra_de_lote)),
+        price,
+        el("div", {}, el("span", { class: "k" }, "Total"), el("span", { class: "v" }, fmtMoney2(p.custo)),
+          el("span", { class: "n" }, p.sobra > 0.005 ? `sobra ${fmtMoney2(p.sobra)}` : "sem sobra"))),
+      ...(fits ? [] : [el("p", {}, el("span", { class: "st", style: "--c:var(--warn)" }, "atenção"), " " + (d.avisos[0] || ""))]),
+      el("p", { class: "muted" }, when),
       el("h3", {}, "Por que esta ação"),
       el("ul", { class: "clean" }, ...p.por_que.map((x) => el("li", {}, x)),
         ...(corr !== null && corr !== undefined ? [el("li", {}, `correlação de ${fmtNum(corr)} com o que você já tem`)] : [])),
-      el("p", {}, el("strong", {}, "Fatos do histórico [H]: "), `retorno médio de ${fmtPct(f.retorno_medio_anual, 1)} ao ano, oscilação de `
-        + `${fmtPct(f.volatilidade, 0)} ao ano, maior queda de ${fmtPct(f.queda_maxima, 0)}, ${fmtNum(f.anos_de_dados, 1)} anos de dados.`),
       el("p", {}, el("strong", {}, "O que a empresa faz: "), p.negocio),
-      el("p", {}, el("strong", {}, "Riscos: "), p.riscos));
+      el("p", {}, el("strong", {}, "Riscos: "), p.riscos),
+      el("details", {}, el("summary", {}, "Fatos do histórico [H]"),
+        el("p", {}, `Retorno médio de ${fmtPct(f.retorno_medio_anual, 1)} ao ano, oscilação de `
+          + `${fmtPct(f.volatilidade, 0)} ao ano, maior queda de ${fmtPct(f.queda_maxima, 0)}, ${fmtNum(f.anos_de_dados, 1)} anos de dados.`)));
   } else {
     setChildren("d-pick", el("p", {}, el("strong", {}, "Nenhuma ação dentro das regras para este valor. "), d.avisos[0] || ""));
   }
   setChildren("d-alts", ...(d.alternativas.length ? d.alternativas.map((a) => el("li", {}, withLogo(a.ticker, a.logo,
-    `${a.ticker} — ${a.nome}: ${fmtQty(a.quantidade)} ${a.quantidade === 1 ? "ação" : "ações"} por ${fmtMoney2(a.custo)} · ${a.motivo}`, 24)))
+    `${a.ticker} — ${a.nome}: ${fmtQty(a.quantidade)} ${a.quantidade === 1 ? "ação" : "ações"} a ${fmtMoney2(a.preco)}`
+    + `${a.ao_vivo ? " (agora)" : " (fechamento)"} = ${fmtMoney2(a.custo)} · ${a.motivo}`, 24)))
     : [el("li", { class: "muted" }, "nenhuma outra opção cabe nas regras com este valor")]));
   setChildren("d-rules", ...d.regras.map((r) => el("li", {}, r)));
   const out = Object.entries(d.fora || {}).filter(([, n]) => n > 0).map(([k, n]) => `${n}: ${k}`);
@@ -2648,7 +2839,8 @@ async function runDaily() {
     const d = await postStream("/api/acao-do-dia", body, live.update);
     live.stop();
     renderDaily(d);
-    st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s.`;
+    st.textContent = `Pronto em ${live.secs().toFixed(1).replace(".", ",")} s.` + (d.precos_ao_vivo ? " Preços de agora, com atraso (hora no cartão)."
+      : d.origem === "real" && d.escolha ? " Preço de agora indisponível: valores pelo último fechamento." : "");
     const p = d.escolha;
     addHistory({ tipo: "dia", titulo: p ? `Ação do dia: ${p.ticker}` : "Ação do dia: nenhuma dentro das regras",
       resumo: p ? `${fmtQty(p.quantidade)} por ${fmtMoney2(p.custo)} · perfil ${d.perfil}` : `valor ${fmtMoney2(body.valor)}`,
@@ -4228,10 +4420,181 @@ $("cp-form").addEventListener("submit", async (ev) => {
   } finally { btn.disabled = false; }
 });
 
+// ---------- market today: delayed quotes with the time of the last trade on every line; numbers only, no causes
+let mkData = null, mkAt = 0, mkTimer = null, mkBusy = false, mkAgain = false;
+const MK_EVERY_MS = 2 * 60 * 1000;
+const SP_TZ = "America/Sao_Paulo";
+const spDay = (t) => new Date(t).toLocaleDateString("pt-BR", { timeZone: SP_TZ, day: "2-digit", month: "2-digit" });
+// time of a trade in Brasília time; the day too when it is not today (market closed, or a stock without trades today)
+function whenSP(iso) {
+  const t = Date.parse(iso);
+  if (!isFinite(t)) return "";
+  const hm = new Date(t).toLocaleTimeString("pt-BR", { timeZone: SP_TZ, hour: "2-digit", minute: "2-digit" });
+  return spDay(t) === spDay(Date.now()) ? hm : `${spDay(t)} ${hm}`;
+}
+const fmtPts = (x) => Math.round(x).toLocaleString("pt-BR");
+function chgEl(x) {
+  if (x === null || x === undefined || !isFinite(x)) return el("span", { class: "chg flat" }, "variação n/d");
+  const dir = x > 0.0005 ? "up" : x < -0.0005 ? "down" : "flat";
+  return el("span", { class: "chg " + dir }, (dir === "up" ? "▲ " : dir === "down" ? "▼ " : "") + fmtPctS(x, 2));
+}
+function fmtVolume(x, ccy) {
+  if (!(x > 0)) return "";
+  const c = CCY[ccy] || ccy;
+  if (x >= 1e9) return `${c} ${(x / 1e9).toFixed(1).replace(".", ",")} bi`;
+  if (x >= 1e6) return `${c} ${Math.round(x / 1e6).toLocaleString("pt-BR")} mi`;
+  return `${c} ${Math.round(x / 1e3).toLocaleString("pt-BR")} mil`;
+}
+// intraday path (5-minute closes) with the previous close as a dashed line; the last point marked
+function sparkline(values, base, label) {
+  const v = (values || []).filter((x) => x !== null && isFinite(x));
+  if (v.length < 2) return null;
+  const all = isFinite(base) ? v.concat([base]) : v;
+  const lo = Math.min(...all), hi = Math.max(...all), span = hi - lo || 1, W = 200, H = 34, pad = 3;
+  const y = (val) => pad + (H - 2 * pad) * (1 - (val - lo) / span);
+  const mk = (tag, attrs) => { const n = document.createElementNS(NS, tag); for (const [k, val] of Object.entries(attrs)) n.setAttribute(k, val); return n; };
+  const svg = mk("svg", { class: "spark", viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none", role: "img", "aria-label": label });
+  const title = mk("title", {}); title.textContent = label; svg.append(title);
+  if (isFinite(base)) svg.append(mk("line", { x1: 0, x2: W, y1: y(base), y2: y(base), stroke: "var(--axis)", "stroke-width": 1,
+    "stroke-dasharray": "3 3", "vector-effect": "non-scaling-stroke" }));
+  svg.append(mk("polyline", { points: v.map((val, i) => `${(i / (v.length - 1)) * W},${y(val)}`).join(" "), fill: "none",
+    stroke: "var(--ink-3)", "stroke-width": 2, "stroke-linejoin": "round", "vector-effect": "non-scaling-stroke" }));
+  return el("div", { class: "spark-wrap" }, svg,
+    el("i", { "aria-hidden": "true", style: `top:calc(${((y(v[v.length - 1]) / H) * 100).toFixed(1)}% - 3.5px)` }));
+}
+function idxTile(r) {
+  if (r.erro) return el("div", { class: "idx off" }, el("div", { class: "k" }, r.nome), el("div", { class: "v" }, "sem cotação agora"),
+    el("div", { class: "n" }, "a fonte não respondeu; nada foi estimado no lugar"));
+  const pts = r.unidade === "pontos";
+  const value = pts ? fmtPts(r.preco) + " pontos" : fmtPrice(r.preco, r.unidade === "R$ por US$" ? "BRL" : r.moeda || "USD");
+  const moved = pts && r.variacao !== null && r.variacao !== undefined && isFinite(r.variacao)
+    ? ` (${r.variacao > 0 ? "+" : ""}${fmtPts(r.variacao)} pontos)` : "";
+  const per = r.unidade === "R$ por US$" ? "por dólar · " : r.unidade === "US$ por barril" ? "por barril · " : "";
+  const label = `${r.nome} hoje, a cada 5 minutos` + (isFinite(r.fechamento_anterior) && r.fechamento_anterior !== null
+    ? `; linha tracejada: fechamento anterior (${pts ? fmtPts(r.fechamento_anterior) : fmtNum(r.fechamento_anterior)})` : "");
+  return el("div", { class: "idx" }, el("div", { class: "k" }, r.nome), el("div", { class: "v" }, value),
+    el("div", {}, chgEl(r.variacao_pct), el("span", { class: "muted" }, moved)),
+    el("div", { class: "n" }, `${per}último negócio ${whenSP(r.hora_utc)}`),
+    sparkline(r.intradia, r.fechamento_anterior === null ? NaN : r.fechamento_anterior, label) || el("span"));
+}
+function moverItem(r, sub) {
+  const b = el("button", { type: "button", "aria-label": `Analisar ${shortTk(r.ticker)} (${r.nome})` }, logoEl(r.ticker, r.logo, 32),
+    el("span", {}, el("span", { class: "t" }, shortTk(r.ticker)),
+      el("span", { class: "s" }, (sub || r.nome) + (r.hora_utc ? " · " + whenSP(r.hora_utc) : ""))),
+    el("span", { class: "r" }, el("span", { class: "p" }, fmtPrice(r.preco, r.moeda)), chgEl(r.variacao_pct)));
+  b.addEventListener("click", () => analyzeTicker(shortTk(r.ticker)));
+  return el("li", {}, b);
+}
+const moverList = (rows, none, sub) => rows.length ? rows.map((r) => moverItem(r, sub ? sub(r) : null)) : [el("li", { class: "empty-line" }, none)];
+const fold = (x) => String(x || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+function renderMkAll() {
+  if (!mkData) return;
+  const q = fold($("mk-filter").value.trim()), how = $("mk-sort").value;
+  const byChange = (dir) => (a, b) => {
+    const na = a.variacao_pct === null || a.variacao_pct === undefined, nb = b.variacao_pct === null || b.variacao_pct === undefined;
+    return na || nb ? na - nb : dir * (b.variacao_pct - a.variacao_pct);
+  };
+  const rows = mkData.cotacoes.filter((r) => !q || fold(r.ticker).includes(q) || fold(r.nome).includes(q))
+    .sort(how === "name" ? (a, b) => a.ticker.localeCompare(b.ticker) : byChange(how === "down" ? -1 : 1));
+  setChildren("mk-all", ...moverList(rows, "Nenhuma ação com esse código ou nome nesta lista."));
+  $("mk-count").textContent = `${rows.length} de ${mkData.cotacoes.length} ações com cotação. Toque em uma para analisá-la.`;
+}
+function renderMarket(d) {
+  $("mk-results").classList.remove("hidden");
+  const last = d.cotacoes.map((r) => r.hora_utc).filter(Boolean).sort().pop();
+  const delays = d.atraso_informado_min || [];
+  setChildren("mk-live",
+    el("span", { class: "st", style: `--c:${d.pregao_aberto === true ? "var(--pos)" : "var(--muted)"}` },
+      d.pregao_aberto === true ? "pregão aberto" : d.pregao_aberto === false ? "pregão fechado" : "pregão: sem informação"),
+    (last ? `último negócio ${whenSP(last)}` : "") + (d.pregao_aberto === false ? " (números do último pregão)" : "")
+      + ` · com atraso${delays.length ? ` de cerca de ${delays.join(" ou ")} min` : ""}, não é tempo real · horário de Brasília`);
+  $("mk-note").textContent = d.aviso + (delays.length ? ` Atraso informado pela fonte: ${delays.join(" ou ")} min.`
+    : " A fonte não informou o atraso desta vez.") + ` Consulta feita às ${whenSP(d.consultado_em_utc)} (horário de Brasília).`;
+  setChildren("mk-idx", ...d.indices.map(idxTile));
+  const a = d.amplitude, n = a.sobem + a.caem + a.estaveis;
+  const bar = el("div", { class: "breadth", role: "img", "aria-label": `${a.sobem} sobem, ${a.estaveis} estáveis e ${a.caem} caem` });
+  for (const [cls, k] of [["up", a.sobem], ["flat", a.estaveis], ["down", a.caem]]) if (k > 0) bar.append(el("i", { class: cls, style: `flex:${k} 1 0` }));
+  setChildren("mk-breadth", bar,
+    el("div", { class: "breadth-legend" }, el("span", {}, el("span", { class: "chg up" }, `▲ ${a.sobem}`), a.sobem === 1 ? " sobe" : " sobem"),
+      el("span", {}, el("span", { class: "chg down" }, `▼ ${a.caem}`), a.caem === 1 ? " cai" : " caem"),
+      el("span", {}, el("span", { class: "chg flat" }, String(a.estaveis)), (a.estaveis === 1 ? " estável" : " estáveis") + " (variação menor que 0,05%)")),
+    el("p", { class: "muted" }, `Entre as ${n} ações com cotação. Variação média: ${fmtPctS(a.variacao_media, 2)} — média simples, cada ação `
+      + "com o mesmo peso (não é o Ibovespa, que pesa cada ação pelo tamanho)."));
+  setChildren("mk-up", ...moverList(d.altas, "Nenhuma ação desta lista sobe mais de 0,05% agora."));
+  setChildren("mk-down", ...moverList(d.baixas, "Nenhuma ação desta lista cai mais de 0,05% agora."));
+  setChildren("mk-traded", ...moverList(d.mais_negociadas, "Volume indisponível agora.",
+    (r) => `${fmtVolume(r.volume_financeiro, r.moeda)} negociados`));
+  renderMkAll();
+  const miss = Object.entries(d.sem_cotacao || {});
+  setChildren("mk-src",
+    el("li", {}, "Ações acompanhadas: " + d.universo + "."),
+    el("li", {}, "Cotações: Yahoo Finance (gráfico do dia em barras de 5 minutos), com atraso — não é tempo real. A variação é contra o "
+      + "fechamento do pregão anterior. Horários em Brasília."),
+    el("li", {}, miss.length ? el("details", {}, el("summary", {}, `${miss.length} ação(ões) sem cotação agora: ficaram de fora (nada foi estimado no lugar)`),
+      el("ul", { class: "clean" }, ...miss.map(([t, why]) => el("li", { class: "muted" }, `${shortTk(t)}: ${why}`))))
+      : "Todas as ações acompanhadas responderam."),
+    el("li", { class: "muted" }, "Pesquisa, não recomendação. Para entender o motivo de uma alta ou queda, veja as notícias do dia."));
+}
+function mkSchedule() {
+  clearTimeout(mkTimer); mkTimer = null;
+  if (currentView === "mercado" && $("mk-form").elements["auto"].checked && document.visibilityState === "visible")
+    mkTimer = setTimeout(() => runMarket(), MK_EVERY_MS);
+}
+function mkSave() {
+  const f = $("mk-form").elements;
+  try { localStorage.setItem("qpi-mercado", JSON.stringify({ mercado: f["mercado"].value, quantidade: f["quantidade"].value, auto: f["auto"].checked })); } catch (e) { /* storage unavailable */ }
+}
+function mkLoad() {
+  let v = null;
+  try { v = JSON.parse(localStorage.getItem("qpi-mercado") || "null"); } catch (e) { v = null; }
+  if (!v || typeof v !== "object") return;
+  const f = $("mk-form").elements;
+  if (["BR", "US"].includes(v.mercado)) f["mercado"].value = v.mercado;
+  if (["30", "60", "100"].includes(String(v.quantidade))) f["quantidade"].value = String(v.quantidade);
+  if (typeof v.auto === "boolean") f["auto"].checked = v.auto;
+}
+async function runMarket() {
+  if (mkBusy) { mkAgain = true; return; }          // a change made during a request is fetched right after it
+  const f = $("mk-form").elements, st = $("mk-status"), btn = $("mk-run");
+  const body = { mercado: f["mercado"].value, quantidade: Number(f["quantidade"].value) };
+  mkBusy = true; btn.disabled = true; clearTimeout(mkTimer);
+  const live = liveStatus(st, mkData ? "Atualizando as cotações…" : "Buscando as cotações…");
+  try {
+    const d = await postStream("/api/mercado", body, live.update);
+    live.stop();
+    mkData = d; mkAt = Date.now();
+    renderMarket(d);
+    st.textContent = `Atualizado às ${whenSP(d.consultado_em_utc)} (Brasília).` + (f["auto"].checked ? " Próxima atualização em 2 min." : "");
+  } catch (e) {
+    live.stop();
+    st.textContent = "Erro: " + e.message + (mkData ? " Os números abaixo continuam os da consulta anterior (a hora está em cada linha)." : "");
+  } finally {
+    mkBusy = false; btn.disabled = false;
+    if (mkAgain) { mkAgain = false; runMarket(); } else mkSchedule();
+  }
+}
+function mkShown() {
+  if (!mkData || Date.now() - mkAt > MK_EVERY_MS || mkData.mercado !== $("mk-form").elements["mercado"].value) runMarket();
+  else mkSchedule();
+}
+mkLoad();
+$("mk-form").addEventListener("submit", (ev) => { ev.preventDefault(); mkSave(); runMarket(); });
+$("mk-form").elements["mercado"].addEventListener("change", () => { mkSave(); runMarket(); });
+$("mk-form").elements["quantidade"].addEventListener("change", () => { mkSave(); runMarket(); });
+$("mk-form").elements["auto"].addEventListener("change", () => { mkSave(); mkSchedule(); });
+$("mk-filter").addEventListener("input", renderMkAll);
+$("mk-sort").addEventListener("change", renderMkAll);
+document.addEventListener("visibilitychange", () => {
+  if (currentView !== "mercado") return;
+  if (document.visibilityState === "visible" && $("mk-form").elements["auto"].checked && mkData && Date.now() - mkAt > MK_EVERY_MS) runMarket();
+  else mkSchedule();
+});
+
 // ---------- navigation: one view at a time; "#/view" routes, "#id" opens the view that holds the element
-const VIEW_NAMES = ["painel", "acoes", "oportunidades", "previsoes", "cenarios", "carteira", "competicao", "laboratorio", "perfil"];
+const VIEW_NAMES = ["painel", "mercado", "acoes", "oportunidades", "previsoes", "cenarios", "carteira", "competicao", "laboratorio", "perfil"];
 let currentView = null;
 function onViewShown(name) {
+  if (name === "mercado") mkShown(); else clearTimeout(mkTimer);
   if (name === "laboratorio") { if (lastData) render(lastData); if (stData) renderSt(stData); }
   if (name === "acoes") { if (stockData) renderStock(stockData); if (thData) renderTh(thData); }
   if (name === "oportunidades" && rdData) renderRd(rdData);
@@ -4245,7 +4608,7 @@ function showView(name, target, tab) {
   if (!VIEW_NAMES.includes(name)) name = "painel";
   const list = document.querySelector(`.view[data-view="${name}"] > [role="tablist"][data-tabs]`);
   if (list && tab) selectTab(list, tab);
-  if (target) openTabOf(target);
+  if (target) { openTabOf(target); const det = target.closest("details:not([open])"); if (det) det.open = true; }
   let view = null;
   document.querySelectorAll(".view").forEach((v) => { const on = v.dataset.view === name; v.hidden = !on; if (on) view = v; });
   document.querySelectorAll("[data-nav]").forEach((a) => { if (a.dataset.nav === name) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });

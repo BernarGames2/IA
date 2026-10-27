@@ -8,11 +8,11 @@ matplotlib 3.11.2, pydantic 2.13.5 (ver `requirements-lock.txt`). Data: 2026-10-
 Comando: `python -m pytest -o addopts="" -q -rs`
 
 ```
-526 passed, 1 skipped (527 testes)
+533 passed, 1 skipped (534 testes)
 SKIPPED [1] tests/test_network_optional.py:14: online test disabled (QPI_NETWORK_TESTS!=1)
 ```
 
-(Registros anteriores: 518 passed, 1 skipped antes da página da competição — seção 23; 514 passed, 1 skipped antes do acompanhamento sob demanda — seção 22; 509 passed, 1 skipped antes dos laboratórios com dados reais — seção 21; 493 passed, 1 skipped antes de fundamentos e cenários — seções 19 e 20; 484 passed, 1 skipped antes das previsões — seção 18; 476 passed, 1 skipped antes de "Minha carteira" e do risco — seção 17; 464 passed, 1 skipped antes da correção de valores pequenos — seção 15; 452 passed, 1 skipped
+(Registros anteriores: 526 passed, 1 skipped antes do mercado do dia — seção 24; 518 passed, 1 skipped antes da página da competição — seção 23; 514 passed, 1 skipped antes do acompanhamento sob demanda — seção 22; 509 passed, 1 skipped antes dos laboratórios com dados reais — seção 21; 493 passed, 1 skipped antes de fundamentos e cenários — seções 19 e 20; 484 passed, 1 skipped antes das previsões — seção 18; 476 passed, 1 skipped antes de "Minha carteira" e do risco — seção 17; 464 passed, 1 skipped antes da correção de valores pequenos — seção 15; 452 passed, 1 skipped
 antes da "Ação do dia" — seção 14; 414 passed, 1 skipped antes dos
 logos — seção 13; 361 passed, 1 skipped antes das correções
 da revisão adversarial — seção 12; 328 passed, 1 skipped antes do motor dinâmico.)
@@ -544,3 +544,29 @@ resumo; recarregar a página mantém os textos e o formulário (guardados só no
 vira lista e a tabela de ordens mostra ativo, quantidade e peso; sem erros de JavaScript (só os 404 dos logos do
 dublê) e sem rolagem horizontal. Suíte completa depois desta etapa: 526 aprovados, 1 pulado (o teste online); um
 teste antigo que dependia da data de hoje foi corrigido (tabela de falhas da seção 1).
+
+## 24. Mercado hoje, preço de agora e resposta curta
+
+`tests/test_market_watch.py` (7 testes), mais `test_daily_pick.test_endpoint` (sem cotação de agora) e
+`test_real_data.test_engine_real_mode_reports_where_to_invest_and_why` (preço em dólar no plano):
+
+| O que se verifica | Resultado |
+|---|---|
+| cotação lida dos metadados do gráfico de 1 dia: preço, fechamento anterior, variação (−3,75%), hora do último negócio no fuso da bolsa (14:30), pregão aberto às 14:30 e fechado às 19:00, atraso de 15 min, fechamentos de 5 min; sem `regularMarketPrice` vale o último fechamento; resposta sem dados → erro, nunca preço inventado | passa |
+| tela pela lista da B3 (dublê do arquivo diário): ações por volume, maior queda primeiro, altas, quantas sobem/caem/ficam estáveis e a média, índices (Ibovespa −4%), índice sem resposta (Brent) dito e não preenchido, mais negociadas por volume × preço, aviso "não é tempo real" | passa |
+| sem as listagens → catálogo do site, dito; as ações sem cotação contadas e deixadas de fora; nenhuma cotação → erro de dados indisponíveis | passa |
+| rota `/api/mercado`: 200, reaproveitada no mesmo minuto, mercado inválido → 422, sem cotações → 503; com `?stream=1`, progresso e um resultado ou um erro 503 | passa |
+| "Ação do dia" no preço de agora: quantidade, custo e sobra refeitos (R$ 50 → 20 ações com R$ 1.000), ação dos EUA pelo dólar da mesma consulta (US$ 180 × 5,5), alternativa sem cotação mantém o fechamento com aviso; se o valor não compra mais 1 ação, o aviso diz e aponta a alternativa que cabe; demonstração sintética não muda | passa |
+| rota `/api/acao-do-dia` com cotações (variação do dia de +1%) e sem cotação de agora (fica o fechamento, `precos_ao_vivo` falso) | passa |
+| plano de compra da carteira: cada ativo dos EUA comprado traz o preço em dólar, nenhuma ação da B3 traz, e o câmbio implícito é o mesmo para todos | passa |
+| página: tela, links de navegação e chamada a `/api/mercado`; textos "não é tempo real" e de que o motivo está nas notícias; cartões "O que comprar", "Quantas comprar" e "Preço agora" | passa |
+
+Navegador (servidor local com dublês: cotações com caminho do dia terminando agora, 1440 e 390 px, temas escuro e
+claro): a tela abre buscando sozinha, mostra "pregão aberto · último negócio … · com atraso de cerca de 15 min, não é
+tempo real", os 5 índices com o caminho do dia (no celular, 2 por linha), 6 sobem / 53 caem / 1 estável, as listas,
+busca ("petro" → PETR3, PETR4, RECV3) e ordem; trocar para EUA busca de novo; tocar numa ação abre "Vale a pena?"
+com o código preenchido. "Ação do dia" (Brasil e EUA): quantas comprar, preço agora com a variação do dia, total e
+sobra, hora do último negócio e o câmbio no caso dos EUA. "Montar carteira": "O que comprar" no topo (8 ativos com
+quantidade, preço, total e por quê; ISRG também em dólar), total e sobra, análise completa recolhida e abrindo
+inteira. Sem erros de JavaScript (só os 404 dos logos do dublê) e sem rolagem horizontal. Suíte completa: 533 aprovados, 1 pulado (o teste online), em 11 min 25 s; os testes que leem a página rodaram de novo na versão final (171 aprovados).
+

@@ -93,3 +93,22 @@ O motor da carteira com propósito ganhou regras externas opcionais (sem elas, o
 pelos testes antigos). As regras de cada edição da competição são informadas pela equipe; o site não traz regras
 prontas. Como nas demais telas, as fontes reais não puderam ser testadas daqui: conferir no site publicado. Suíte
 completa depois desta atualização: 526 aprovados, 1 pulado (o teste online).
+
+## 9. Atualização de 27/10/2026 — mercado do dia e respostas curtas
+
+Pedido: uma aba com o que está acontecendo no mercado (maiores quedas, ações subindo, preços, Ibovespa); na
+montagem da carteira, primeiro só quantas ações comprar, por que e o preço; na "Ação do dia", o mesmo, com o preço
+de agora.
+
+| Funcionalidade | Estado inicial | Alteração realizada | Teste ou verificação |
+|---|---|---|---|
+| Mercado do dia | Ausente | Tela "Mercado hoje": Ibovespa, dólar, S&P 500, Nasdaq e Brent com o caminho do dia; quantas ações sobem e caem; 10 maiores altas e 10 maiores quedas; mais negociadas; todas as cotações com busca (tocar abre a análise da ação). Cotações com atraso, com a hora do último negócio em cada linha; sem causas atribuídas aos movimentos; atualiza a cada 2 min só com a tela aberta | 7 testes (`test_market_watch.py`); navegador a 1440 e 390 px, temas escuro e claro |
+| Ação do dia no preço de agora | Último fechamento | Preço de agora (com atraso) na ação escolhida e nas alternativas; quantidade, custo e sobra refeitos (ações dos EUA pelo dólar da mesma consulta); o cartão começa por quantas comprar, preço agora com a variação do dia e total; sem cotação, fica o fechamento, com aviso | `test_market_watch.py`, `test_daily_pick.py`; navegador |
+| Montar carteira: resposta curta | O que comprar aparecia depois de indicadores e tabelas | Cartão "O que comprar" no topo: quantas ações ou cotas, preço de cada uma (ativos dos EUA também em dólar), total, sobra e uma linha de por quê; a análise completa continua inteira, recolhida | `test_real_data.py` (preço em dólar no plano); navegador |
+
+Navegação: "Mercado hoje" é a primeira tela de "Pesquisar"; no celular, a barra inferior passa a ser Painel, Mercado,
+Radar, Carteira e "Mais" (a análise de ações fica em "Mais" e na lupa do topo). O site mostra os números do dia,
+não o motivo: uma queda forte do Ibovespa aparece com o tamanho e a hora, e a explicação fica para as notícias.
+Como nas demais integrações, a cotação de agora não pôde ser testada contra o Yahoo Finance daqui (rede bloqueada):
+conferir no site publicado. Suíte completa depois desta atualização: 533 aprovados, 1 pulado (o teste online).
+

@@ -300,3 +300,56 @@ def daily_pick(amount: float, profile: str = "moderado", markets: list[str] | No
     if hits:                                       # defensive: every text above is fixed, so this should not happen
         raise RuntimeError(f"linguagem de garantia no resultado: {hits}")
     return out
+
+
+def apply_live_prices(d: dict[str, object], quotes: object, us_fractional: bool = False) -> dict[str, object]:
+    """The pick and the alternatives at the latest quote (``core.market_data.quotes``; delayed, with the time of the
+    last trade): price in reais (US stocks at the latest dollar quote), shares the money buys, cost and change of the
+    day. The pick itself comes from the daily history and does not change here; if the money no longer buys one lot
+    at the latest price, that is said, with the first alternative that fits. A quote the source does not answer keeps
+    the last close, said on the line. ``quotes``: symbols -> (quotes, failures)."""
+    if d.get("origem") != "real" or not d.get("escolha"):
+        return d
+    amount = float(d["valor"])  # type: ignore[arg-type]
+    entries = [d["escolha"], *d.get("alternativas", [])]  # type: ignore[list-item]
+    syms = [str(e["ticker"]) for e in entries]  # type: ignore[index]
+    foreign = [t for t in syms if not t.endswith(".SA")]
+    got, _ = quotes(syms + (["USDBRL=X"] if foreign else []))  # type: ignore[operator]
+    fx = got.get("USDBRL=X")
+    cat = {a.ticker: a for a in REAL_CATALOG}
+    out: list[dict[str, object]] = []
+    for e in entries:
+        e2: dict[str, object] = dict(e)  # type: ignore[arg-type]
+        t = str(e2["ticker"])
+        q = got.get(t)
+        price_brl = None
+        if q is not None and q.currency == "BRL":
+            price_brl = q.price
+        elif q is not None and q.currency == "USD" and fx is not None:
+            price_brl = q.price * fx.price
+        if q is None or price_brl is None or t not in cat:
+            e2["ao_vivo"] = None
+            e2["ao_vivo_nota"] = ("cotação de agora indisponível: preço do último fechamento" if q is None else
+                                  "câmbio de agora indisponível: preço convertido pelo último fechamento")
+            out.append(e2)
+            continue
+        lot = lot_size(cat[t], us_fractional)[0]
+        qty = math.floor(amount / (price_brl * lot) + 1e-9) * lot
+        e2.update({"preco_fechamento": e2.get("preco"), "preco": round(price_brl, 4), "quantidade": round(qty, 8),
+                   "custo": round(qty * price_brl, 2), "sobra": round(amount - qty * price_brl, 2),
+                   "ao_vivo": {"preco_original": q.price, "moeda": q.currency, "cambio": fx.price if q.currency != "BRL"
+                               and fx is not None else None, "variacao_dia": q.change_pct, "data": q.date_local,
+                               "hora": q.time_local, "hora_utc": q.time_utc, "pregao_aberto": q.market_open,
+                               "atraso_min": q.delay_min}})
+        out.append(e2)
+    res = dict(d)
+    res["escolha"], res["alternativas"] = out[0], out[1:]
+    pick = out[0]
+    if pick.get("ao_vivo") and float(pick["quantidade"]) <= 0:  # type: ignore[arg-type]
+        fits = next((a for a in out[1:] if a.get("ao_vivo") and float(a["quantidade"]) > 0), None)  # type: ignore[arg-type]
+        res["avisos"] = [f"Com o preço de agora ({_money(float(pick['preco']))}), {_money(amount)} não compra 1 ação de "  # type: ignore[arg-type]
+                         f"{pick['ticker']}"
+                         + (f"; a primeira opção que cabe é {fits['ticker']} ({_money(float(fits['custo']))})."  # type: ignore[arg-type]
+                            if fits else "."), *d.get("avisos", [])]  # type: ignore[misc]
+    res["precos_ao_vivo"] = any(e.get("ao_vivo") for e in out)
+    return res

@@ -19,7 +19,7 @@ registrados).
 
 | Motor | Módulos |
 |---|---|
-| Market Intelligence | `core/market_data/` (yfinance, gerador sintético, cache, qualidade), `core/data_loader.py` |
+| Market Intelligence | `core/market_data/` (yfinance, gerador sintético, cache, qualidade, cotações do dia em `quotes.py`), `core/data_loader.py`, `core/market_watch/` (mercado hoje) |
 | Quant Research | `core/estimators/`, `core/covariance/`, `core/volatility/`, `core/factors/`, `core/regimes/` |
 | Portfolio Construction | `core/optimization/` (`optimizers.py`, `constraints.py`, `robust.py`), `core/markowitz.py` |
 | Risk Intelligence / Black Swan Lab | `core/extreme_risk/` (VaR/ES, EVT/POT, estresse, reverse stress, t-cópula), `core/black_swan.py` |
@@ -184,10 +184,11 @@ Resumo (lista completa em [`docs/assumptions_and_limitations.md`](docs/assumptio
 A versão web fica em `webapp/`: API FastAPI (`webapp/server.py`) + página única (`webapp/static/index.html`, sem
 etapa de build). Identidade visual própria: fundo azul-marinho/grafite, fonte Inter servida pelo próprio app
 (`/static/fonts/`, SIL OFL), ícones Lucide (ISC) embutidos, tokens de cor/espaçamento/raio, tema escuro (padrão) e
-claro, `prefers-reduced-motion` respeitado. Navegação por telas (`#/painel`, `#/acoes`, `#/oportunidades`,
+claro, `prefers-reduced-motion` respeitado. Navegação por telas (`#/painel`, `#/mercado`, `#/acoes`, `#/oportunidades`,
 `#/previsoes`, `#/cenarios`, `#/carteira`, `#/competicao`, `#/laboratorio`, `#/perfil`, com abas como `#/acoes/tese` ou
 `#/oportunidades/radar`): menu lateral no computador, trilho de ícones no tablet e barra inferior
-no celular; links antigos por âncora (`#d-title`, `#p-title`…) abrem a tela certa. O **Painel** mostra o que existe
+no celular (Painel, Mercado, Radar, Carteira e "Mais"; a análise de ações fica em "Mais" e na lupa do topo); links
+antigos por âncora (`#d-title`, `#p-title`…) abrem a tela certa. O **Painel** mostra o que existe
 de fato neste aparelho (última carteira montada, histórico de análises, perfil); o **Perfil** guarda as respostas do
 investidor no navegador (`localStorage`, com exportar/importar/apagar) e preenche os formulários de todas as
 ferramentas. Nada do investidor vai para o servidor fora dos pedidos de análise. A **Carteira com propósito** usa por padrão **cotações reais**: preços diários ajustados de ~30 ações e
@@ -204,7 +205,8 @@ com `fonte_dados: "real"`, sobre as cotações dos ativos escolhidos (seção 10
 | `POST /api/perguntar` | pergunta ao analista de IA (mesmas recusas e verificação de números da CLI) |
 | `POST /api/proposito` | carteira com propósito (seção 10): `fonte_dados="real"` (padrão, Yahoo Finance) ou `"sintetico"` |
 | `POST /api/acao` | "vale a pena?" de uma ação digitada (seção 11): veredito por regras + projeção |
-| `POST /api/acao-do-dia` | uma ação para o valor de hoje, por regras fixas (seção 10b) |
+| `POST /api/acao-do-dia` | uma ação para o valor de hoje, por regras fixas, no preço de agora (seção 10b) |
+| `POST /api/mercado` | mercado hoje: índices, maiores altas e quedas, mais negociadas e preços, com atraso (seção 10j) |
 | `POST /api/carteira/painel`, `/api/carteira/risco` | painel e risco da carteira do investidor (seção 10c) |
 | `POST /api/previsoes/prever`, `/registrar`, `/avaliar` | previsões, calibração e registro auditável (seção 10d) |
 | `POST /api/tese`, `/api/radar` | tese e fundamentos, armadilhas de valor, radar (seção 10e) |
@@ -320,6 +322,14 @@ P90/P50/P10, P(objetivo) com erro padrão e IC, sensibilidade, alertas e as seç
 diversificação real, triagem completa, regras/hipóteses, fontes e reprodutibilidade: impressão digital da carteira,
 dos parâmetros e dos dados + versão). Todo texto gerado passa pelo verificador de linguagem de garantia.
 
+**Primeiro, o que comprar:** no site, o resultado abre com um cartão curto — para cada ativo da compra inicial (ou
+do primeiro aporte, quando não há capital), quantas ações ou cotas comprar, o preço de cada uma (ativos dos EUA
+também em dólar, `execucao.precos_originais`: o último fechamento na moeda do ativo, do mesmo dia do preço em
+reais), o total e uma linha de "por quê" (o papel na carteira em palavras simples e o tema do seu motivo, quando há).
+Embaixo, o total, a sobra e a chance estimada de chegar à meta. A análise completa (pesos, KPIs, plano, mudanças,
+diversificação, teses, triagem, regras, cenários, alertas e fontes) continua inteira, recolhida em "Ver a análise
+completa". Os preços são do último dado diário (com a data), não a cotação de agora.
+
 **Logos das empresas** (`core/market_data/logos.py`): na carteira (alocação, teses, plano de compra, mudanças) e
 em "Vale a pena?" (atalhos e cabeçalho do resultado), cada ativo aparece com o ícone que a empresa publica no próprio
 site. O site vem da B3 ou do Yahoo Finance (ação pesquisada) ou de uma lista curada de sites oficiais do catálogo
@@ -361,6 +371,14 @@ Resultado: a ação, quantas comprar, custo e sobra, por que ela (fatos do hist�
 alternativas que também cabem nas regras, o que ficou de fora e por quê, fontes e avisos. Com os mesmos dados a
 escolha é a mesma (pode repetir em dias seguidos). Usa só o histórico: não prevê o preço de amanhã e não é
 recomendação; para quem está começando, distribuir os aportes numa carteira costuma reduzir o risco.
+
+**Preço de agora** (`apply_live_prices`): a escolha vem do histórico diário (reaproveitada por até 15 min); a cada
+pedido, a ação escolhida e as alternativas recebem a última cotação (`core/market_data/quotes.py`, a mesma da tela
+Mercado, guardada por 60 s), e a quantidade, o custo e a sobra são refeitos com ela — ações dos EUA pelo dólar da
+mesma consulta. O cartão mostra primeiro quantas comprar, o preço agora com a variação do dia e o total; embaixo, a
+hora do último negócio (horário de Brasília), pregão aberto ou fechado e o atraso (cerca de 15 min na B3: não é tempo
+real), e o fechamento usado na escolha. Se o valor não comprar mais 1 lote no preço de agora, o site diz e aponta a
+primeira alternativa que cabe; se a cotação de agora não vier, fica o último fechamento, com aviso na linha.
 
 ## 10c. Minha carteira e risco (`POST /api/carteira/painel`, `POST /api/carteira/risco`)
 
@@ -505,6 +523,31 @@ cliente e administra uma carteira virtual com as regras da sua edição (tela **
 
 Nada é executado: a equipe digita as ordens no simulador da competição. As regras mudam a cada edição, e o site não
 traz regras prontas de nenhuma competição.
+
+## 10j. Mercado hoje (`POST /api/mercado`)
+
+Uma tela para ver o que o mercado está fazendo no dia (tela **Mercado hoje**, a primeira de "Pesquisar"):
+
+* **Índices:** Ibovespa (`^BVSP`), dólar (`USDBRL=X`), S&P 500 (`^GSPC`), Nasdaq (`^IXIC`) e petróleo Brent
+  (`BZ=F`) — valor, variação do dia (em % e, nos índices, em pontos), hora do último negócio e o caminho do dia em
+  barras de 5 minutos, com o fechamento anterior tracejado. Um índice que a fonte não responder aparece como "sem
+  cotação agora"; nada é estimado no lugar.
+* **Ações acompanhadas** (30, 60 ou 100; `core/market_watch/overview.py`): no Brasil, as de maior volume financeiro
+  no último pregão do arquivo diário da B3 (a mesma listagem da carteira); nos EUA, as maiores por valor de mercado
+  no screener da Nasdaq. Sem a listagem, as ações do catálogo do site, dito na tela.
+* **Listas:** quantas sobem, caem e ficam estáveis (variação menor que 0,05%), com a média simples (não é o
+  Ibovespa); as 10 maiores altas e as 10 maiores quedas; as 10 mais negociadas (ações negociadas no dia × último
+  preço, aproximado); e todas as cotações, com busca e ordem. Tocar numa ação abre a análise "Vale a pena?".
+* **Cotações** (`core/market_data/quotes.py`): metadados do gráfico de 1 dia do Yahoo Finance (o mesmo endpoint das
+  séries diárias, com as mesmas tentativas, ritmo, disjuntor e limite de tempo): último preço, fechamento do pregão
+  anterior, hora do último negócio, pregão aberto ou fechado e o atraso que a fonte informa. **Não é tempo real:** na
+  B3 o atraso costuma ser de 15 minutos; cada linha mostra a hora do último negócio (horário de Brasília). Fora do
+  pregão, os números são os do último pregão. Uma ação sem resposta é contada e deixada de fora.
+* **Atualização:** a tela busca ao abrir e, se a opção estiver marcada, a cada 2 minutos enquanto está aberta e
+  visível (nada roda em segundo plano depois que você sai). O servidor guarda cada cotação por 60 s e a tela pronta
+  pelo mesmo tempo, para muitos acessos não multiplicarem os pedidos à fonte.
+* **Sem motivos inventados:** o site mostra os números, não a causa. Uma queda forte do Ibovespa aparece como
+  queda, com o tamanho e a hora; para entender o motivo, veja as notícias do dia — notícias não são lidas aqui.
 
 ## 11. "Vale a pena?" — análise de uma ação (`--acao`, `POST /api/acao`)
 

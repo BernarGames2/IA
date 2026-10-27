@@ -97,3 +97,59 @@ def http_without_cdi(url: str, timeout: float) -> tuple[int, bytes]:
     if "bcdata.sgs.12" in url:
         return 503, b""
     return listings_http(url, timeout)
+
+
+QUOTE_NOW = "2026-10-26T17:30:00+00:00"          # 14:30 in São Paulo, during the regular session
+
+
+def quote_json(symbol: str, price: float, prev: float, currency: str, when: str = QUOTE_NOW,
+               session: tuple[str, str] = ("2026-10-26T13:00:00+00:00", "2026-10-26T20:00:00+00:00"),
+               delay: int | None = 15, name: str | None = None) -> dict:
+    """A one-day chart payload of the Yahoo chart endpoint (metadata + 5-minute closes)."""
+    t = int(pd.Timestamp(when).timestamp())
+    start, end = (int(pd.Timestamp(x).timestamp()) for x in session)
+    steps = [t - 300 * k for k in range(5, -1, -1)]
+    closes = [prev + (price - prev) * (i + 1) / len(steps) for i in range(len(steps))]
+    meta = {"symbol": symbol, "currency": currency, "regularMarketPrice": price, "chartPreviousClose": prev,
+            "regularMarketTime": t, "gmtoffset": -10800, "exchangeTimezoneName": "America/Sao_Paulo",
+            "currentTradingPeriod": {"regular": {"start": start, "end": end}}, "longName": name or f"{symbol} S.A.",
+            "fullExchangeName": "São Paulo" if symbol.endswith(".SA") else "NasdaqGS",
+            "regularMarketDayHigh": max(price, prev), "regularMarketDayLow": min(price, prev),
+            "regularMarketVolume": 2_000_000}
+    if delay is not None:
+        meta["exchangeDataDelayedBy"] = delay
+    return {"chart": {"result": [{"meta": meta, "timestamp": steps, "indicators": {"quote": [{"close": closes}]}}],
+                      "error": None}}
+
+
+class QuoteHTTP:
+    """Chart-endpoint double for one-day charts: ``book`` maps a symbol to (price, previous close, currency);
+    a symbol outside the book (or in ``fail``) answers 404, like an unknown ticker."""
+
+    def __init__(self, book: dict[str, tuple[float, float, str]], fail: set[str] | None = None, **kw: object) -> None:
+        self.book, self.fail, self.kw, self.calls = book, set(fail or ()), kw, 0
+
+    def __call__(self, url: str, timeout: float) -> tuple[int, bytes]:
+        import urllib.parse
+
+        self.calls += 1
+        sym = urllib.parse.unquote(url.split("/v8/finance/chart/")[1].split("?")[0])
+        if sym in self.fail or sym not in self.book:
+            return 404, b'{"chart":{"result":null,"error":{"code":"Not Found","description":"No data found"}}}'
+        price, prev, ccy = self.book[sym]
+        return 200, json.dumps(quote_json(sym, price, prev, ccy, **self.kw)).encode()  # type: ignore[arg-type]
+
+
+def quotes_double(book: dict[str, tuple[float, float, str]], fail: set[str] | None = None, **kw: object):
+    """The real quote reader over :class:`QuoteHTTP` (no pacing, a fixed clock): symbols -> (quotes, failures)."""
+    from datetime import datetime
+
+    from core.market_data.quotes import live_quotes
+
+    return live_quotes(fetch=QuoteHTTP(book, fail, **kw), budget_s=None, min_interval_s=0.0,
+                       now=lambda: datetime.fromisoformat(QUOTE_NOW), sleep=lambda s: None)
+
+
+def quotes_from_market(market: dict[str, RawSeries], move: float = 0.01) -> dict[str, tuple[float, float, str]]:
+    """A quote book from a structured market: the last close as the previous close and a move of ``move`` today."""
+    return {s: (float(r.close.iloc[-1]) * (1 + move), float(r.close.iloc[-1]), r.currency) for s, r in market.items()}

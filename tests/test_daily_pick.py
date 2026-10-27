@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from core.purpose.language import guarantee_phrases
 from core.stock_check.daily_pick import CEILING, daily_pick
-from tests.market_doubles import Prov, http, structured_market
+from tests.market_doubles import Prov, http, quotes_double, structured_market
 from webapp import server
 
 MARKET = structured_market()
@@ -93,12 +93,15 @@ def test_invalid_inputs_are_refused():
 def test_endpoint(monkeypatch):
     monkeypatch.setattr(server, "_market_provider", lambda: Prov(MARKET))
     monkeypatch.setattr(server, "_rf_fetch", lambda: http)
+    monkeypatch.setattr(server, "_quote_source", lambda: (lambda progress: quotes_double({})))   # no latest quote
     c = TestClient(server.app)
     body = {"valor": 1_000, "perfil": "moderado", "carteira_atual": {"PETR4": 2_000}}
     r1 = c.post("/api/acao-do-dia", json=body)
     assert r1.status_code == 200, r1.text
     d = r1.json()
     assert d["escolha"]["ticker"] != "PETR4.SA" and d["carteira_considerada"] == ["PETR4.SA"]
+    assert d["precos_ao_vivo"] is False and d["escolha"]["ao_vivo"] is None                  # the close stays, said
+    assert "fechamento" in d["escolha"]["ao_vivo_nota"]
     assert d["do_cache"] is False and d["calculado_em_utc"] and d["regras"] and d["aviso"]
     assert c.post("/api/acao-do-dia", json=body).json()["do_cache"] is True
     syn = c.post("/api/acao-do-dia", json={"valor": 1_000, "fonte_dados": "sintetico"}).json()

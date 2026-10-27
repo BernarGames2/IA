@@ -264,6 +264,18 @@
     resultado); a faixa até o fim das negociações supõe retornos lognormais com o retorno esperado e a covariância
     estimados pelo motor; o IPS é um rascunho montado com os números calculados e as citações do caso.
 
+59. **Mercado hoje e preço de agora**: cotações do Yahoo Finance com atraso (na B3, em geral 15 minutos; o atraso que
+    a fonte informa aparece na tela), lidas dos metadados do gráfico de 1 dia — não é tempo real nem livro de ofertas;
+    a variação do dia é contra o fechamento do pregão anterior que a fonte informa (`chartPreviousClose`) e, fora do
+    pregão, é a do último pregão; "pregão aberto" vem do horário regular informado pela fonte (não considera leilões
+    nem feriados que a fonte não informe); o volume financeiro das "mais negociadas" é aproximado (ações negociadas ×
+    último preço); a média de variação é simples (não é um índice). Ações acompanhadas: as de maior volume no último
+    arquivo diário da B3 ou as maiores dos EUA no screener da Nasdaq (sem as listagens, o catálogo do site). A tela
+    não atribui causas aos movimentos e não lê notícias. A atualização automática só acontece com a tela aberta e
+    visível; cotações e a tela pronta são reaproveitadas por até 60 s. Na "Ação do dia", a escolha continua vindo do
+    histórico diário: o preço de agora só refaz quantidade, custo e sobra (ações dos EUA pelo dólar da mesma
+    consulta). Na "Montar carteira", o cartão "O que comprar" usa o último dado diário, com a data.
+
 ## Itens pendentes / próximos passos
 
 * Validar o modo online com dados reais (SPY/AGG/GLD e ativos B3) em ambiente com acesso ao Yahoo Finance,

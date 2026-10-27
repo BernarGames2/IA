@@ -1467,6 +1467,10 @@ def run_purpose(req: PurposeRequest, output_dir: Path | None = None, provider: o
         "precos": (f"último preço da série diária ({last_quote}), em {ccy} — dado com atraso (pode ser o pregão "
                    "ainda em andamento), não cotação em tempo real; confira o preço na corretora antes de comprar"),
         "regras_de_lote": {s: lot_size(cat[s], req.fracionario_eua)[1] for s in w_f.index if w_f[s] > 0},
+        # price in the asset's own currency (a US stock bought in reais): the last close of the same day
+        "precos_originais": {s: {"preco": float(ds.native_prices[s].dropna().iloc[-1]), "moeda": ds.native_currency[s]}
+                             for s in w_f.index if w_f[s] > 0 and s in ds.native_prices
+                             and ds.native_currency.get(s, ccy) != ccy and len(ds.native_prices[s].dropna())},
         "valor_minimo_posicao": req.valor_minimo_posicao, "fracionario_eua": req.fracionario_eua,
         "fora_por_tamanho_minimo": not_exec, "retirados_apos_otimizar": dropped,
         "compra_inicial": buy_now.as_dict() if buy_now else None,
